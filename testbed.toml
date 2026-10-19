@@ -1,0 +1,36 @@
+# How the testbed tests, checks, builds and deploys this repository, in the testbed's declaration format.
+
+testbed = 0
+name = "bmo-voice"
+
+# The Cargo crate, and the Bun projects of their own found by their manifests and lockfiles. The repository holds
+# no tests yet: they are written and run once the minimal services stand on bmo-next (README.md, 「Tests」).
+[test]
+languages = ["cargo", "bun"]
+
+[check]
+# The sweeps that read the tree before anything runs: Korean in the code, the README's folder table and the
+# dependencies the manifests name. The ledger is the Korean allowed per code file.
+quick = ["korean", "layout", "dependencies"]
+korean_ledger = "korean-ledger.json"
+# The base libraries every unit may build on. The voice reaches every other unit through the routes and commands
+# `docs/boundary-api.md` states.
+base_libraries = ["bmo-chat", "bmo-chat-client", "bmo-ui", "bmo-markup"]
+
+[[check.step]]
+id = "check"
+command = "cargo check --all-targets"
+lane = "wide"
+
+[[check.step]]
+id = "clippy"
+command = "cargo clippy --all-targets -- -D warnings"
+lane = "wide"
+
+[[check.step]]
+id = "fmt"
+command = "cargo fmt --all --check"
+
+[build]
+# The service, the unit command and the script studio's server, into the release's bin/.
+binaries = ["voice-server", "bmo-voice", "script-studio"]

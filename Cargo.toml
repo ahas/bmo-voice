@@ -1,0 +1,31 @@
+# One crate: the voice service, its unit command and the script studio's server, split into modules, with a
+# binary each under `src/bin/` (docs/layout.md).
+[package]
+name = "bmo-voice"
+description = "The voice: briefings spoken in a trained voice, the voice server on the voice nodes, voice training, and the script studio."
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "bmo_voice"
+path = "src/lib.rs"
+
+# The service: the routes other units call (docs/boundary-api.md).
+[[bin]]
+name = "voice-server"
+path = "src/bin/voice-server.rs"
+
+# The unit command `bmo` hands the voice's commands to (docs/boundary-api.md, 「The unit command」).
+[[bin]]
+name = "bmo-voice"
+path = "src/bin/bmo-voice.rs"
+
+# The script studio's server (docs/script-studio.md).
+[[bin]]
+name = "script-studio"
+path = "src/bin/script-studio.rs"
+
+[dependencies]
+serde = { version = "1.0.219", features = ["derive"] }
+toml = { version = "0.8.23", default-features = false, features = ["parse"] }

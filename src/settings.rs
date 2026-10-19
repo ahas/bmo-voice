@@ -1,0 +1,135 @@
+//! The settings every binary reads at start (`docs/layout.md`, 「Settings」): one TOML file, held for the process's
+//! life. Every address, path and name of a deployment is read from here, every token from its own file, and every
+//! file the voice keeps stands under the data root's `voice/` folder.
+
+use std::path::{Path, PathBuf};
+
+use serde::Deserialize;
+
+/// The variable naming the settings file, where it is not the one beside the release.
+pub const SETTINGS_VARIABLE: &str = "BMO_VOICE_SETTINGS";
+
+/// A unit the voice calls: its base address, and the file under the data root's `env/` its token stands in.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Unit {
+  pub address: String,
+  pub token_file: Option<String>,
+}
+
+/// The units the voice calls, each reached only through the routes `docs/boundary-api.md` names.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Units {
+  pub gate: Unit,
+  pub receiver: Unit,
+  pub agency: Unit,
+  pub artifact: Unit,
+  pub node: Unit,
+  pub pocket: Unit,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Settings {
+  /// Where the service listens.
+  pub listen: String,
+  /// The service's own address, as the units it hands work to call it back.
+  pub address: String,
+  /// The file under the data root's `env/` holding the token callers present.
+  pub token_file: String,
+  /// The address of the voice's own database.
+  pub database: String,
+  /// The runtime data root.
+  pub data_root: PathBuf,
+  /// The registered agent whose voice a briefing speaks in where nothing names another, by its id.
+  pub agent: String,
+  pub units: Units,
+}
+
+/// Why the settings would not stand.
+#[derive(Debug)]
+pub struct Unread(pub String);
+
+impl std::fmt::Display for Unread {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str(&self.0)
+  }
+}
+
+impl std::error::Error for Unread {}
+
+impl Settings {
+  /// The settings a file holds.
+  pub fn read(path: &Path) -> Result<Self, Unread> {
+    let text = std::fs::read_to_string(path).map_err(|why| Unread(format!("{}: {why}", path.display())))?;
+
+    toml::from_str(&text).map_err(|why| Unread(format!("{}: {why}", path.display())))
+  }
+
+  /// Where the settings stand: the file the variable names, else `settings.toml` at the top of the release the
+  /// running binary stands in.
+  pub fn path() -> Result<PathBuf, Unread> {
+    if let Some(named) = std::env::var_os(SETTINGS_VARIABLE) {
+      return Ok(PathBuf::from(named));
+    }
+
+    let binary = std::env::current_exe().map_err(|why| Unread(format!("the running binary: {why}")))?;
+    let release = binary.parent().and_then(Path::parent).ok_or_else(|| {
+      Unread(format!(
+        "{} stands in no release; name the settings in {SETTINGS_VARIABLE}",
+        binary.display()
+      ))
+    })?;
+
+    Ok(release.join("settings.toml"))
+  }
+
+  /// The settings where they stand.
+  pub fn load() -> Result<Self, Unread> {
+    Self::read(&Self::path()?)
+  }
+
+  /// The voice's own folder under the data root, where everything it keeps stands.
+  pub fn voice_folder(&self) -> PathBuf {
+    self.data_root.join("voice")
+  }
+
+  /// The installed voices (`weights/checkpoints.toml`).
+  pub fn voices_folder(&self) -> PathBuf {
+    self.voice_folder().join("voices")
+  }
+
+  /// The locks the voice takes: the synthesis on this machine's card, and one per voice node.
+  pub fn locks_folder(&self) -> PathBuf {
+    self.voice_folder().join("locks")
+  }
+
+  /// The token the voice servers on the voice nodes check.
+  pub fn node_token_file(&self) -> PathBuf {
+    self.voice_folder().join("voice.token")
+  }
+
+  /// A file under the data root's `env/`.
+  pub fn env_file(&self, name: &str) -> PathBuf {
+    self.data_root.join("env").join(name)
+  }
+
+  /// The token a file under `env/` holds, trimmed; none where it holds none.
+  pub fn token(&self, name: &str) -> Result<Option<String>, Unread> {
+    let path = self.env_file(name);
+    let text =
+      std::fs::read_to_string(&path).map_err(|why| Unread(format!("{}: {why}", path.display())))?;
+    let token = text.trim();
+
+    Ok((!token.is_empty()).then(|| token.to_owned()))
+  }
+
+  /// The token a unit is called with, where it names a file.
+  pub fn unit_token(&self, unit: &Unit) -> Result<Option<String>, Unread> {
+    match &unit.token_file {
+      Some(name) => self.token(name),
+      None => Ok(None),
+    }
+  }
+}

@@ -1,0 +1,19 @@
+# Where the voice's weights stand. The weights themselves are runtime data and never stand in this repository;
+# this is the one place their folders are declared, and the service, the node scripts and the training scripts
+# read it (docs/voice-plan.md, 「The voices」).
+
+# Under the runtime data root on the operations machine: every installed voice, a folder per checkpoint holding
+# its LoRA settings (`lora_config.json`), its LoRA weights (`lora_weights.safetensors`) and its continuation
+# prompt clips (`prompt-<digest>.wav`, `prompt-en-<digest>.wav`).
+voices = "voice/voices"
+
+# Under the same root: the reference clips a voice is conditioned on, one `<key>.wav` each.
+references = "voice/voices/reference"
+
+# Under the account's home on a voice node: the server's folder, the copy of the voices pushed to it beneath
+# (`voices/`), and the virtual environment the server runs in (`.venv/`).
+node_place = "bmo-voice"
+
+# The VoxCPM2 base model every checkpoint is trained on stands in a voice node's Hugging Face cache, fetched there
+# by the node install; a checkpoint's `lora_config.json` names the snapshot it was trained on by its model id.
+base_model_cache = "huggingface"

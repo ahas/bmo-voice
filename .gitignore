@@ -1,0 +1,15 @@
+/target
+node_modules/
+.env
+__pycache__/
+.venv/
+# A Nuxt project's generated and served output, wherever one stands.
+.nuxt/
+.output/
+.data/
+dist/
+# The typecheck's build record, wherever a project of its writes one.
+*.tsbuildinfo
+# Trained voices, base models and clips are runtime data under the data root (weights/); never committed.
+*.safetensors
+*.wav
