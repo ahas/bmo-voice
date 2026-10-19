@@ -1,0 +1,33 @@
+[
+  {
+    "id": "console/briefing-player",
+    "title": "Console briefing player",
+    "what": "The console plugin bundle in client/: the briefing player and its settings page at /briefing, heard on the voice's listener stream, with routes relaying the voice and the receiver.",
+    "files": [
+      "client/app/domain/briefing.ts",
+      "client/app/domain/briefing-position.ts",
+      "client/app/components/BriefingPlayer.vue",
+      "client/app/components/SettingsBriefing.vue",
+      "client/app/pages/briefing.vue",
+      "client/server/api/briefing/events.get.ts",
+      "client/server/api/briefing/stop.post.ts",
+      "client/server/api/briefing/read.post.ts",
+      "client/server/api/briefing/sound.get.ts",
+      "client/server/utils/voice.ts",
+      "client/server/utils/receiver.ts",
+      "client/shared/briefings.ts",
+      "client/nuxt.config.ts",
+      "client/package.json",
+      "client/tsconfig.json"
+    ],
+    "symbols": [
+      "useBriefings",
+      "BriefingDesk"
+    ],
+    "aliases": [],
+    "needs": [
+      "briefing/service"
+    ],
+    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+  }
+]

@@ -1,0 +1,35 @@
+[
+  {
+    "id": "speech/nodes",
+    "title": "Speaking on the voice nodes",
+    "what": "A line spoken on a free voice node through the node's shell or its hub, the node locks and health, and the run clock past a briefing's cap, in src/speech/node.rs and src/speech/clock.rs.",
+    "files": [
+      "src/speech/node.rs",
+      "src/speech/clock.rs"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [
+      "core/store",
+      "core/units",
+      "speech/synth"
+    ],
+    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+  },
+  {
+    "id": "speech/synth",
+    "title": "Speaking on this machine's card",
+    "what": "The voice's mouth and encoder run through its own tool entry under synth/, the one lock in front of the card, a kept sound's length and the failure notices, in src/speech/synth.rs.",
+    "files": [
+      "src/speech/synth.rs",
+      "src/speech/mod.rs"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [
+      "core/settings",
+      "synth/tool"
+    ],
+    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+  }
+]

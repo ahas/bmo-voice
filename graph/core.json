@@ -1,0 +1,97 @@
+[
+  {
+    "id": "core/deployment",
+    "title": "Voice deployment",
+    "what": "How the testbed deploys the voice: testbed.toml's setup, build and deploy, the voice and studio units and the studio's proxy locations in deploy/.",
+    "files": [
+      "testbed.toml",
+      "deploy/bmo-voice.service",
+      "deploy/bmo-script.service",
+      "deploy/nginx.conf",
+      "docs/deploy.md",
+      "docs/inventory.md"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [
+      "briefing/service",
+      "studio/server",
+      "nodes/scripts"
+    ],
+    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+  },
+  {
+    "id": "core/policy",
+    "title": "Voice policy values",
+    "what": "The voice's own policy, policy/voice.toml: a briefing run's cap, the failed notice's kind and the emotions a briefing may carry, served at GET /policy.",
+    "files": [
+      "policy/voice.toml",
+      "src/policy.rs"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [],
+    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+  },
+  {
+    "id": "core/settings",
+    "title": "Voice settings and context",
+    "what": "The one settings file every binary and script reads (listen, database, data root, unit addresses, studio values) and the context of store and unit clients built from it, in src/settings.rs and src/context.rs.",
+    "files": [
+      "src/settings.rs",
+      "src/context.rs",
+      "src/lib.rs",
+      "docs/layout.md",
+      "CLAUDE.md",
+      "README.md"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [],
+    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+  },
+  {
+    "id": "core/store",
+    "title": "Voice store",
+    "what": "The voice's own Postgres database: the voices, voice names, voice node list and briefing rows, its migration and the names table's seed from data/ko/voice-names.toml, in src/store/.",
+    "files": [
+      "src/store/mod.rs",
+      "src/store/voices.rs",
+      "src/store/briefings.rs",
+      "src/store/migration/mod.rs",
+      "src/store/migration/m20261019_000001_tables.rs",
+      "src/store/migration/tables.sql",
+      "data/ko/voice-names.toml",
+      "docs/store.md"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [
+      "core/settings"
+    ],
+    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+  },
+  {
+    "id": "core/units",
+    "title": "Clients of other units",
+    "what": "One temporary client module per sibling the voice calls, gate, receiver, agency, artifact, node, the jake hub, pocket and web, each holding only the voice's calls, in src/units/.",
+    "files": [
+      "src/units/mod.rs",
+      "src/units/gate.rs",
+      "src/units/receiver.rs",
+      "src/units/agency.rs",
+      "src/units/artifact.rs",
+      "src/units/node.rs",
+      "src/units/hub.rs",
+      "src/units/pocket.rs",
+      "src/units/web.rs",
+      "docs/boundary-api.md"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [
+      "core/settings"
+    ],
+    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+  }
+]

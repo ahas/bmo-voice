@@ -10,6 +10,7 @@ How the repository is laid out, what each part is, and where it runs. Read this 
 | `data/` | Language material the code reads by language, `data/<language>/`: the reading tables a script is spoken from, the voice names' seed readings, the material the training lines' prompt cannot do without. Every line of it is in `korean-ledger.json` |
 | `deploy/` | The units the testbed's deployment keeps on the operations machine, and the proxy locations of the script studio |
 | `docs/` | The documents, which come before the code |
+| `graph/` | The code dependency graph, one node per feature in its areas (`core`, `script`, `speech`, `briefing`, `synth`, `nodes`, `training`, `studio`, `console`), written only by `bmo graph` |
 | `policy/` | The voice's own policy values, `policy/voice.toml`, served at `GET /policy` |
 | `prompts/` | What the voice's own model runs are told: the training lines' writer. English only |
 | `scripts/` | The node and training scripts, a Bun project of its own: the voice node install, push, sync, health, speak and card adapter, a voice installed and checked, the voice names, training stages placed on a card, the training lines written |

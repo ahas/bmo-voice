@@ -1,0 +1,51 @@
+[
+  {
+    "id": "nodes/install",
+    "title": "Voice install and names",
+    "what": "A trained voice brought into the data root and its settings, a continuation prompt checked on whole briefings before it is given, and the voice name table, in scripts/voice-install.ts and scripts/voice-names.ts.",
+    "files": [
+      "scripts/voice-install.ts",
+      "scripts/voice-names.ts",
+      "scripts/lib/voice-prompt-check.ts",
+      "scripts/lib/hangul.ts",
+      "data/ko/voice-prompt-check-lines.json",
+      "data/en/voice-prompt-check-lines.json"
+    ],
+    "symbols": [
+      "checkPrompt"
+    ],
+    "aliases": [],
+    "needs": [
+      "nodes/scripts"
+    ],
+    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+  },
+  {
+    "id": "nodes/scripts",
+    "title": "Voice node scripts",
+    "what": "Setting up, pushing, syncing, asking and speaking on the voice nodes, and the card arbiter's adapter, with the store, node and hub clients they share, in scripts/voice-node.ts and scripts/lib/.",
+    "files": [
+      "scripts/voice-node.ts",
+      "scripts/lib/voice-node.ts",
+      "scripts/lib/node-shell.ts",
+      "scripts/lib/node.ts",
+      "scripts/lib/hub.ts",
+      "scripts/lib/settings.ts",
+      "scripts/lib/store.ts",
+      "scripts/lib/voice.ts",
+      "scripts/package.json",
+      "scripts/tsconfig.json",
+      "data/ko/voice-node.toml"
+    ],
+    "symbols": [
+      "speakOnNode",
+      "takeVoiceNode"
+    ],
+    "aliases": [],
+    "needs": [
+      "core/store",
+      "synth/tool"
+    ],
+    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+  }
+]
