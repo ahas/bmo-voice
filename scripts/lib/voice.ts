@@ -12,8 +12,14 @@ import type { VoiceRow } from "./store";
 // the line in front of this machine's card, the delivery a trained voice starts with, and the voice's own entries
 // in `synth/`, which do the speaking, encoding and transcribing.
 
-// How long a line may take before it is called off, as the voice's own policy declares it (`policy/voice.toml`).
-export const voiceCapMs: number = (Bun.TOML.parse(readFileSync(join(releaseRoot, "policy/voice.toml"), "utf8")) as { run_cap_ms: number }).run_cap_ms;
+// The voice's own policy values (`policy/voice.toml`).
+const policy = Bun.TOML.parse(readFileSync(join(releaseRoot, "policy/voice.toml"), "utf8")) as { run_cap_ms: number; emotions: string[] };
+
+// How long a line may take before it is called off.
+export const voiceCapMs: number = policy.run_cap_ms;
+
+// The emotions a briefing may be spoken with.
+export const briefingEmotions: readonly string[] = policy.emotions;
 
 // -------------------------------------------------------------- the line in front of the card
 

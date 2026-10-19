@@ -12,14 +12,19 @@
 ## The speech standard
 
 - **The one statement of it is the generator's instructions,** `prompts/voice-lines.md`, in English, which Codex
-  reads at the head of every thread, with the language material it cannot do without loaded from
-  `data/ko/voice-lines.toml`: the manner of speech, its sentence shape, how the agent names itself, the words it never
-  says, and the invented example lines.
-- **Nothing real goes to Codex.** The instructions carry invented examples only: no line out of any record, no room's
-  words and no person's name.
-- **The reading follows the voice:** names by the voice name table's seeds (`docs/voice-plan.md`, 「How names are
-  said」), figures by its figure rules, roman words by their sound, symbols as they are said. Unlike a live
-  briefing, a web address is spelt out in the reading, since the list is there to teach the voice hard notation.
+  reads at the head of every thread, filled in with two things:
+  - **the agent's persona,** the file the run is handed: who the agent is, how it talks and names itself, the people
+    it may name, and its own invented example lines. It names the agent and the people around it, so it is the
+    deployment's own and stands in no repository (`docs/deploy.md`);
+  - **the language material** it cannot do without, loaded from `data/ko/voice-lines.toml`: the kinds' and bands'
+    names, what each emotion sounds like, how a Korean speaker reads figures, roman words, commands and symbols, the
+    words of meta talk, and the words a line never uses.
+- **Nothing real goes to Codex** beyond the persona. The instructions carry invented examples only: no line out of
+  any record and no room's words.
+- **The reading follows the voice:** names by the voice name table (`docs/voice-plan.md`, 「How names are said」),
+  listed under the instructions, figures by its figure rules, roman words by their sound, symbols as they are said.
+  Unlike a live briefing, a web address is spelt out in the reading, since the list is there to teach the voice hard
+  notation.
 
 ## The spread
 
@@ -65,7 +70,9 @@ flowchart TD
 - **The reading:** Hangul syllables, spaces and `. , ? !` only, so every figure, roman letter and symbol is said.
 - **The kind holds:** a question ends on `?`, an exclamation on `!`, a statement on neither, and a mixed line's
   reading differs from its text.
-- **No word the data file bans,** and no meta talk, the data file's list.
+- **No word the data file bans,** each read as the wording check reads a glossary entry, bmo-markup's `wording`:
+  a term standing alone, and not in a phrase where it keeps its own sense. A banned term a name's reading in the
+  voice name table spells is no use of the word in the reading. **No meta talk,** the data file's list.
 - **Not a duplicate:** readings reduced to their Hangul are compared with every row kept; the same reading is a
   duplicate, and one of six syllables or more whose syllable pairs overlap another's by 70 percent or more is a near
   duplicate.
@@ -84,8 +91,9 @@ flowchart TD
 ## Running it
 
 - **A run takes hours and is carried by a unit of its own,** restarted on failure: `systemd-run --user --unit
-  bmo-voice-lines --same-dir -E PATH="$PATH" -p Restart=on-failure -p RestartSec=900 bun scripts/voice-lines.ts run`.
-  It always resumes from its files.
+  bmo-voice-lines --same-dir -E PATH="$PATH" -p Restart=on-failure -p RestartSec=900 bun scripts/voice-lines.ts run
+  --persona <file> --model <model> --effort <effort>`. It always resumes from its files.
 - **`bun scripts/voice-lines.ts status`** prints the progress.
-- **`run` takes** `--out <folder>`, `--per-cell <n>` (20), `--at-once <n>` (2), `--rounds <n>` (5) and
+- **`run` takes** `--persona <file>`, `--model <model>` and `--effort <effort>`, which it needs, and `--out <folder>`,
+  `--prefix <id prefix>` (`ko`), `--per-cell <n>` (20), `--at-once <n>` (2), `--rounds <n>` (5) and
   `--emotion <emotion>` for one emotion alone.

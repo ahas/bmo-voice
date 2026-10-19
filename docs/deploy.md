@@ -18,6 +18,10 @@ How a commit of this repository goes live. The testbed deploys it from the repos
   voice with `scripts/voice-install.ts --add` (`docs/voice-plan.md`, 「The voices」), and the readings of the names
   the deployment's agents and owner go by with `scripts/voice-names.ts --set`, beside the generic seed names a new
   table is given.
+- **The persona the training lines are written in** is the deployment's own file, kept outside every repository and
+  handed to `scripts/voice-lines.ts run --persona` (`docs/voice-lines.md`, 「The speech standard」): who the agent is
+  and the world it lives in, how it talks and names itself, the people it may name, and a few invented example lines,
+  a long briefing among them.
 - **The proxy:** `deploy/nginx.conf` holds the script studio's two locations, the bare path redirected to the one with
   the slash and everything under it passed to the studio's port. A deployment never touches the proxy; the path and
   the port are fixed and the locations stand in the host's server block.

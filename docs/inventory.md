@@ -274,6 +274,10 @@ Files whose work this repository does another way, each named with what does it 
 | `tools/voice/bmo/voice-names.ts` | `scripts/voice-names.ts`, its usage and listing in English |
 | `tools/voice/bmo/voice-prompt-check-lines.json` | `data/ko/voice-prompt-check-lines.json` and `data/en/voice-prompt-check-lines.json`, the first Korean line no longer addressed to a person |
 | `tools/voice/bmo/package.json`, `tools/voice/bmo/bunfig.toml` | `scripts/package.json` and `scripts/tsconfig.json`; the old bunfig held only test preloads, and the tests are deferred |
+| `bot/bot/voice-train.ts` | `scripts/lib/voice-train.ts`: whether a card is free is the node card arbiter's answer rather than the driver's process list, a node without an arbiter takes no step, and the step runs inside the arbiter's turn client, holding the voice's turn and the card lock |
+| `tools/voice/bmo/voice-train.ts` | `scripts/voice-train.ts`: every node is the node service's list, the record stands under the script studio's data root as `docs/script-studio.md` names it, and the choosing lock under the voice folder's `locks/` |
+| `tools/voice/bmo/voice-lines.ts` | `scripts/lib/voice-lines.ts` and the command `scripts/voice-lines.ts`: the emotions are `policy/voice.toml`'s, the names the voice name table's, the kinds, bands, meta words and banned words the language material's, the Codex model, effort and id prefix the run's own flags, and its messages English |
+| `prompts/agents/voice-lines/instructions.md` | `prompts/voice-lines.md`, in English, naming no agent and no person; its Korean material is `data/ko/voice-lines.toml`, with the Korean entries of the old wording glossary its rows were checked against, and its sections on who the agent is, how it talks and the people it names are the deployment's persona file (`docs/deploy.md`) |
 
 The voice's Python files keep their work as it was; their paths name this repository's layout, their log lines
 are English, and the names of machines, agents and people are gone from their comments. Their Korean that stays is

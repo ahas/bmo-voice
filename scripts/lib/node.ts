@@ -1,7 +1,7 @@
 import { settings, unitToken } from "./settings";
 
-// bmo-node, as its `docs/api.md` states it (「Agency's calls」, 「Registry routes」): how a node is reached by its
-// name, and the arguments of a batch SSH login to it. Bodies are camelCase, and a refusal is an answer of its own.
+// bmo-node, as its `docs/api.md` states it (「Agency's calls」, 「Node reads」, 「Registry routes」): the node list, how
+// a node is reached by its name, and the arguments of a batch SSH login to it. Bodies are camelCase, and a refusal is an answer of its own.
 // This is the scripts' whole client of the node service, standing until that service publishes its own.
 
 // An ssh node by its host, port, account, key and shell, or a hub node through its hub by the hub's address, its
@@ -50,6 +50,11 @@ async function ask<T>(method: "GET" | "POST", path: string, body?: unknown): Pro
   }
 
   return read as T;
+}
+
+// Every node the service lists, by name, in the list's order.
+export async function nodeNames(): Promise<string[]> {
+  return (await ask<{ nodes?: { name: string }[] }>("GET", "/nodes")).nodes?.map((node) => node.name) ?? [];
 }
 
 // How a node is reached by its name.

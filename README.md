@@ -23,7 +23,8 @@ the base libraries `bmo-chat`, `bmo-chat-client`, `bmo-ui` and `bmo-markup` may 
 | `data/` | Language material the code reads by language, `data/<language>/`; every Korean line of it is in `korean-ledger.json` |
 | `docs/` | The documents, which come before the code: start with `docs/layout.md` |
 | `policy/` | The voice's own policy values, `policy/voice.toml` |
-| `scripts/` | The node and install scripts, a Bun project of its own: the voice node install, push, sync, health, speak and card adapter, a voice installed and checked, the voice names |
+| `prompts/` | What the voice's own model runs are told: the training lines' writer, in English |
+| `scripts/` | The node, install and training scripts, a Bun project of its own: the voice node install, push, sync, health, speak and card adapter, a voice installed and checked, the voice names, training steps placed on a card, the training lines written |
 | `src/` | The crate: the settings, the store, the script rules, the clients of the other units, synthesis and the voice nodes, the briefing runtime, the routes, and the `voice-server`, `bmo-voice` and `script-studio` binaries |
 | `synth/` | What speaks: the VoxCPM2 mouth and voice server, the encoder, the transcriber, the intelligibility measure, the tool entries and their schemas, and the frozen package list of the voice environment |
 | `weights/` | The declarations of the voice's weights: the voice server's card declaration and where the voices and the base model stand; never the weights themselves |

@@ -1,10 +1,11 @@
 {
+  "data/ko/voice-lines.toml": 183,
   "data/ko/voice-names.toml": 6,
   "data/ko/voice-node.toml": 1,
   "data/ko/voice-prompt-check-lines.json": 4,
   "data/ko/voice-script.yaml": 117,
   "policy/voice.toml": 1,
-  "scripts/lib/voice-prompt-check.ts": 2,
+  "scripts/lib/hangul.ts": 1,
   "src/script/spoken.rs": 4,
   "synth/briefing.json": 10,
   "synth/voice-cer-sentences.json": 18,

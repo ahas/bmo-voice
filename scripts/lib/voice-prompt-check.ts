@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 
+import { hangulSyllables, syllableRange } from "./hangul";
 import { shellWord } from "./node-shell";
 import { dataFile } from "./settings";
 import { VOICE_PLACE, speakThroughFreeNode, voiceNodeNames, voiceNodeShell } from "./voice-node";
@@ -43,12 +44,12 @@ export interface LineVerdict extends SpokenLine {
 
 // The letters a line is compared on: Hangul syllables and Latin letters, nothing else.
 export function bareLetters(text: string): string {
-  return text.toLowerCase().replace(/[^가-힣a-z]/g, "");
+  return text.toLowerCase().replace(new RegExp(`[^${syllableRange}a-z]`, "g"), "");
 }
 
 export function syllables(text: string, language: VoiceLanguage): number {
   if (language === "ko") {
-    return (text.match(/[가-힣]/g) ?? []).length;
+    return hangulSyllables(text).length;
   }
 
   // An English word's syllables as its groups of vowels, a silent final e left out.

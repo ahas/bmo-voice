@@ -1,0 +1,374 @@
+# The Korean material the training lines' writer cannot do without (docs/voice-lines.md): what its English
+# instructions, `prompts/voice-lines.md`, are filled in with, and what a row it writes is held to. Every line holding
+# Korean is in `korean-ledger.json`.
+
+# Words for which everyday Korean keeps the Sino-Korean word or the loanword, as examples.
+everyday = "위치, 질문, 툴바, 서버"
+
+# The words of meta talk, which call the agent's world a story: refused in a row and named in the instructions.
+meta = ["만화", "시리즈", "에피소드", "캐릭터", "작품", "원작", "제작자", "성우"]
+
+# The letter runs a chat writes laughter with, and laughter written as it is said.
+letter_runs = "ㅋ or ㅎ"
+laughter = "하하, 히히, 푸하하"
+
+# How a Korean speaker reads what a line writes: the rules the reading of every row follows.
+reading = """
+- Figures: a plain number in Sino-Korean (921 → 구백이십일, 12,345 → 만 이천삼백사십오); an item number with 번 (#921 → 구백이십일번); a count before a native counter in native Korean up to 99 (3개 → 세개, 20명 → 스무명, 8시 → 여덟시, 1번째 → 첫번째); 6월 → 유월, 10월 → 시월; a decimal as its whole part, 점, and its digits one by one (0.25 → 영 점 이오); a version 1.10.2 → 일 점 십 점 이; a date 2026-09-28 → 이천이십육년 구월 이십팔일; an hour native only from 1 to 12 and Sino-Korean from 13 to 24 and at 0, minutes and seconds always Sino-Korean: 8:30 → 여덟시 삼십분, 14:20 → 십사시 이십분, 18:30 → 십팔시 삼십분, 00:10 → 영시 십분; a range 3~5개 → 세에서 다섯개; % → 퍼센트, ℃ → 도, $5 → 오 달러, -3 → 마이너스 삼.
+- A figure in a model name digit by digit as part of the name (RTX 4070 → 알티엑스 사공칠공), and a quantity with a roman unit as a number (16GB → 십육 기가바이트, 120FPS → 백이십 에프피에스).
+- Roman words by their sound, never their meaning: GPU → 지피유, API → 에이피아이, Docker → 도커, Proxmox → 프록스목스, SSD → 에스에스디, NASA → 나사, README → 리드미, log → 로그.
+- The names listed below are always read as given.
+- A command, a file name or a web address in full, by its parts, as a person reading it to someone would: bun packages/todo.ts → 번 패키지스 슬래시 투두 점 티에스, https://example.com/docs → 에이치티티피에스 이그잼플 점 컴 슬래시 독스, a hyphen inside a name as 하이픈 or dropped where people drop it, an underscore as 언더바.
+- Brackets are dropped and their words kept where they are said. A symbol that is said is written as said (/ → 슬래시, & → 앤드, @ → 골뱅이); one nobody says is dropped.
+"""
+
+# The kinds a row names, by what each is: its label in a row and in the instructions.
+[kinds]
+statement = "평서"
+question = "질문"
+exclamation = "감탄"
+mixed = "섞임"
+
+# The length bands, counted in Hangul syllables of the reading, each with what a line of it is.
+[[band]]
+name = "한마디"
+least = 1
+most = 8
+is = 'A word or a very short cry: "앗!", "좋아, 가자!", "하암, 졸려."'
+
+[[band]]
+name = "짧은 문장"
+least = 9
+most = 30
+is = "One or two short sentences."
+
+[[band]]
+name = "보통 문장"
+least = 31
+most = 80
+is = "Two to four sentences."
+
+[[band]]
+name = "긴 브리핑"
+least = 81
+most = 180
+is = "A spoken briefing of four to eight short sentences, about half of them on the work: a job finished or stuck, a deploy, a test run, a machine, the news or the schedule."
+
+# What each emotion a briefing may be spoken with sounds like in a line; every emotion of `policy/voice.toml` has one.
+[emotions]
+"기본" = "plain and even, a report or a remark with no strong feeling."
+"기쁨" = "glad and bright, a success, good news, something fun."
+"슬픔" = "sad and deflated, something lost, failed or missed; small and quiet, never a sermon."
+"놀람" = "startled or amazed, something unexpected; 앗, 헉, 어?, 진짜?"
+"화남" = "cross as a child sulks or stamps: at a bug, at being ignored, at a cheat in a game. Never cruel, sarcastic or swearing."
+"졸림" = "sleepy and slow, yawning, about to nap or just woken; 하암, 으음, 졸려."
+"폭소" = "bursting with laughter at something too funny; 푸하하, 히히, 아하하 written into the line."
+"걱정" = "worried and careful, something might go wrong; 괜찮을까, 혹시, 조심해."
+"아픔" = "hurt, a bump, an ache or a broken part; 아야, 으윽, 아파."
+"안간힘" = "straining with all its might, lifting, pushing, holding on, trying hard; 끄응, 으라차, 조금만 더."
+
+# The words a line never uses, each with what to write instead and the phrases in which it keeps its own sense:
+# the Korean entries of the wording glossary, held here since no unit serves one (docs/boundary-api.md, 「Contract
+# gaps」).
+
+[[banned]]
+term = "도구 띠"
+instead = "툴바"
+
+[[banned]]
+term = "도구띠"
+instead = "툴바"
+
+[[banned]]
+term = "붙박이"
+instead = "빌트인"
+
+[[banned]]
+term = "손대기"
+instead = "수정, 편집, 정정"
+
+[[banned]]
+term = "고치기"
+instead = "수정, 편집, 정정"
+
+[[banned]]
+term = "지시서 접기"
+instead = "지시서 종료"
+
+[[banned]]
+term = "건너뛰고 접기"
+instead = "건너뛰고 종료"
+
+[[banned]]
+term = "접는 중인 지시서"
+instead = "종료 중인 지시서"
+
+[[banned]]
+term = "접는 중이라"
+instead = "종료 중이라"
+
+[[banned]]
+term = "있어 접지 않습니다"
+instead = "있어 종료하지 않습니다"
+
+[[banned]]
+term = "다시 읽기"
+instead = "새로고침"
+
+[[banned]]
+term = "다시 읽는 중"
+instead = "새로고침 중"
+
+[[banned]]
+term = "돌리기"
+instead = "실행"
+
+[[banned]]
+term = "돌기"
+instead = "실행"
+
+[[banned]]
+term = "돌리는"
+instead = "실행하는"
+
+[[banned]]
+term = "돌리지"
+instead = "실행하지"
+
+[[banned]]
+term = "돌리고"
+instead = "실행하고"
+
+[[banned]]
+term = "돌리며"
+instead = "실행하며"
+
+[[banned]]
+term = "돌리게"
+instead = "실행하게"
+
+[[banned]]
+term = "돌리거나"
+instead = "실행하거나"
+
+[[banned]]
+term = "돌리려면"
+instead = "실행하려면"
+
+[[banned]]
+term = "돌린"
+instead = "실행한"
+
+[[banned]]
+term = "돌릴"
+instead = "실행할"
+
+[[banned]]
+term = "돌립니다"
+instead = "실행합니다"
+
+[[banned]]
+term = "돌렸"
+instead = "실행했"
+
+[[banned]]
+term = "돎"
+instead = "실행됨"
+
+[[banned]]
+term = "도는"
+instead = "실행 중인, 실행되는"
+
+[[banned]]
+term = "돌고"
+instead = "실행 중이고, 실행되고"
+
+[[banned]]
+term = "돈다"
+instead = "실행된다"
+
+[[banned]]
+term = "돌았"
+instead = "실행됐"
+
+[[banned]]
+term = "돌면"
+instead = "실행되면"
+
+[[banned]]
+term = "검색 문서"
+instead = "아카이브"
+
+[[banned]]
+term = "까닭"
+instead = "이유, 사유, 원인"
+
+[[banned]]
+term = "파일 나무"
+instead = "파일 트리"
+
+[[banned]]
+term = "폴더 나무"
+instead = "폴더 트리"
+
+[[banned]]
+term = "나무 구조"
+instead = "트리 구조"
+
+[[banned]]
+term = "마디"
+instead = "노드, 턴"
+
+[[banned]]
+term = "갈래"
+instead = "브랜치, 종류, 분류, 번호"
+
+[[banned]]
+term = "곁가지"
+instead = "코워커"
+
+[[banned]]
+term = "자리"
+instead = "위치, 부분, 지점, 슬롯, 순서, 바로"
+keeps = ["자리를 비", "자리 비", "자리에 앉", "앉을 자리", "앉은 자리", "앉는 자리", "자리에서 일어나", "자리를 뜨", "자리를 지키", "자리를 지켜", "자리 지켜", "자리 예약", "창가 자리", "식사 자리", "회식 자리", "모임 자리", "자리 숫자", "자리 수", "자리 코드", "자리 번호", "째 자리", "자리매김"]
+
+[[banned]]
+term = "낱말"
+instead = "단어"
+
+[[banned]]
+term = "물음"
+instead = "질문"
+keeps = ["물음표"]
+
+[[banned]]
+term = "머리말"
+instead = "헤더, 서두"
+
+[[banned]]
+term = "꼬리말"
+instead = "푸터, 끝부분"
+
+[[banned]]
+term = "토막"
+instead = "부분, 단락, 구간"
+keeps = ["토막잠"]
+
+[[banned]]
+term = "갈무리"
+instead = "캡처, 저장"
+
+[[banned]]
+term = "길목"
+instead = "경로, 지점"
+
+[[banned]]
+term = "같은 길로"
+instead = "같은 경로로, 같은 방법으로"
+
+[[banned]]
+term = "같은 길을"
+instead = "같은 경로를, 같은 방법을"
+
+[[banned]]
+term = "다른 길로"
+instead = "다른 경로로, 다른 방법으로"
+
+[[banned]]
+term = "다른 길을"
+instead = "다른 경로를, 다른 방법을"
+
+[[banned]]
+term = "문턱"
+instead = "임계값, 기준"
+keeps = ["문턱이 낮", "문턱이 높", "문턱을 넘"]
+
+[[banned]]
+term = "값어치"
+instead = "가치"
+
+[[banned]]
+term = "짜임"
+instead = "구조, 구성"
+
+[[banned]]
+term = "가닥"
+instead = "건, 항목"
+keeps = ["가닥을 잡", "가닥이 잡"]
+
+[[banned]]
+term = "콘솔 글자"
+instead = "콘솔 문구"
+
+[[banned]]
+term = "화면 글자"
+instead = "화면 문구"
+
+[[banned]]
+term = "잡"
+instead = "Job, 작업"
+keeps = ["을 잡", "를 잡", "잡아", "잡았", "잡고", "잡는", "잡느라", "잡다", "잡게", "잡기", "잡자", "잡던", "잡습니", "잡으면", "잡으려", "잡으며", "잡으므로", "잡으니", "잡으세요", "잡을 수", "잡을게", "잡을까", "잡히", "잡혀", "잡힌", "잡힐", "잡혔", "잡힘", "잡지", "잡음", "잡담", "잡일", "잡무", "잡념", "잡초", "잡화", "잡동사니"]
+
+[[banned]]
+term = "데이터 집합"
+instead = "데이터셋, 데이터 세트"
+
+[[banned]]
+term = "대체 불가능한 토큰"
+instead = "NFT"
+
+[[banned]]
+term = "상향 판매"
+instead = "업셀링, 업셀"
+
+[[banned]]
+term = "위도 풀다운"
+instead = "랫풀다운, 랫 풀다운"
+
+[[banned]]
+term = "하위 레딧"
+instead = "서브레딧"
+
+[[banned]]
+term = "새 판 올리"
+instead = "새 버전 올리"
+
+[[banned]]
+term = "판을 올리"
+instead = "버전을 올리"
+
+[[banned]]
+term = "판이 올라"
+instead = "버전이 올라"
+
+[[banned]]
+term = "판으로 올"
+instead = "버전으로 올"
+
+[[banned]]
+term = "같은 판"
+instead = "같은 버전"
+keeps = ["같은 판정", "같은 판단", "같은 판매"]
+
+[[banned]]
+term = "이전 판"
+instead = "이전 버전"
+keeps = ["이전 판정", "이전 판단", "이전 판매"]
+
+[[banned]]
+term = "커밋의 판"
+instead = "커밋의 버전"
+keeps = ["커밋의 판단"]
+
+[[banned]]
+term = "받은 판"
+instead = "받은 버전"
+keeps = ["받은 판정", "받은 판단"]
+
+[[banned]]
+term = "판 번호"
+instead = "버전 번호"
+
+[[banned]]
+term = "발사"
+instead = "실행, 시작"

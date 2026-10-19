@@ -248,20 +248,27 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
 - **On the nodes an experiment's pipeline names,** once `scripts/voice-node.ts setup --node <name>` has built the
   voice environment there and fetched the base model. An experiment stands on its home, the node named with `--home`,
   under `bmo-voice-train/` in the account's home: the training code a run imports and `experiments/<run>/`.
-- **The copy under the script studio's data root is the record,** and the one place an experiment's scripts are
-  written; what a run executes is carried out to the node it runs on.
+- **The copy under the script studio's data root is the record,** `experiments/<run>/` there, and the one place an
+  experiment's scripts are written; what a run executes is carried out to the node it runs on.
 
 ### Placing a step on a card
 
 - **`scripts/voice-train.ts` runs one step of an experiment on a free card and brings its results home.** It works
   from the operations machine, where every node is reached.
-  - `nodes` says, for every node, whether it carries the voice environment, whether its card is free, and whether
-    the card is its own or shared with the voice server.
-  - `run --experiment <name> --step <label> --node <name>… [--carry <path>]… [--bring <path>]… -- <command…>` does
-    one step from start to end on one of the nodes it names.
-- **A card is free** when no process is on it but the voice server's and no training step is running on the node;
-  a step waits, asking once a minute, while every card it may use is taken. Choosing a card is done by one runner at
-  a time, so steps launched together never pick the same card.
+  - `nodes` says, for every node the node service lists or each one `--node` names, whether it carries the voice
+    environment and a card arbiter, whether its card is free, and whether the card is its own or shared with the
+    voice server.
+  - `run --experiment <name> --step <label> --node <name>… --home <name> [--carry <path>]… [--bring <path>]… --
+    <command…>` does one step from start to end on one of the nodes it names.
+- **A card is the node's card arbiter's to tell about** (bmo-arbiter's `docs/api.md`, 「The node arbiter's units」):
+  a node whose arbiter does not answer, or answers for no card, takes no step.
+- **A card is free** when the arbiter names no claim on it, nobody but the voice server holds its lock, nobody is in
+  line for it but to rest, and no training step is running on the node; a step waits, asking once a minute, while
+  every card it may use is taken. Choosing a card is done by one runner at a time, under `voice/locks/voice-train.lock`,
+  so steps launched together never pick the same card.
+- **The step takes its turn on the card through the arbiter's turn client** (「The turn client」), as the voice: it
+  waits for the turn, holds the card lock for as long as it runs, and lets go as it ends. A voice server on the same
+  card gives way to it as it gives way to any other occupant that asks.
 - **A card of its own is chosen before the voice server's.** The step is told in `BMO_VOICE_CARD`: `own` or
   `shared`.
 - **What the step needs is carried before it starts:** the experiment's folder but for what its runs write, and every

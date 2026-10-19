@@ -68,6 +68,14 @@ export function locksFolder(): string {
   return join(voiceFolder(), "locks");
 }
 
+// The script studio's data root: the folder `BMO_SCRIPT_DATA` names, else the voice folder's `studio/`
+// (docs/script-studio.md).
+export function studioFolder(): string {
+  const named = process.env.BMO_SCRIPT_DATA;
+
+  return named === undefined || named === "" ? join(voiceFolder(), "studio") : named;
+}
+
 // The token the voice servers on the voice nodes check.
 export function nodeTokenPath(): string {
   return join(voiceFolder(), "voice.token");

@@ -230,6 +230,7 @@ is reported with the failure's own words, and the briefing it served fails as `d
 |---|---|---|
 | a node's target | `GET /nodes/{name}/target` | how a voice node is reached: `kind`, then an ssh node's `host`, `port`, `user`, `keyPath?` and `shell?`, or a hub node's `hubUrl`, `tokenFile` and `agent` |
 | a node's login | `POST /nodes/login` with `node` | `ssh`, the arguments that open a batch SSH login to an ssh node, or null |
+| the node list | `GET /nodes` | each node's `name`, in the list's order: the nodes `scripts/voice-train.ts nodes` looks at where none is named |
 
 - A refusal of the node service is its answer: `answered` false and a `refusal` carrying its `code` and `message`,
   carried as the voice's error like any other.
@@ -239,6 +240,12 @@ is reported with the failure's own words, and the briefing it served fails as `d
 - **The declaration** `weights/voice.card.toml` and **the adapter verbs** above.
 - **The turn client** `~/bmo-card/turn.py` on each node (「The turn client」), which the voice server imports from
   there and holds a turn with, declaring `BMO_CARD_SERVICE=voice`; **the card lock** `~/.gpu.lock`.
+- **A training step runs inside the turn client as a command,** `turn.py --service voice -- <command>`, on the
+  arbiter's own interpreter where its installation carries one; an exit of 3 is the voice having no place on the node.
+- **Whether a card is free for a training step** is read from the node arbiter's `GET /units` on the node's loopback
+  (「The node arbiter's units」), at the port `CARD_TURN_PORT` names in `~/.config/bmo-card/env`, else 7439: its
+  `card`, `lockHeldBy`, `claim` and `queue`, each ticket's `rest`. It is asked through the node's own shell with the
+  node's Python standard library.
 
 ### bmo-pocket (`docs/api.md`, 「The control socket」)
 
@@ -272,6 +279,10 @@ is reported with the failure's own words, and the briefing it served fails as `d
 ## Contract gaps
 
 Statements here a sibling's document does not yet match, each for that sibling to take up:
+
+- **No unit serves the wording glossary.** bmo-markup reads a glossary at a path its caller names and holds none,
+  so the training lines hold the Korean banned terms a line is checked against in their own data file,
+  `data/ko/voice-lines.toml`, until a unit serves the glossary and the voice reads it from there.
 
 - **bmo-receiver** sends a launch with `kind` `notice` or `summary` and no `started_by`; the voice reads such a
   launch's `started_by` as `notice:<chat>` or `chat:<chat>` until it sends one. It keeps its own copy of
