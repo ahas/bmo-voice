@@ -7,6 +7,14 @@ name = "bmo-voice"
 # no tests yet: they are written and run once the minimal services stand on bmo-next (README.md, 「Tests」).
 [test]
 languages = ["cargo", "bun"]
+# The Bun projects' packages, which their checks, the node scripts, the studio's tools, its screen's generate step and
+# the plugin bundle's types stand on; a release runs them too.
+setup = [
+  "cd scripts && bun install --frozen-lockfile",
+  "cd studio && bun install --frozen-lockfile",
+  "cd studio/client && bun install --frozen-lockfile",
+  "cd client && bun install --frozen-lockfile",
+]
 
 [check]
 # The sweeps that read the tree before anything runs: Korean in the code, the README's folder table and the
@@ -34,3 +42,27 @@ command = "cargo fmt --all --check"
 [build]
 # The service, the unit command and the script studio's server, into the release's bin/.
 binaries = ["voice-server", "bmo-voice", "script-studio"]
+
+# The voice's own deploy tree and the shared data root its settings and everything it keeps stand under
+# (docs/deploy.md). The plugin bundle is not deployed here: the web console extends it in its own build.
+[deploy]
+root = "~/.local/share/bmo-voice"
+link = "deploy"
+data_root = "~/.local/share/bmo/data"
+env_links = [{ link = "settings.toml", target = "env/voice.toml" }]
+units = ["deploy/*.service"]
+# Answers 0 once the service answers its health and the script studio its API with a sign-in asked for and its
+# screen with HTML.
+health = '''cd ~/.local/share/bmo-voice/deploy && bin/bmo-voice health && test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3214/bmo-script/api/assets)" = 401 && curl -sf http://127.0.0.1:3214/bmo-script/ | grep -qi '<html' '''
+
+# The script studio's screen, generated into the release where its server serves it from.
+[[deploy.step]]
+id = "studio-screen"
+phase = "before-flip"
+command = "cd studio/client && bun run generate"
+
+# Every voice node brought up to date once the service answers, pushing only where a node's stamp differs.
+[[deploy.step]]
+id = "voice-nodes"
+phase = "after-health"
+command = "bun scripts/voice-node.ts sync"

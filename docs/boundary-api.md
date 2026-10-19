@@ -150,6 +150,8 @@ it.
 | `voice brief --chat <chat> --by <who> [--text <words>] [--emotion <emotion>] [--title <title>] [--document <id>] [--via <road>]` | `voice-brief` | launches a briefing as `POST /briefings` does, the words on standard input where `--text` names none, the agent the one `BMO_TURN_AGENT` names, and ends once the run is up |
 | `runner voice <chat> <words-file> [<run> [<unit>]] [--reply-to <message>] [--voices <line>] [--no-transcript] [--emotion <emotion>] [--summary] [--keep] [--document <id>] [--agent <agent>] [--via <road>]` | `voice-runner` | the run a launch started: reads, speaks and sends the line, and closes its run |
 
+- **`health`**, which `bmo` does not dispatch, is the deployment's: it asks the service the settings name for its
+  `GET /health` and exits 0 where it answers `ok`, 1 otherwise, opening no store of its own.
 - Exit 0 on success, 1 on a refusal, which is printed on standard error as its English sentence, 2 on words that
   do not read.
 - **A briefing's run** is opened in agency's ledger under the agent `voice` and launched there as this command's

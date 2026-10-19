@@ -1,0 +1,22 @@
+[Unit]
+Description=bmo-voice: briefings spoken in a trained voice (docs/boundary-api.md in the voice's repository)
+After=network-online.target
+Wants=network-online.target
+# Without its settings the service has no listen address, database or token, so the unit does not start where the
+# deployment wrote none (docs/layout.md, 「Settings」).
+ConditionPathExists=%h/.local/share/bmo/data/env/voice.toml
+
+[Service]
+# The service runs out of the deploy tree, whose bin/ holds it and whose settings.toml links to the data root's
+# env/voice.toml.
+Type=simple
+WorkingDirectory=%h/.local/share/bmo-voice/deploy
+ExecStart=%h/.local/share/bmo-voice/deploy/bin/voice-server
+Restart=always
+RestartSec=2
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target
+# The repository's one service: stopped, restarted and watched by every deployment, which waits on its health.
+X-BMO-Deploy=bot

@@ -7,6 +7,7 @@ use std::process::ExitCode;
 
 use bmo_voice::briefing::{self, Launch, hand, runner};
 use bmo_voice::context::Context;
+use bmo_voice::settings::Settings;
 use clap::{Parser, Subcommand};
 
 // The nouns `bmo` dispatches here, one a line.
@@ -94,6 +95,38 @@ enum Command {
     #[arg(long)]
     via: Option<String>,
   },
+  /// Whether the service the settings name answers its health: 0 where it does, 1 where it does not.
+  Health,
+}
+
+// How long the health is waited for before it counts as no answer.
+const HEALTH_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+// The service's `GET /health`, at its own address as the settings name it.
+async fn health() -> Result<String, (u8, String)> {
+  let settings = Settings::load().map_err(|why| (1, format!("voice: {why}")))?;
+  let url = format!("{}/health", settings.address.trim_end_matches('/'));
+  let answer = reqwest::Client::new()
+    .get(&url)
+    .timeout(HEALTH_WAIT)
+    .send()
+    .await
+    .map_err(|why| (1, format!("voice: {url} did not answer: {why}")))?;
+
+  if !answer.status().is_success() {
+    return Err((1, format!("voice: {url} answered {}", answer.status().as_u16())));
+  }
+
+  let said: serde_json::Value = answer
+    .json()
+    .await
+    .map_err(|why| (1, format!("voice: {url} answered no health: {why}")))?;
+
+  if said["ok"] != true {
+    return Err((1, format!("voice: {url} answered {said}")));
+  }
+
+  Ok(String::new())
 }
 
 // The words as `bmo` hands them, a two-word noun joined into the one command name it stands for.
@@ -148,6 +181,11 @@ async fn main() -> ExitCode {
       return ExitCode::from(if error.use_stderr() { 2 } else { 0 });
     }
   };
+  // The health asks the running service and opens no store of its own.
+  if matches!(words.command, Command::Health) {
+    return ended(health().await);
+  }
+
   let context = match Context::open(4).await {
     Ok(context) => context,
     Err(why) => return ended(Err((1, format!("voice: {why}")))),
@@ -247,5 +285,6 @@ async fn main() -> ExitCode {
         .await
         .map_err(|(code, said)| (u8::try_from(code).unwrap_or(1), said))
     }
+    Command::Health => health().await,
   })
 }

@@ -309,6 +309,8 @@ Files whose work this repository does another way, each named with what does it 
 | `client/server/api/briefing/{events.get,stop.post,read.post}.ts` | `client/server/api/briefing/`: the stream relays the voice's `GET /briefings/events`, the stop asks the voice's `POST /briefings/stop`, and a line's reading asks the receiver's `POST /voice-briefing/line`, each behind the host's sign-in with English refusals and codes; a new `sound.get.ts` relays a voice message's sound from the receiver |
 | `client/server/utils/briefing-stream.ts`, `client/server/utils/presence.ts` | the voice's own listener stream (`src/service/`), which files only the frames a listener hears and works out the presence itself |
 | `client/shared/briefings.ts` | `client/shared/briefings.ts`, for a host showing a line's voices, its state type its own |
+| `tools/voice/services/bmo-script.service` | `deploy/bmo-script.service`: the `script-studio` binary out of the voice's deploy tree, the screen the deployment generates into the release served by default, marked to restart with every deployment |
+| `tools/voice/services/nginx.conf` | `deploy/nginx.conf`: the same two locations, naming no host and no snippet of a host's, the headers the studio reads written out |
 | `prompts/agents/voice-lines/instructions.md` | `prompts/voice-lines.md`, in English, naming no agent and no person; its Korean material is `data/ko/voice-lines.toml`, with the Korean entries of the old wording glossary its rows were checked against, and its sections on who the agent is, how it talks and the people it names are the deployment's persona file (`docs/deploy.md`) |
 
 The voice's Python files keep their work as it was; their paths name this repository's layout, their log lines
