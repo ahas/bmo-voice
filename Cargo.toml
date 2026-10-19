@@ -28,11 +28,17 @@ path = "src/bin/script-studio.rs"
 
 [dependencies]
 async-trait = "0.1.92"
+bmo-markup = { version = "0.1.0", path = "../../base/markup" }
+regex = "1.11.1"
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "query", "stream"] }
 sea-orm = { version = "1.1.17", default-features = false, features = ["macros", "runtime-tokio-rustls", "sqlx-postgres"] }
 sea-orm-migration = { version = "1.1.17", default-features = false, features = ["runtime-tokio-rustls", "sqlx-postgres"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = { version = "1.0.140", features = ["preserve_order"] }
+# The language data files under data/, read as YAML.
+serde-saphyr = { version = "2.0.0", default-features = false, features = ["deserialize"] }
+# A data file's templates filled by their {name} marks.
+strfmt = "0.2.4"
 sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "runtime-tokio"] }
 tokio = { version = "1.47.0", features = ["macros", "rt", "rt-multi-thread", "net", "time", "signal", "io-util", "process", "fs", "sync"] }
 toml = { version = "0.8.23", default-features = false, features = ["parse"] }

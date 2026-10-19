@@ -2,6 +2,7 @@
 //! (`docs/boundary-api.md`, 「What the voice calls」).
 
 pub mod artifact;
+pub mod receiver;
 
 use serde::de::DeserializeOwned;
 

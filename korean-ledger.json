@@ -1,1 +1,4 @@
-{}
+{
+  "data/ko/voice-script.yaml": 117,
+  "src/script/spoken.rs": 4
+}

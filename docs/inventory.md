@@ -256,6 +256,9 @@ Files whose work this repository does another way, each named with what does it 
 | `bot/bmo-server/src/verbs/voice/voices.rs` | the store's `voices` and `briefings` modules, on the voice's own database; its read of a document's title from the archive is the artifact unit's `GET /api/archive/{id}` |
 | `archive/bmo-archive/src/migration/m20261010_000001_voice_awaits_line.rs` | the store's one migration, which makes `voice_briefings` with `awaits_line` among its columns |
 | `archive/archive/briefing-store.ts` | the store's `briefings` module: the TypeScript reading of `voice_briefings` served the old archive facade alone |
+| `lang/bmo-lang/src/voice_script.rs` | the script's `words` module, reading `data/ko/voice-script.yaml` by language |
+| `lang/bmo-lang/lang/ko/voice-script.yaml` | `data/ko/voice-script.yaml` keeps its reading tables; its gate, reading and polish sentences are the script's English faults, each with a code |
+| `bot/bmo-server/src/verbs/voice/script/{mod,reading,spoken,polish,figures}.rs` | `src/script/`, their colocated tests left out as deferred; a gate run is the script's own request handed to the gate's route with the stage's own instructions, and the prompts name the agent rather than an agent's name |
 
 ## Deferred tests and test data
 

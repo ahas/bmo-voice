@@ -4,6 +4,7 @@
 use sea_orm::{DatabaseConnection, QueryResult};
 
 use super::{StoreError, all, one, run};
+pub use crate::script::reading::VoiceName;
 
 /// One continuation prompt of a voice: the clip it starts from and the words that clip says.
 #[derive(Clone, Debug, PartialEq)]
@@ -25,14 +26,6 @@ pub struct VoiceRow {
   pub seed: i64,
   pub prompts: Vec<(&'static str, Prompt)>,
   pub by_sentence: bool,
-}
-
-/// How one spelling is said in each language; an empty reading leaves it as written in that language.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VoiceName {
-  pub written: String,
-  pub ko: String,
-  pub en: String,
 }
 
 // The prompt columns of each language, in the order a voice is handed them.
