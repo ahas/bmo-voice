@@ -164,9 +164,16 @@ it.
 
 ### The tool entries
 
-`synth/tool.toml` declares the voice's entries for the system alone, called through the tool host's control
-socket (bmo-pocket's `docs/api.md`, 「The control socket」): `voice/mouth`, `voice/encoder`, `voice/transcriber` and
-`voice/briefing` (`docs/voice-plan.md`, 「The voice as a tool」).
+`synth/tool.toml` declares the tool `synth` and its entries for the system alone, called through the tool host's
+control socket (bmo-pocket's `docs/api.md`, 「The control socket」): `voice/mouth`, `voice/encoder`,
+`voice/transcriber` and `voice/briefing` (`docs/voice-plan.md`, 「The voice as a tool」).
+
+- **The executable answers the tool host's call protocol 1** (bmo-pocket's `docs/api.md`, 「The call protocol」)
+  with the voice's own `synth/tool_protocol.py`, so the placement needs nothing of the tool host's own helpers.
+- **The voice's own runs call the same executable directly,** handing it the call object the host would, with a
+  record naming the data root; the mouth's lock is the data root's `voice/locks/voice-synth.lock` either way.
+- **`voice/briefing`** runs the voice's unit command, the one `BMO_VOICE_BINARY` names, else `bmo-voice` on the
+  path.
 
 ## What the voice calls
 

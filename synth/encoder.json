@@ -1,0 +1,25 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "from_wav": {
+      "description": "The wav to encode.",
+      "type": "string"
+    },
+    "out": {
+      "description": "Where the OGG/Opus sound is written.",
+      "type": "string"
+    },
+    "wav": {
+      "description": "Where the waveform as it went into the encoder is kept as a wav as well, where it is wanted.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "from_wav",
+    "out"
+  ],
+  "type": "object"
+}

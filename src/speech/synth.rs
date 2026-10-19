@@ -99,7 +99,7 @@ pub fn mouth_arguments(words: &Words<'_>, out: &Path, voice: &VoiceRow) -> Value
 }
 
 // One entry of the voice's own tool entry run to its end, handed the call as the tool host hands it: the entry,
-// its arguments, and a record whose data root is the voice's folder, where the card's lock stands. Dropping the
+// its arguments, and a record naming the data root, under whose voice folder the card's lock stands. Dropping the
 // call before it answers ends the entry's process and whatever it runs, the synthesiser and its hold on the lock
 // with it.
 async fn call_entry(
@@ -114,7 +114,7 @@ async fn call_entry(
     "kind": "call",
     "entry": entry,
     "arguments": arguments,
-    "session": { "line": "voice", "capabilities": [], "dataRoot": settings.voice_folder() },
+    "session": { "line": "voice", "capabilities": [], "dataRoot": settings.data_root },
   });
   let mut child = tokio::process::Command::new("python3")
     .arg(folder.join(TOOL_ENTRY))

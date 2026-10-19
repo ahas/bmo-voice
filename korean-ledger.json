@@ -1,5 +1,9 @@
 {
   "data/ko/voice-script.yaml": 117,
   "policy/voice.toml": 1,
-  "src/script/spoken.rs": 4
+  "src/script/spoken.rs": 4,
+  "synth/briefing.json": 10,
+  "synth/voice-cer-sentences.json": 18,
+  "synth/voice-cer.py": 9,
+  "synth/voice-vox.py": 2
 }

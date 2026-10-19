@@ -264,6 +264,15 @@ Files whose work this repository does another way, each named with what does it 
 | `bot/bmo-server/src/verbs/voice/{mod,brief,runner,hand}.rs` | `src/briefing/` and the `bmo-voice` unit command, their colocated tests left out as deferred: the run in agency's ledger, its runner launched there, sends through the receiver, the sanitiser and the gates through the gate, the face through the tool host, the frame on the voice's own listener stream, and a full reading's or a narration's sound kept under the voice's folder |
 | `lang/bmo-lang/src/voice.rs`, `lang/bmo-lang/lang/ko/voice.yaml` | English refusals with codes in `src/briefing/`, English run notes in the runner, and the unit command's own usage; the switch-change sentence stays with the receiver, whose switch it is |
 
+| `tools/voice/tool.toml` | `synth/tool.toml`, named `synth` after its folder as the tool host requires, its entries still of the `voice` namespace; its `[card]` table is `weights/voice.card.toml`, and its after-deploy sync of the voice nodes is a step of the deployment (`docs/deploy.md`) |
+| the old tool SDK's Python helper the build copied beside the tool | `synth/tool_protocol.py`, the voice's own answer of the tool host's documented call protocol 1, so the voice depends on no other repository's code |
+
+The voice's Python files keep their work as it was; their paths name this repository's layout, their log lines
+are English, and the names of machines, agents and people are gone from their comments. Their Korean that stays is
+data: the spoken spellings the intelligibility measure normalises to, the measure's sentences, the line a freshly
+loaded model speaks and drops, the Hangul range a sentence's language is read by, and the emotions the briefing
+entry's schema allows.
+
 The launch a briefing goes through stood in the old `bot/bmo-server/src/chat/voice.rs`, a file the receiver
 carries: its launch, its switch and voice checks and its runner command are the voice's and stand in
 `src/briefing/`, while the receiver's own half of that file, the briefings a round ties and lets go, stays the

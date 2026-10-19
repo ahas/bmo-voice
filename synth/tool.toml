@@ -1,0 +1,53 @@
+# The voice as a tool (docs/voice-plan.md, 「The voice as a tool」): the mouth, the encoder, the transcriber and the
+# briefing, each an entry of the `voice` namespace for the system, answered by `voice-tool.py` on the system's
+# `python3`. The tool's name is its folder's, as the tool host reads it; its entries' full names are their
+# namespace's. The placement carries the manifest, the schemas, the executable, the three files it runs and the
+# answer of the call protocol it answers through. The voice server's card declaration is weights/voice.card.toml,
+# and every voice node is brought up to date by the deployment (docs/deploy.md).
+
+[tool]
+name = "synth"
+protocol = 1
+language = "python"
+build = 'cp voice-tool.py tool_protocol.py voice-vox.py voice-encode.py voice-transcribe.py "$BMO_TOOL_OUT/"'
+# The tests are deferred (README.md, 「Tests」); until they stand, the check reads every file the placement carries.
+check = 'python3 -m py_compile voice-tool.py tool_protocol.py voice-vox.py voice-encode.py voice-transcribe.py'
+run = ["python3", "voice-tool.py"]
+timeout = 60
+
+[[entry]]
+namespace = "voice"
+name = "mouth"
+title = "Mouth"
+description = "Speak one line on this machine's card in a trained voice, standing in the card's line, and write it as OGG/Opus."
+input = "mouth.json"
+timeout = 600
+system = true
+
+[[entry]]
+namespace = "voice"
+name = "encoder"
+title = "Encoder"
+description = "Write a spoken wav as OGG/Opus."
+input = "encoder.json"
+system = true
+
+[[entry]]
+namespace = "voice"
+name = "transcriber"
+title = "Transcriber"
+description = "Take spoken files down in one language, each with what was heard, in the order given."
+input = "transcriber.json"
+output = "transcribed.json"
+hints = { read_only = true }
+timeout = 600
+system = true
+
+[[entry]]
+namespace = "voice"
+name = "briefing"
+title = "Briefing"
+description = "Launch a briefing said out loud in a room, answered once its run is up."
+input = "briefing.json"
+hints = { open_world = true }
+system = true

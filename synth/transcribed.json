@@ -1,0 +1,27 @@
+{
+  "properties": {
+    "heard": {
+      "description": "Each file with what was heard in it, in the order given.",
+      "items": {
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "heard": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "heard"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "heard"
+  ],
+  "type": "object"
+}

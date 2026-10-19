@@ -1,0 +1,95 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "cfg": {
+      "description": "The voice row's guidance.",
+      "type": "number"
+    },
+    "checkpoint": {
+      "description": "The voice row's checkpoint.",
+      "type": "string"
+    },
+    "out": {
+      "description": "Where the OGG/Opus sound is written.",
+      "type": "string"
+    },
+    "prompts": {
+      "description": "The voice row's continuation prompts, one per language.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "clip": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "words": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "language",
+          "clip",
+          "words"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "reference": {
+      "description": "The voice row's reference clip.",
+      "type": "string"
+    },
+    "seed": {
+      "description": "The voice row's seed.",
+      "type": "integer"
+    },
+    "sentences": {
+      "default": false,
+      "description": "Whether the line is spoken sentence by sentence.",
+      "type": "boolean"
+    },
+    "steps": {
+      "description": "The voice row's steps.",
+      "type": "integer"
+    },
+    "style": {
+      "description": "The delivery the line is spoken with, where the voice row names one.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "text": {
+      "description": "The words, where they are not handed as a file.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "text_file": {
+      "description": "A file holding the words.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "wav": {
+      "description": "Where the spoken wav is kept as well, where it is wanted.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "out",
+    "checkpoint",
+    "reference",
+    "cfg",
+    "steps",
+    "seed"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,26 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "files": {
+      "description": "The spoken files, in the order they are answered in.",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "language": {
+      "description": "The language they are spoken in.",
+      "enum": [
+        "ko",
+        "en"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "language",
+    "files"
+  ],
+  "type": "object"
+}
