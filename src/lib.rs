@@ -1,6 +1,9 @@
 //! The voice: briefings spoken in a trained voice, the voice servers on the voice nodes, voice training and the
 //! script studio (`docs/layout.md`).
 
+pub mod briefing;
+pub mod context;
+pub mod policy;
 pub mod script;
 pub mod settings;
 pub mod speech;

@@ -217,4 +217,29 @@ impl Receiver {
   pub async fn events(&self) -> Result<reqwest::Response, UnitError> {
     self.caller.send(self.caller.request(Method::GET, &["events"])).await
   }
+
+  /// A room's name, as the room list gives it.
+  pub async fn room_title(&self, chat: i64) -> Result<String, UnitError> {
+    #[derive(Deserialize)]
+    struct Titled {
+      title: String,
+    }
+
+    let sent = self.caller.request(Method::GET, &["console", "rooms", &chat.to_string(), "title"]);
+    let titled: Titled = self.caller.json(sent).await?;
+
+    Ok(titled.title)
+  }
+
+  /// News that a message of a room changed, put into the receiver's stream so a screen showing the room reads it
+  /// again.
+  pub async fn message_changed(&self, chat: i64, message: i64) -> Result<(), UnitError> {
+    let body = serde_json::json!({ "type": "message", "chatId": chat, "messageId": message });
+
+    self
+      .caller
+      .send(self.caller.request(Method::POST, &["event"]).json(&body))
+      .await
+      .map(drop)
+  }
 }

@@ -261,6 +261,13 @@ Files whose work this repository does another way, each named with what does it 
 | `bot/bmo-server/src/verbs/voice/script/{mod,reading,spoken,polish,figures}.rs` | `src/script/`, their colocated tests left out as deferred; a gate run is the script's own request handed to the gate's route with the stage's own instructions, and the prompts name the agent rather than an agent's name |
 | `bot/bmo-server/src/verbs/voice/{synth,node}.rs` | `src/speech/`, their colocated tests left out as deferred; the mouth and the encoder run through the voice's own tool entry under `synth/`, a node is reached as the node service's target and login say, a hub node through its hub's exec route, the locks stand under the voice's folder and are taken with the standard library's file locks |
 | `bot/bmo-server/src/verbs/voice/clock.rs` | `src/speech/clock.rs`, holding a speaking run to agency's clock for it rather than asking past its cap itself |
+| `bot/bmo-server/src/verbs/voice/{mod,brief,runner,hand}.rs` | `src/briefing/` and the `bmo-voice` unit command, their colocated tests left out as deferred: the run in agency's ledger, its runner launched there, sends through the receiver, the sanitiser and the gates through the gate, the face through the tool host, the frame on the voice's own listener stream, and a full reading's or a narration's sound kept under the voice's folder |
+| `lang/bmo-lang/src/voice.rs`, `lang/bmo-lang/lang/ko/voice.yaml` | English refusals with codes in `src/briefing/`, English run notes in the runner, and the unit command's own usage; the switch-change sentence stays with the receiver, whose switch it is |
+
+The launch a briefing goes through stood in the old `bot/bmo-server/src/chat/voice.rs`, a file the receiver
+carries: its launch, its switch and voice checks and its runner command are the voice's and stand in
+`src/briefing/`, while the receiver's own half of that file, the briefings a round ties and lets go, stays the
+receiver's and reaches the voice through `docs/boundary-api.md`.
 
 ## Deferred tests and test data
 

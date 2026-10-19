@@ -33,6 +33,8 @@ base64 = "0.22.1"
 dotenvy = "0.15.7"
 futures-util = "0.3.34"
 bmo-markup = { version = "0.1.0", path = "../../base/markup" }
+# The unit command's words, read by the maintained reader of command lines.
+clap = { version = "4.5.40", features = ["derive"] }
 # The tool host's control socket, HTTP/1.1 over a Unix socket.
 http-body-util = "0.1.3"
 hyper = { version = "1.6.0", features = ["client", "http1"] }

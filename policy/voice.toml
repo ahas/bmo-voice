@@ -1,0 +1,12 @@
+# The voice's own policy values (docs/boundary-api.md, 「The voice's policy values」). The voice owns them; a unit
+# above it that needs one reads it from GET /policy.
+
+# How long a briefing's run may take, in milliseconds, before its clock asks whether to keep it.
+run_cap_ms = 600000
+
+# The kind a notice of a briefing that did not go out is queued under, which a newer such notice replaces.
+failed_kind = "voice-failed"
+
+# The emotions a briefing may be said with, one for each face a listener draws; a launch naming any other is
+# refused. They are names a listener's faces are keyed by, as the face unit keys them.
+emotions = ["기본", "기쁨", "슬픔", "놀람", "화남", "졸림", "폭소", "걱정", "아픔", "안간힘"]

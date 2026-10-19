@@ -119,19 +119,31 @@ that plays briefings. It carries only these frames, each with an id a client res
 
 - The voice owns these values; a unit above it that needs one reads it here.
 
+### A briefing heard, from its own runner
+
+| Route | Request | Answer |
+|---|---|---|
+| `POST /briefings/heard` | a `briefing` frame's data (「The listener stream」) | 204, the frame filed on the listener stream |
+
+- A briefing's runner runs apart from the service, so it files the frame of what it put in the room here, with the
+  service's own token. No other unit calls it.
+
 ### The unit command
 
 `bmo-voice` is the command `bmo` hands the voice's words to (bmo-cli's boundary, 「Unit commands」). Asked
-`nouns`, it prints `voice say`, `voice brief` and `runner voice`.
+`nouns`, it prints `voice say`, `voice brief` and `runner voice`; each noun's two words, or its one-word name, run
+it.
 
-| Words | Alias | What it does |
+| Words | Name and alias | What it does |
 |---|---|---|
-| `voice say --text <words> [--chat <chat>] [--voice <name>]`, or `--file <sound> [--caption <words>]` | `voice` | says one line out loud in a room while the caller waits, or sends a sound file it is handed |
-| `voice brief --chat <chat> --by <who> [--text <words>] [--emotion <emotion>] [--title <title>] [--document <id>]` | `voice-brief` | launches a briefing as `POST /briefings` does, the words on standard input where `--text` names none, and ends once the run is up |
-| `runner voice <chat> <words-file> [<run> [<unit>]] [--reply-to <message>] [--voices <line>] [--no-transcript] [--emotion <emotion>] [--summary] [--keep] [--document <id>] [--agent <agent>]` | `voice-runner` | the run a launch started: reads, speaks and sends the line, and closes its run |
+| `voice say --text <words> [--chat <chat>] [--voice <name>]`, or `--file <sound> [--caption <words>]` | `voice-say`, `voice` | says one line out loud in a room while the caller waits, or sends a sound file it is handed; the room is the owner's private chat where none is named |
+| `voice brief --chat <chat> --by <who> [--text <words>] [--emotion <emotion>] [--title <title>] [--document <id>] [--via <road>]` | `voice-brief` | launches a briefing as `POST /briefings` does, the words on standard input where `--text` names none, the agent the one `BMO_TURN_AGENT` names, and ends once the run is up |
+| `runner voice <chat> <words-file> [<run> [<unit>]] [--reply-to <message>] [--voices <line>] [--no-transcript] [--emotion <emotion>] [--summary] [--keep] [--document <id>] [--agent <agent>] [--via <road>]` | `voice-runner` | the run a launch started: reads, speaks and sends the line, and closes its run |
 
 - Exit 0 on success, 1 on a refusal, which is printed on standard error as its English sentence, 2 on words that
   do not read.
+- **A briefing's run** is opened in agency's ledger under the agent `voice` and launched there as this command's
+  `voice-runner`, with `BMO_VOICE_SETTINGS` naming the settings the launcher read.
 
 ### The node scripts and the card adapter
 
@@ -160,6 +172,7 @@ is reported with the failure's own words, and the briefing it served fails as `d
 |---|---|---|
 | one run of a gate | `POST /stages/{stage}/runs` with `prompt`, `chat?`, `message?`, `agent?`, `thinking`, `alongside` | the reading gate, `voice-reading`, and the polishing gate, `voice-polish`, each with the stage's own instructions; `answer` null is no answer, 409 `stopped` a stop, anything else that is no answer the gate's fault |
 | a gate's options | `GET /options/{key}` | whether the polishing gate is switched on: off only where `enabled` is false or zero |
+| the sanitiser | `POST /sanitised` with `text`, `label`, `chat?` | a briefing's words and a voice message's caption made safe to hand on, before anything is made of them; where the gate does not answer, the words go on as they are and the run's log says so |
 
 ### bmo-receiver (`docs/boundary-api.md`)
 
@@ -172,6 +185,8 @@ is reported with the failure's own words, and the briefing it served fails as `d
 | a send with files | `POST /say-file`, a form of `chatId`, `text?`, `replyTo?` and the `file` | a voice message put in a room, its reading as the caption; answers `messageId`, `sent` and `failed` |
 | a message | `GET /rooms/{chat}/messages/{message}` | `text`, the line a full reading voices; 404 for a message the receiver does not keep |
 | the event stream | `GET /events` | the turn events presence is worked out from |
+| a room's name | `GET /console/rooms/{chat}/title` | `title`, what a briefing's run is called where a person watches it |
+| a message changed | `POST /event` with `type` `message`, `chatId` and `messageId` | a screen showing the room reads the line a briefing voices again once the briefing's run ends |
 
 ### bmo-agency (`docs/api.md`)
 
@@ -246,12 +261,16 @@ Statements here a sibling's document does not yet match, each for that sibling t
   reading listed with `kind` `full` and no title does not read there until it takes both.
 - **bmo-receiver's `POST /say-file`** takes a caption and files but says nothing of sending an OGG/Opus file as a
   voice message, of folding a caption past a road's limit into replies, or of the road a line nobody asked for
-  goes on; the voice sends its briefings there and leaves those to the receiver's roads.
+  goes on; the voice sends its briefings there and leaves those to the receiver's roads. Nor does any route say
+  before a send whether a room's road carries a voice, so a road that carries none is met at the send and told to
+  the room as a briefing that did not go out.
+- **bmo-receiver's sends** name no room-file rule for a sound file `voice say` is handed, so the voice sends what it
+  is handed and the receiver's roads keep their own rules.
 - **bmo-artifact** sends `chat_id` and no `kind`; the voice reads a body naming a `document` as a narration. It
   serves no route to attach a narration to a document, so a narration's sound is kept by the voice and served at
   `GET /briefings/{run}/sound` until it does.
-- **bmo-gate** names no route for the sanitiser a unit other than the receiver calls; `voice say` sends a caption
-  unsanitised until it does.
+- **bmo-agency** stands a run's program in its agent's host; a briefing's run names the agent `voice`, which is
+  to stand as agency's registration for the voice's runs.
 - **bmo-node** serves no route that runs a command on a hub node; the voice reaches a hub node through the hub
   itself, from the target's `hubUrl`, `tokenFile` and `agent`: the hub's `POST /exec?agent=` with the bearer token
   the token file holds under `JAKE_CONTROL_TOKEN`, its answer a server-sent stream of `started`, `stdout`,

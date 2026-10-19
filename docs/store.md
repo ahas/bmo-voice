@@ -94,7 +94,7 @@ Under the data root's `voice/`:
 | Place | What it holds |
 |---|---|
 | `voices/` | the installed voices, a folder per checkpoint, and `reference/` (`weights/checkpoints.toml`) |
-| `sounds/` | the kept sounds of full readings and narrations, by run |
+| `sounds/` | the kept sounds of full readings and narrations, one `<run>.ogg` each, OGG/Opus; a full reading's row names its file in `sound_path` |
 | `locks/` | `voice-synth.lock`, the line in front of this machine's card, and `voice-node-<node>.lock`, one per voice node, taken by the run that speaks through it |
 | `voice.token` | the bearer token every voice server checks, `0600` |
 | `studio/` | the script studio's data root where the settings name no other (`docs/script-studio.md`) |

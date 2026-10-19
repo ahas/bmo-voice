@@ -1,4 +1,5 @@
 {
   "data/ko/voice-script.yaml": 117,
+  "policy/voice.toml": 1,
   "src/script/spoken.rs": 4
 }

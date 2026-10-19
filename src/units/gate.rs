@@ -82,4 +82,19 @@ impl Gate {
 
     Ok(options.on())
   }
+
+  /// Words made safe to hand on, as the gate's sanitiser reads them: the smallest spans carrying
+  /// security-intrusion material defused, the rest as it was.
+  pub async fn sanitised(&self, text: &str, label: &str, chat: Option<i64>) -> Result<String, UnitError> {
+    #[derive(Deserialize)]
+    struct Sanitised {
+      text: String,
+    }
+
+    let body = serde_json::json!({ "text": text, "label": label, "chat": chat });
+    let sanitised: Sanitised =
+      self.caller.json(self.caller.request(Method::POST, &["sanitised"]).json(&body)).await?;
+
+    Ok(sanitised.text)
+  }
 }
