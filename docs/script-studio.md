@@ -13,8 +13,15 @@ A studio for checking the provided source material and recording the line spans 
 - **What is the deployment's own** stands in the settings' `[studio]` section (`docs/boundary-api.md`, 「Settings」),
   each part optional: `source_root`, the folder the source manifest's paths and the download records' keys stand
   under, which an asset's path is read without; `source_url`, the address an export names as its source, null where
-  none is named; and `speakers`, the spellings of the speaker label a subtitle cue may open with, which matching
-  drops, matched whatever their case.
+  none is named; `speakers`, the spellings of the speaker label a subtitle cue may open with, which matching drops,
+  matched whatever their case, the first of them the speaker an automatic line's id and notes name; `cloud`, the
+  address the media tools download the material from; and `cloud_home`, the folder of the manifest's paths the
+  cloud's player names its videos below.
+- **The media tools under `studio/`** read the same settings, through `BMO_VOICE_SETTINGS` or the release's
+  `settings.toml`, and the same `BMO_SCRIPT_DATA`, so the server, the TypeScript tools and the Python tools stand on
+  one data root. The Korean they write into records stands in `data/ko/`: the tags, their defaults and the group of
+  a file at the top of the material in `studio-tags.json`, the notes and the import's evidence sentence in
+  `studio-notes.json`.
 - **A refusal of the API** answers `error`, an English sentence, and `code`, which the screen words for its reader:
   `signed_out`, `sign_in_throttled`, `bad_sign_in`, `wrong_sign_in`, `sign_in_unavailable`, `foreign_origin`,
   `not_found`, `no_file`, `unsupported`, `bad_track`, `no_subtitle`, `not_downloaded`, `no_local_file`, and for a
@@ -72,6 +79,9 @@ A studio for checking the provided source material and recording the line spans 
 - **Resuming:** downloads resume through `.part`, and failures are not hidden. `studio/scripts/bmo-script-download.py`
   resumes them; the screen only reads the download records.
 - **Where the downloads go:** the data root `--root` names, else `BMO_SCRIPT_DATA`, else the default above.
+- **Where they come from:** the settings' `cloud`: a video through the cloud's player page, named by its path below
+  `cloud_home`, and its sound and subtitle addresses read off that page; any other file at its path under the
+  cloud, the cloud named as the referrer of every request.
 - **Expired addresses** are refreshed by opening the original player again. No host or access identifier is ever
   made up.
 - **Checking:** the list snapshot is compared with the completed files.

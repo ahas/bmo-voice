@@ -36,7 +36,7 @@ The service and the unit command read one TOML file (`docs/layout.md`, 「Settin
 | `data_root` | the runtime data root; everything the voice keeps stands under its `voice/` folder |
 | `agent` | the registered agent whose voice speaks where nothing names another, by its id |
 | `[units.<unit>]` | `address` and `token_file?` of each unit called: `gate`, `receiver`, `agency`, `artifact`, `node`, `pocket`, and `web` for the script studio's sign-in |
-| `[studio]` | optional, the script studio's deployment values: `source_root?`, `source_url?` and `speakers?` (`docs/script-studio.md`, 「Access and service」) |
+| `[studio]` | optional, the script studio's deployment values: `source_root?`, `source_url?`, `speakers?`, `cloud?` and `cloud_home?` (`docs/script-studio.md`, 「Access and service」) |
 
 ## What the voice serves
 

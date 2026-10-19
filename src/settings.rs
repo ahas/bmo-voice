@@ -64,9 +64,14 @@ pub struct Studio {
   pub source_root: Option<String>,
   /// The address an export names as its source.
   pub source_url: Option<String>,
-  /// The spellings of the speaker label a subtitle cue may open with, which matching drops.
+  /// The spellings of the speaker label a subtitle cue may open with, which matching drops; the first is the speaker
+  /// the media tools name in an automatic line's id and notes.
   #[serde(default)]
   pub speakers: Vec<String>,
+  /// The address the media tools download the source material from, read by them alone.
+  pub cloud: Option<String>,
+  /// The folder of the manifest's paths the cloud's player names its videos below, read by the media tools alone.
+  pub cloud_home: Option<String>,
 }
 
 /// Why the settings would not stand.

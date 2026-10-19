@@ -26,7 +26,7 @@ the base libraries `bmo-chat`, `bmo-chat-client`, `bmo-ui` and `bmo-markup` may 
 | `prompts/` | What the voice's own model runs are told: the training lines' writer, in English |
 | `scripts/` | The node, install and training scripts, a Bun project of its own: the voice node install, push, sync, health, speak and card adapter, a voice installed and checked, the voice names, training steps placed on a card, the training lines written |
 | `src/` | The crate: the settings, the store, the script rules, the clients of the other units, synthesis and the voice nodes, the briefing runtime, the routes, the script studio's server, and the `voice-server`, `bmo-voice` and `script-studio` binaries |
-| `studio/` | The script studio's screen, `studio/client/`, a Nuxt project on bmo-ui |
+| `studio/` | The script studio's media tools, a Bun project with Python scripts beside it (`studio/lib/`, `studio/scripts/`, `studio/fixtures/`), and its screen, `studio/client/`, a Nuxt project on bmo-ui |
 | `synth/` | What speaks: the VoxCPM2 mouth and voice server, the encoder, the transcriber, the intelligibility measure, the tool entries and their schemas, and the frozen package list of the voice environment |
 | `weights/` | The declarations of the voice's weights: the voice server's card declaration and where the voices and the base model stand; never the weights themselves |
 
@@ -41,6 +41,7 @@ as the record of the behaviour to keep. Until then a build check is the only ver
 - `cargo check --all-targets`: the static check.
 - `bunx tsc --noEmit` in `scripts/`: the scripts' static check.
 - `bunx nuxi typecheck` in `studio/client/`: the studio screen's static check.
+- `bunx tsc --noEmit` in `studio/` and `python3 -m py_compile studio/scripts/*.py`: the studio tools' static checks.
 - `cargo fmt --all --check` and `cargo clippy --all-targets -- -D warnings`: the review.
 
 ## Version

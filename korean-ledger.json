@@ -1,6 +1,7 @@
 {
+  "data/ko/studio-notes.json": 2,
+  "data/ko/studio-tags.json": 7,
   "data/ko/voice-lines.toml": 183,
-  "data/ko/studio-tags.json": 6,
   "data/ko/voice-names.toml": 6,
   "data/ko/voice-node.toml": 1,
   "data/ko/voice-prompt-check-lines.json": 4,
@@ -12,6 +13,7 @@
   "src/studio/records.rs": 1,
   "src/studio/review.rs": 2,
   "src/studio/subtitles.rs": 6,
+  "studio/fixtures/reviews.json": 18,
   "synth/briefing.json": 10,
   "synth/voice-cer-sentences.json": 18,
   "synth/voice-cer.py": 9,

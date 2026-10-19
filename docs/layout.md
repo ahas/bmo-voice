@@ -14,7 +14,7 @@ How the repository is laid out, what each part is, and where it runs. Read this 
 | `prompts/` | What the voice's own model runs are told: the training lines' writer. English only |
 | `scripts/` | The node and training scripts, a Bun project of its own: the voice node install, push, sync, health, speak and card adapter, a voice installed and checked, the voice names, training stages placed on a card, the training lines written |
 | `src/` | The crate: the settings, the store, the script rules, the clients of the other units, synthesis and the voice nodes, the briefing runtime, the routes, the script studio's server, and the `voice-server`, `bmo-voice` and `script-studio` binaries |
-| `studio/` | The script studio's screen (`studio/client/`, a Nuxt project) and its media tools (`studio/scripts/`, Bun and Python), with their records' shared fixtures |
+| `studio/` | The script studio's screen (`studio/client/`, a Nuxt project) and its media tools (`studio/lib/` and `studio/scripts/`, Bun and Python), with their records' shared fixtures |
 | `synth/` | What speaks: the VoxCPM2 mouth and voice server, the encoder, the transcriber, the intelligibility measure, the tool entries and their schemas, and the frozen package list of the voice environment |
 | `tests/` | Every test of the repository, whatever its language |
 | `weights/` | The declarations of the voice's weights: the voice server's card declaration and where the voices and the base model stand; never the weights themselves |

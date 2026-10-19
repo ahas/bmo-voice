@@ -4,7 +4,8 @@ How the script studio is run while it is being changed, without touching the liv
 
 ## The copy of the data root
 
-- **Where:** a workbench folder outside the data root it copies, named with `--to`.
+- **Where:** a workbench folder outside the data root it copies, named with `--to`, by default the studio's data root
+  with `-workbench` after its name.
 - **What it holds:** the source manifest, the download records and the research index, copied; `studio.db`, copied
   through SQLite (`VACUUM INTO`), which reads through the write-ahead log so every committed review is in the copy;
   and `media/`, `subtitles/` and `asr/`, linked to the live ones, which the server only reads.
