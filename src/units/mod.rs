@@ -1,12 +1,45 @@
 //! The other units the voice calls, each a client of only the routes that unit's own document states
 //! (`docs/boundary-api.md`, 「What the voice calls」).
 
+pub mod agency;
 pub mod artifact;
+pub mod gate;
+pub mod node;
+pub mod pocket;
 pub mod receiver;
 
 use serde::de::DeserializeOwned;
 
 use crate::settings::{Settings, Unit};
+
+/// Every unit the voice calls, each at the address the settings name.
+#[derive(Clone, Debug)]
+pub struct Units {
+  pub gate: gate::Gate,
+  pub receiver: receiver::Receiver,
+  pub agency: agency::Agency,
+  pub artifact: artifact::Artifact,
+  pub node: node::Node,
+  pub pocket: pocket::Pocket,
+}
+
+impl Units {
+  /// The units the settings name, called through one HTTP client.
+  pub fn new(settings: &Settings) -> Result<Self, UnitError> {
+    let http = reqwest::Client::new();
+    let units = &settings.units;
+    let caller = |name: &'static str, unit: &Unit| Caller::new(name, settings, unit, http.clone());
+
+    Ok(Self {
+      gate: gate::Gate::new(caller("gate", &units.gate)?),
+      receiver: receiver::Receiver::new(caller("receiver", &units.receiver)?),
+      agency: agency::Agency::new(caller("agency", &units.agency)?),
+      artifact: artifact::Artifact::new(caller("artifact", &units.artifact)?),
+      node: node::Node::new(caller("node", &units.node)?),
+      pocket: pocket::Pocket::new(&units.pocket.address),
+    })
+  }
+}
 
 /// Why a unit did not give what was asked: its refusal, or no answer at all.
 #[derive(Debug)]

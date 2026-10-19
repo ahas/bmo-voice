@@ -149,40 +149,40 @@ socket (bmo-pocket's `docs/api.md`, 「The control socket」): `voice/mouth`, `v
 
 ## What the voice calls
 
-Each call goes to the unit's address under `[units]` with the unit's token as a bearer where it names a token file.
-A refusal is read as the unit's document gives it; a unit that does not answer is reported with the failure's own
-words, and the briefing it served fails as `docs/voice-briefing.md` says.
+Each call goes to the unit's address under `[units]` with the unit's token as a bearer where it names a token file,
+in the conventions that unit's document gives the route's family. A refusal is read as the unit's document gives
+it, carried as the voice's error naming the unit, its status, its code and its sentence; a unit that does not answer
+is reported with the failure's own words, and the briefing it served fails as `docs/voice-briefing.md` says.
 
 ### bmo-gate (`docs/boundary-api.md`, 「For the voice unit: the voice gates」 and 「For the console」)
 
 | Call | Route | Used for |
 |---|---|---|
-| one run of a gate | `POST /stages/{stage}/runs` with `prompt`, `chat?`, `message?`, `agent?` | the reading gate, `voice-reading`, and the polishing gate, `voice-polish`, each with the stage's own instructions; `answer` null is no answer, 409 `stopped` a stop, 404 `no_gate` a stage that is not a gate |
-| a gate's options | `GET /options/{key}` | whether the polishing gate is switched on (`enabled`) |
-| the sanitiser | the sanitiser route of the gate's document | a voice message's caption sanitised before `voice say` sends it |
+| one run of a gate | `POST /stages/{stage}/runs` with `prompt`, `chat?`, `message?`, `agent?`, `thinking`, `alongside` | the reading gate, `voice-reading`, and the polishing gate, `voice-polish`, each with the stage's own instructions; `answer` null is no answer, 409 `stopped` a stop, anything else that is no answer the gate's fault |
+| a gate's options | `GET /options/{key}` | whether the polishing gate is switched on: off only where `enabled` is false or zero |
 
 ### bmo-receiver (`docs/boundary-api.md`)
 
 | Call | Route | Used for |
 |---|---|---|
-| voice a notice | `POST /rooms/{chat}/notices` | a briefing that did not go out told to its room by the room's voice |
-| the switch | `GET /voice-briefing` | whether briefings are on, and whether they play by themselves |
-| a room's answerers | `GET /rooms/{chat}/answerers` | the agent that speaks for a room |
-| the owner | `GET /owner` | the owner's private chat, where a line nobody asked for goes |
-| a send with files | `POST /say-file` | a voice message put in a room, its reading as the caption |
-| a message | `GET /rooms/{chat}/messages/{message}` | the line a full reading voices |
+| voice a notice | `POST /rooms/{chat}/notices` with `fact`, `intent`, `follow_up?`, `optional`, `kind?`, `expires_at?`, `events`, `rides_until?` | a briefing that did not go out told to its room by the room's voice; answers the instruction's `id` |
+| the switch | `GET /voice-briefing` | `on` and `autoplay`: whether briefings are on, and whether they play by themselves |
+| a room's answerers | `GET /rooms/{chat}/answerers` | `voice`, the agent that speaks for a room |
+| the owner | `GET /owner` | `chat`, the owner's private chat, where a line nobody asked for goes |
+| a send with files | `POST /say-file`, a form of `chatId`, `text?`, `replyTo?` and the `file` | a voice message put in a room, its reading as the caption; answers `messageId`, `sent` and `failed` |
+| a message | `GET /rooms/{chat}/messages/{message}` | `text`, the line a full reading voices; 404 for a message the receiver does not keep |
 | the event stream | `GET /events` | the turn events presence is worked out from |
 
 ### bmo-agency (`docs/api.md`)
 
 | Call | Route | Used for |
 |---|---|---|
-| the agents | `GET /agents` | the voice an agent's registration names, or none |
-| open a run | `POST /runs` | the ledger row of a briefing's run |
-| launch it | `POST /runs/{id}/launch` | the briefing's runner started in its agent's host |
-| close it | `POST /runs/{id}/close` | how the run ended: `done`, `failed`, `refused`, `superseded` |
-| its clock | `GET /runs/clock?run=` | how long a run past its cap is kept, before a line is cut |
-| a note | `POST /log/notes` | what the runner tells its run's log on its way |
+| the agents | `GET /agents` | each agent's `name` and the `voice` its row names, or none |
+| open a run | `POST /runs` with `agent`, `chat_id?`, `unit`, `depth`, `cap_ms?`, `started_at`, `started_by?` | the ledger row of a briefing's run; answers its `id` |
+| launch it | `POST /runs/{id}/launch` with `title`, `agent` and `command` (`program`, `args`, `cwd`, `environment`) | the briefing's runner started in its agent's host |
+| close it | `POST /runs/{id}/close` with `finished_at` and `outcome` | how the run ended: `done`, `failed`, `refused`, `superseded`; a run closed already, 409, keeps its closing |
+| its clock | `GET /runs/clock?run=` | `capEnds` and `keptUntil`: how long a run past its cap is kept, before a line is cut |
+| a note | `POST /log/notes` with `agent`, `run`, `chat?`, `text`, `state?` | what the runner tells its run's log on its way |
 
 ### bmo-artifact (`docs/api.md`, 「Documents (HTTP)」)
 
@@ -194,8 +194,11 @@ words, and the briefing it served fails as `docs/voice-briefing.md` says.
 
 | Call | Route | Used for |
 |---|---|---|
-| a node's target | `GET /nodes/{name}/target` | how a voice node is reached: an ssh node's host, port, user, key and shell, or a hub node's hub, token file and agent |
-| a node's login | `POST /nodes/login` | the arguments that open a batch SSH login to an ssh node |
+| a node's target | `GET /nodes/{name}/target` | how a voice node is reached: `kind`, then an ssh node's `host`, `port`, `user`, `keyPath?` and `shell?`, or a hub node's `hubUrl`, `tokenFile` and `agent` |
+| a node's login | `POST /nodes/login` with `node` | `ssh`, the arguments that open a batch SSH login to an ssh node, or null |
+
+- A refusal of the node service is its answer: `answered` false and a `refusal` carrying its `code` and `message`,
+  carried as the voice's error like any other.
 
 ### bmo-arbiter (`docs/api.md`)
 
@@ -207,7 +210,10 @@ words, and the briefing it served fails as `docs/voice-briefing.md` says.
 
 | Call | Route | Used for |
 |---|---|---|
-| a system entry | `POST /calls` with `face/expression` | the face a briefing shows for its emotion, filed on its `briefing` frame |
+| an entry described | `GET /catalogue/{namespace}/{name}` | the capabilities the entry asks, which the call's record holds |
+| a system entry | `POST /calls` with `session` (a record of `line` `voice`, those capabilities, `dataRoot` and a privileged turn), `tool` `face/expression` and its `arguments` | the face a briefing shows for its emotion, filed on its `briefing` frame |
+
+- The control socket is the path `[units.pocket]`'s `address` names; it takes no token.
 
 ### bmo-web (`docs/boundary.md`, 「sumida's own routes」)
 
