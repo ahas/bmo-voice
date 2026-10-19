@@ -55,6 +55,49 @@ stands, and no other.
 - **The node and training scripts** read the same file, and the Python under `synth/` is handed what it needs on
   its command line or standard input.
 
+## The console plugin bundle
+
+`client/` is the voice briefing as the web unit's console takes it (`docs/voice-briefing.md`, 「The console's
+player」): a Bun project of its own, its manifest, its lockfile and its Nuxt configuration one level below the root.
+
+- **A Nuxt layer on bmo-ui.** It extends bmo-ui and adds the `/briefing` page, the briefing player, the composable
+  that hears briefings, its domain modules and four server routes. A host extends it the way it extends bmo-ui.
+  bmo-ui is a peer at the one version the bundle is built against; for the bundle's own install a packed copy under
+  `client/vendor/` is a development dependency, and bmo-ui's patch stands under `client/patches/`.
+- **Its own files by relative path.** In a host `~`, `@` and `#shared` are the host's folders, so no file of the
+  bundle reaches another through them, and bmo-ui's modules are imported by the package's path.
+- **The page** is the player's settings section: the side and height it stands at, a reset, and the trial voice the
+  bundle ships, `public/briefing-trial.ogg`.
+- **The player and the hearing** are the host's to place: `BriefingPlayer` inside its layout's page panel, and
+  `useBriefings(t)` called once by the screen that stands for as long as briefings are to be heard. The composable
+  holds `/api/briefing/events` open with the browser's own event source, plays a `briefing` frame whose `autoplay`
+  is true and which is still fresh (two minutes), and stops on a `briefing-stopped` frame.
+- **Where a press on the player leads** is the host's room route, the app configuration's `briefing.line`, a path
+  with `{chat}` and `{message}` marks, `/rooms/{chat}?at={message}` where the host names none.
+- **Every word is a key of the host's language pack:** `briefing.label.title`, `briefing.label.side`,
+  `briefing.label.top`, `briefing.label.pixels`, `briefing.label.side_left`, `briefing.label.side_right`,
+  `briefing.action.listen`, `briefing.action.open`, `briefing.action.stop`, `briefing.action.play_trial`,
+  `briefing.action.stop_trial`, `briefing.action.reset_position`, `briefing.error.play_failed` and
+  `briefing.error.stop_failed`.
+- **The server routes** call the voice and the receiver at the addresses and with the tokens the host's runtime
+  configuration gives under `voice` and `receiver`, from `NUXT_VOICE_ADDRESS`, `NUXT_VOICE_TOKEN`,
+  `NUXT_RECEIVER_ADDRESS` and `NUXT_RECEIVER_TOKEN`:
+  - `GET /api/briefing/events` relays the voice's listener stream, `GET /briefings/events`, handing on the
+    `Last-Event-ID` the browser resumes with;
+  - `POST /api/briefing/stop` with `chat` and `message` asks the voice's `POST /briefings/stop`;
+  - `POST /api/briefing/read` with `chat` and `message` asks the receiver's `POST /voice-briefing/line`, a line's
+    full reading, and answers its `ok` and `state`;
+  - `GET /api/briefing/sound?chat=&message=` relays the voice message's sound, the receiver's
+    `GET /console/rooms/{chat}/messages/{message}/files/0`, handing on the `Range` the browser asked with.
+  Each refuses a request with no signed-in user, and hands a refusal of the unit's on with its status, its code and
+  its sentence. Their own codes are `which` (no chat or message named), `no_voice_address` and
+  `no_receiver_address` (the host names no address), `voice_unreachable` and `receiver_unreachable` (the unit did
+  not answer), and `voice_refused` and `receiver_refused` (a refusal with no code).
+- **What the host owes,** beside what bmo-ui asks of it: its i18n module and a language pack answering the keys
+  above; its sign-in, as `nuxt-auth-utils`'s `requireUserSession`, which the server routes call; and the placing of
+  the player and the hearing above. `client/host/` declares the sign-in, so the bundle's typecheck holds the routes
+  to it.
+
 ## Where things run
 
 - **The operations machine** runs the service, the unit command, the script studio's server and the node and

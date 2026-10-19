@@ -20,6 +20,7 @@ the base libraries `bmo-chat`, `bmo-chat-client`, `bmo-ui` and `bmo-markup` may 
 
 | Folder | What it holds |
 |---|---|
+| `client/` | The console plugin bundle: the briefing player and its settings section at `/briefing`, a Nuxt layer on bmo-ui (`docs/layout.md`, 「The console plugin bundle」) |
 | `data/` | Language material the code reads by language, `data/<language>/`; every Korean line of it is in `korean-ledger.json` |
 | `docs/` | The documents, which come before the code: start with `docs/layout.md` |
 | `policy/` | The voice's own policy values, `policy/voice.toml` |
@@ -40,7 +41,7 @@ as the record of the behaviour to keep. Until then a build check is the only ver
 
 - `cargo check --all-targets`: the static check.
 - `bunx tsc --noEmit` in `scripts/`: the scripts' static check.
-- `bunx nuxi typecheck` in `studio/client/`: the studio screen's static check.
+- `bunx nuxi typecheck` in `studio/client/` and in `client/`: the studio screen's and the plugin bundle's static checks.
 - `bunx tsc --noEmit` in `studio/` and `python3 -m py_compile studio/scripts/*.py`: the studio tools' static checks.
 - `cargo fmt --all --check` and `cargo clippy --all-targets -- -D warnings`: the review.
 

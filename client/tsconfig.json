@@ -1,0 +1,11 @@
+{
+  // Nuxt's own project configs carry the layer's code. The app is read on its own and the server routes again with
+  // the host's sign-in declared, so those two take the place of Nuxt's app and server configs.
+  "files": [],
+  "references": [
+    { "path": "./host" },
+    { "path": "./.nuxt/tsconfig.shared.json" },
+    { "path": "./.nuxt/tsconfig.node.json" },
+    { "path": "./host/tsconfig.server.json" }
+  ]
+}
