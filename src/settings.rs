@@ -27,6 +27,8 @@ pub struct Units {
   pub artifact: Unit,
   pub node: Unit,
   pub pocket: Unit,
+  /// The account service the script studio signs a person in against.
+  pub web: Unit,
 }
 
 #[derive(Clone, Debug, Deserialize)]
