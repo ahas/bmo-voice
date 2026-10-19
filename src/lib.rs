@@ -9,6 +9,7 @@ pub mod service;
 pub mod settings;
 pub mod speech;
 pub mod store;
+pub mod studio;
 pub mod units;
 
 /// Now, in epoch milliseconds.

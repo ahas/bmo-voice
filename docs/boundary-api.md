@@ -36,6 +36,7 @@ The service and the unit command read one TOML file (`docs/layout.md`, 「Settin
 | `data_root` | the runtime data root; everything the voice keeps stands under its `voice/` folder |
 | `agent` | the registered agent whose voice speaks where nothing names another, by its id |
 | `[units.<unit>]` | `address` and `token_file?` of each unit called: `gate`, `receiver`, `agency`, `artifact`, `node`, `pocket`, and `web` for the script studio's sign-in |
+| `[studio]` | optional, the script studio's deployment values: `source_root?`, `source_url?` and `speakers?` (`docs/script-studio.md`, 「Access and service」) |
 
 ## What the voice serves
 
@@ -260,7 +261,7 @@ is reported with the failure's own words, and the briefing it served fails as `d
 
 | Call | Route | Used for |
 |---|---|---|
-| sign-in | `POST /sumida/auth/session`, then `DELETE /sumida/auth/session` | the script studio's sign-in: a name and a password the account service takes are a login; the studio keeps its own session after |
+| sign-in | `POST /sumida/auth/session` with `name` and `password`, then `DELETE /sumida/auth/session` with the `bmo.sid` cookie it answered | the script studio's sign-in: a name and a password the account service takes are a login, a 401 is a wrong one; the studio keeps its own session after |
 
 ## Codes
 

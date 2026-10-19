@@ -8,6 +8,7 @@ pub mod hub;
 pub mod node;
 pub mod pocket;
 pub mod receiver;
+pub mod web;
 
 use serde::de::DeserializeOwned;
 
@@ -22,6 +23,7 @@ pub struct Units {
   pub artifact: artifact::Artifact,
   pub node: node::Node,
   pub pocket: pocket::Pocket,
+  pub web: web::Web,
 }
 
 impl Units {
@@ -38,6 +40,7 @@ impl Units {
       artifact: artifact::Artifact::new(caller("artifact", &units.artifact)?),
       node: node::Node::new(caller("node", &units.node)?),
       pocket: pocket::Pocket::new(&units.pocket.address),
+      web: web::Web::new(caller("web", &units.web)?),
     })
   }
 }

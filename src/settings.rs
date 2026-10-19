@@ -50,6 +50,23 @@ pub struct Settings {
   /// stands in.
   pub synth: Option<PathBuf>,
   pub units: Units,
+  /// The script studio's deployment values.
+  #[serde(default)]
+  pub studio: Studio,
+}
+
+/// What the script studio holds of a deployment (`docs/script-studio.md`, 「Access and service」).
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Studio {
+  /// The folder the source manifest's paths and the download records' keys stand under, which an asset's path is
+  /// read without; none where they stand at the top.
+  pub source_root: Option<String>,
+  /// The address an export names as its source.
+  pub source_url: Option<String>,
+  /// The spellings of the speaker label a subtitle cue may open with, which matching drops.
+  #[serde(default)]
+  pub speakers: Vec<String>,
 }
 
 /// Why the settings would not stand.
@@ -102,12 +119,18 @@ impl Settings {
       return Ok(named.clone());
     }
 
-    let binary = std::env::current_exe().map_err(|why| Unread(format!("the running binary: {why}")))?;
-    let release = binary.parent().and_then(Path::parent).ok_or_else(|| {
-      Unread(format!("{} stands in no release; name `synth` in the settings", binary.display()))
-    })?;
+    Ok(Self::release_folder()?.join("synth"))
+  }
 
-    Ok(release.join("synth"))
+  /// The top of the release the running binary stands in, `bin/` beneath it.
+  pub fn release_folder() -> Result<PathBuf, Unread> {
+    let binary = std::env::current_exe().map_err(|why| Unread(format!("the running binary: {why}")))?;
+
+    binary
+      .parent()
+      .and_then(Path::parent)
+      .map(Path::to_path_buf)
+      .ok_or_else(|| Unread(format!("{} stands in no release", binary.display())))
   }
 
   /// The voice's own folder under the data root, where everything it keeps stands.

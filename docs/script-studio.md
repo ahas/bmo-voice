@@ -7,9 +7,20 @@ A studio for checking the provided source material and recording the line spans 
 - **Address:** the path `/bmo-script/` of the host the proxy locations in `deploy/` stand in. The path goes to the
   service, which serves both the screen and its API; the path without the slash is redirected to it.
 - **Service:** `bmo-script.service` runs the `script-studio` binary on loopback, at the port `BMO_SCRIPT_PORT`
-  names. The data root comes from `BMO_SCRIPT_DATA`, by default `voice/studio/` under the data root, and the
-  generated screen from `BMO_SCRIPT_STATIC`. A port of 0 is one the system chooses, named in the line the service
-  prints as it starts listening.
+  names, 3214 where it names none. The data root comes from `BMO_SCRIPT_DATA`, by default `voice/studio/` under the
+  data root, and the generated screen from `BMO_SCRIPT_STATIC`, by default `studio/client/.output/public` in the
+  release. A port of 0 is one the system chooses, named in the line the service prints as it starts listening.
+- **What is the deployment's own** stands in the settings' `[studio]` section (`docs/boundary-api.md`, 「Settings」),
+  each part optional: `source_root`, the folder the source manifest's paths and the download records' keys stand
+  under, which an asset's path is read without; `source_url`, the address an export names as its source, null where
+  none is named; and `speakers`, the spellings of the speaker label a subtitle cue may open with, which matching
+  drops, matched whatever their case.
+- **A refusal of the API** answers `error`, an English sentence, and `code`, which the screen words for its reader:
+  `signed_out`, `sign_in_throttled`, `bad_sign_in`, `wrong_sign_in`, `sign_in_unavailable`, `foreign_origin`,
+  `not_found`, `no_file`, `unsupported`, `bad_track`, `no_subtitle`, `not_downloaded`, `no_local_file`, and for a
+  review that does not read the review's own codes: `bad_time`, `time_form`, `time_sixty`, `time_range`,
+  `text_length`, `duplicate_line`, `review_status`, `span`, `record_form` and, answered 409, `edited_elsewhere`.
+  The import script's reading of a record refuses with the same codes and sentences.
 - **A request body is at most 2,000,000 bytes;** a larger one is answered `413` before it is read.
 - **One reading of a record, in two languages.** The server reads and writes the review records in Rust, and the
   import script with the studio's TypeScript reading; both are held to one set of stored records in
