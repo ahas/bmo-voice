@@ -27,9 +27,16 @@ A studio for checking the provided source material and recording the line spans 
   `studio/fixtures/reviews.json`, each with what the TypeScript reading makes of it or the sentence it refuses it
   with, so neither reading drifts from the other unseen. `studio/scripts/fixtures.ts` writes it again after the
   reading changes.
-- **Screen:** the Nuxt app in `studio/client/`, generated into static files. The server hands them out as they are
-  and answers every other GET under the prefix, a deep link included, with the app's `index.html`. Paths under
-  `api/`, `media/` and `subtitle/` are the server's own.
+- **Screen:** the Nuxt app in `studio/client/`, a host of bmo-ui, generated into static files. The server hands them
+  out as they are and answers every other GET under the prefix, a deep link included, with the app's `index.html`.
+  Paths under `api/`, `media/` and `subtitle/` are the server's own.
+- **The screen's words** are keys: the studio's own under `script.*`, and every key bmo-ui reads. The words the
+  repository carries are English, `studio/client/i18n/locales/en.yaml`. A deployment that speaks another language
+  hands the generate step its pack, the file `BMO_SCRIPT_PACK` names, in the language `BMO_SCRIPT_LANGUAGE` names,
+  answering the same keys; the screen then speaks that language, and English otherwise. A refusal of the server is
+  shown as the pack's `script.error.<code>` where it has one, and as the server's own sentence otherwise.
+- **The tags a line is stored with** are data, not words: the emotion, delivery, music, overlap and non-verbal sound
+  choices and a new line's defaults stand in `data/ko/studio-tags.json`, which the screen reads.
 - **Data:** files and records stand in the studio's data root and are never committed.
 - **Review database:** SQLite in write-ahead-log mode. An edit compares versions, so one tab cannot overwrite
   another tab's save. JSON export is offered.

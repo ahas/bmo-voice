@@ -281,6 +281,10 @@ is reported with the failure's own words, and the briefing it served fails as `d
 
 Statements here a sibling's document does not yet match, each for that sibling to take up:
 
+- **bmo-web holds every language pack,** and none for the script studio's screen yet. The studio carries its words
+  in English and takes a pack at generate time (`docs/script-studio.md`, 「Access and service」); the Korean pack of
+  its `script.*` keys, and of bmo-ui's keys for it, is bmo-web's to hold and hand the deployment.
+
 - **No unit serves the wording glossary.** bmo-markup reads a glossary at a path its caller names and holds none,
   so the training lines hold the Korean banned terms a line is checked against in their own data file,
   `data/ko/voice-lines.toml`, until a unit serves the glossary and the voice reads it from there.

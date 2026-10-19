@@ -1,0 +1,39 @@
+diff --git a/dist/Collapsible/CollapsibleRoot.cjs b/dist/Collapsible/CollapsibleRoot.cjs
+index 9fb6f87d336d4550d55e62413b491b607d21baaa..47296e2e12690fcb2e6fa3629191458c6ae3f1df 100644
+--- a/dist/Collapsible/CollapsibleRoot.cjs
++++ b/dist/Collapsible/CollapsibleRoot.cjs
+@@ -1,5 +1,6 @@
+ const require_rolldown_runtime = require('../rolldown-runtime.cjs');
+ const require_shared_createContext = require('../shared/createContext.cjs');
++const require_shared_useId = require('../shared/useId.cjs');
+ const require_shared_useForwardExpose = require('../shared/useForwardExpose.cjs');
+ const require_Primitive_Primitive = require('../Primitive/Primitive.cjs');
+ const vue = require_rolldown_runtime.__toESM(require("vue"));
+@@ -48,7 +49,7 @@ var CollapsibleRoot_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ *
+ 		});
+ 		const { disabled, unmountOnHide } = (0, vue.toRefs)(props);
+ 		provideCollapsibleRootContext({
+-			contentId: "",
++			contentId: require_shared_useId.useId(void 0, "reka-collapsible-content"),
+ 			disabled,
+ 			open,
+ 			unmountOnHide,
+diff --git a/dist/Collapsible/CollapsibleRoot.js b/dist/Collapsible/CollapsibleRoot.js
+index bf5a45a58fe3c590548394eff6b7b584ed3aa0e8..c4f25db59d44aa71f9455d22765b03e45d25aeb0 100644
+--- a/dist/Collapsible/CollapsibleRoot.js
++++ b/dist/Collapsible/CollapsibleRoot.js
+@@ -1,4 +1,5 @@
+ import { createContext } from "../shared/createContext.js";
++import { useId } from "../shared/useId.js";
+ import { useForwardExpose } from "../shared/useForwardExpose.js";
+ import { Primitive } from "../Primitive/Primitive.js";
+ import { createBlock, defineComponent, openBlock, renderSlot, toRefs, unref, withCtx } from "vue";
+@@ -47,7 +48,7 @@ var CollapsibleRoot_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ *
+ 		});
+ 		const { disabled, unmountOnHide } = toRefs(props);
+ 		provideCollapsibleRootContext({
+-			contentId: "",
++			contentId: useId(void 0, "reka-collapsible-content"),
+ 			disabled,
+ 			open,
+ 			unmountOnHide,

@@ -1,0 +1,230 @@
+# The script studio's words in English (docs/script-studio.md, 「Access and service」): the studio's own keys under
+# `script`, and every key bmo-ui reads under `common` and `files`. A deployment speaking another language hands the
+# generate step a pack answering the same keys.
+script:
+  title:
+    # The line editor's heading.
+    edit_line: Edit line
+    # The episode panel's heading.
+    episodes: Episodes
+    # The line list's heading.
+    lines: Lines
+    # The sign-in card's heading.
+    login: Sign in to the studio
+    # The span editor's heading.
+    range: Spoken span
+    # The page's title.
+    studio: Line studio
+  label:
+    all_files: All files
+    all_seasons: All seasons
+    annotated_line: Line with emotion tags
+    # Whether the voiced character appears in the episode.
+    agent_appears: Character appears
+    # Whether the voiced character really speaks in the episode.
+    agent_speaks: Character speaks
+    clip_id: Clip ID
+    delivery: Delivery
+    # {progress}: how many downloads are done of how many.
+    downloads: "Downloads {progress}"
+    emotion: Emotion
+    end: End
+    english_line: English line
+    events: Non-verbal sounds
+    file_path: Sound file path
+    has_lines: Has lines or candidates
+    # {n}: the number of lines.
+    line_count: "Lines: {n}"
+    lines: Lines
+    music: Background music
+    new_line: New line
+    no_range: No span
+    none: None
+    notes: Notes
+    overlap: Another speaker overlapping
+    password: Password
+    playable: Playable
+    review_note: Evidence and review notes
+    review_state: Review state
+    reviewed: Reviewed
+    source: Source
+    speaks: Speaks
+    speaks_unknown: Speech not checked
+    start: Start
+    # The line under the page's title.
+    subtitle: Voice data records
+    unclassified: Unclassified
+    unknown: Not checked
+    user_id: Name
+    whole_video: Whole video
+    "yes": "Yes"
+    zoom_range: Zoom to span
+  action:
+    add: Add
+    delete: Delete
+    discard: Discard
+    download_original: Download original
+    export_csv: Export CSV
+    login: Sign in
+    logout: Sign out
+    play_range: Play span
+    refresh: Refresh
+    set_now: Set to now
+    step_back: −0.1 s
+    step_forward: +0.1 s
+    view_range: View span
+  placeholder:
+    annotated_line: "<sad> …"
+    english_line: The English line as it is heard
+    episode_pick: Search and choose an episode
+    events: Choose laughter, crying and the like
+    notes: Background sound, overlapping speakers, uncertain transcription
+    review_note: Scenes checked, sources, silent appearances
+    title_search: Search titles
+  aria:
+    check_state: Check state
+    downloads: Downloads
+    edit_panel: Line editing panel
+    episode_panel: Episode panel
+    episode_panel_width: Episode panel width
+    episode_pick: Choose an episode
+    episode_search: Search episodes
+    line_range: Line span
+    lines_panel: Line list panel
+    lines_panel_width: Line panel width
+    open_lines: Open the line list
+    playback_rate: Playback speed
+    season: Season
+    video: Episode video; the left and right arrows move 0.1 seconds
+    video_and_edit: Video and line editing
+    video_info: Video and its details
+    video_width: Video and editor width
+    view_range: View this span
+  status:
+    dirty: Unsaved changes
+    download_complete: Downloaded
+    download_failed: Download failed
+    download_queued: Queued
+    downloading: Downloading
+    episodes_loading: Loading the episode…
+    loading: Loading the studio…
+    needs_review: Needs review
+    unsaved: Not saved
+  message:
+    add_lines: Add the lines you have checked.
+    check_download: Check the file through the original download above.
+    check_ranges: Check each line's start and end.
+    delete_confirm: Delete the chosen line?
+    discard_confirm: Discard the unsaved changes?
+    file_path_hint: Records the path of the extracted sound file.
+    lines_after_pick: Choose an episode to see its lines.
+    logout_confirm: Sign out without saving?
+    no_subtitles: No English subtitles were found for this video yet. Spans can be set by hand.
+    pick_episode: Choose an episode.
+    pick_line: Choose a line from the list, or add one.
+    range_hint: Drag the handles, or use the left and right keys to move 0.1 seconds.
+    range_in_video: Set a start and end inside the video's length.
+    review_hint: Check the line and its span, set it to reviewed, then save.
+    save_to_apply: It takes effect once saved.
+    saved: Saved.
+    source_note: "Sources the character's lines were matched against: fan scripts, which do not mean every line was found or the video was reviewed."
+    subtitle_match: Empty spans are matched against the English subtitles on save. Only a line matching in one place gets its times.
+    time_format: Write a time as 02:13.450.
+    wait_download: The video plays once its download has finished.
+  error:
+    episode_failed: The episode could not be loaded.
+    load_failed: The studio could not be loaded.
+    reload_failed: The list could not be read again.
+    request_failed: The request could not be handled.
+    save_failed: It could not be saved.
+    video_unplayable: The video cannot be played.
+common:
+  action:
+    cancel: Cancel
+    choose_all: Choose all
+    choose_none: Choose none
+    close: Close
+    close_all_tabs: Close all tabs
+    close_other_tabs: Close other tabs
+    close_right_tabs: Close tabs to the right
+    copy: Copy
+    discard: Discard
+    fit_screen: Fit to screen
+    more: More
+    next_picture: Next picture
+    pause: Pause
+    pin: Pin
+    play: Play
+    previous_picture: Previous picture
+    save: Save
+    unpin: Unpin
+    zoom_in: Zoom in
+    zoom_out: Zoom out
+  aria:
+    close_named: "Close {name}"
+    column_width: "Width of {name}"
+    decrease: Decrease
+    download_named: "Download {name}"
+    image_zoom: "Zoom of {title}"
+    increase: Increase
+    more_notices: "{n} more notices"
+    pinned_named: "{name}, pinned"
+  error:
+    editor_failed: The editor could not be loaded.
+    picture_failed: The picture could not be loaded.
+    video_failed: The video could not be loaded.
+  label:
+    # A dayjs format the day is written in.
+    day_format: MMM D, YYYY
+    days: "{d} d"
+    days_hours: "{d} d {h} h"
+    expired: Expired
+    forever: Forever
+    hours: "{h} h"
+    hours_minutes: "{h} h {m} min"
+    left_days: "{n} days left"
+    left_hours: "{n} hours left"
+    left_minutes: "{n} minutes left"
+    left_under_minute: Under a minute left
+    minutes: "{m} min"
+    minutes_seconds: "{m} min {s} s"
+    palette_forest: Forest
+    palette_lemon: Lemon
+    palette_sea: Sea
+    palette_sunset: Sunset
+    palette_teal: Teal
+    palette_violet: Violet
+    play_position: Play position
+    properties: Properties
+    seconds: "{n} s"
+    theme_forest: Forest
+    theme_sea: Sea
+    theme_sunset: Sunset
+    theme_teal: Teal
+    theme_violet: Violet
+    unplayable: Cannot be played
+  message:
+    discard_confirm: Discard the changes?
+    preview_badge: Badge
+    preview_field: Field
+    preview_link: Link
+    preview_meta: Details
+    preview_note: A note
+  status:
+    copied: Copied
+    loading: Loading…
+    picture_loading: Loading the picture…
+    video_loading: Loading the video…
+files:
+  action:
+    keep_both: Keep both
+    replace: Replace
+    skip: Skip
+  aria:
+    name_field: Name
+  label:
+    progress: "{done} of {all} ({percent})"
+  message:
+    conflict: Some names are already taken.
+  status:
+    uploading: Uploading…
