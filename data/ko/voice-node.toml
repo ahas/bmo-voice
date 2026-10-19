@@ -1,0 +1,4 @@
+# What the node scripts say on a voice node (docs/voice-plan.md, 「Building and updating them」).
+
+# The line a node is tried on once the voice server is installed there: written for that try, never a room's words.
+check_line = "목소리 노드를 옮긴 뒤 처음 해 보는 확인 문장이에요."

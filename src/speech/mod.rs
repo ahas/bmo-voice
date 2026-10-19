@@ -2,7 +2,6 @@
 //! on the voice nodes reached through each node's own shell, and the clock a speaking run is held to.
 
 pub mod clock;
-pub mod hub;
 pub mod node;
 pub mod synth;
 

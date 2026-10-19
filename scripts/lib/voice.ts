@@ -1,0 +1,150 @@
+import { mkdir } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+
+import { parseFile } from "music-metadata";
+
+import { releaseRoot, settings, synthFolder } from "./settings";
+
+import type { VoiceRow } from "./store";
+
+// What the scripts share with the service about speaking a line (docs/voice-plan.md): how long a line may take,
+// the line in front of this machine's card, the delivery a trained voice starts with, and the voice's own entries
+// in `synth/`, which do the speaking, encoding and transcribing.
+
+// How long a line may take before it is called off, as the voice's own policy declares it (`policy/voice.toml`).
+export const voiceCapMs: number = (Bun.TOML.parse(readFileSync(join(releaseRoot, "policy/voice.toml"), "utf8")) as { run_cap_ms: number }).run_cap_ms;
+
+// -------------------------------------------------------------- the line in front of the card
+
+// A lock file there, made by whichever run comes first, so a line does not depend on another having run before
+// it. A node a run speaks through is held by a lock file of its own beside the card's.
+export async function readyVoiceLock(path: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true }).catch(async () => undefined);
+  await Bun.write(path, "");
+}
+
+// How long a run stands in that line before it gives up its turn. Three ordinary briefings ahead of you fit inside
+// this, and a wait longer than it means the card is wedged rather than busy.
+export const voiceQueueWaitMs = 5 * 60_000;
+
+// What flock exits with when a lock is somebody else's, kept clear of anything the process it guards exits with.
+export const voiceQueueExit = 75;
+
+// The delivery instruction a trained voice is spoken under: the one the training run chose together with cfg 1.5
+// and 16 steps for a lower, steadier delivery (docs/voice-plan.md, 「How steady the pitch is」). It is the value a
+// voice row starts with, and the row is where it is changed.
+export const trainedDelivery = "A calm, steady voice, slightly lower pitch, even pacing, restrained expression";
+
+// What the trained mouth refuses in an instruction, said before a row is written that no briefing could speak: a
+// bracket would close the instruction early and have the rest read aloud, and the mouth takes a sentence rather
+// than a script. The mouth holds the same two limits on its side (`synth/voice-vox.py`).
+export const mostDelivery = 300;
+
+export function deliveryRefusal(style: string): string | null {
+  if (/[()]/.test(style) || style.length > mostDelivery) {
+    return `a delivery instruction is plain words of at most ${mostDelivery} characters, without brackets`;
+  }
+
+  return null;
+}
+
+// ------------------------------------------------------------ the voice's entries
+
+// Every line spoken on this machine's card, every wav encoded and every file taken down is the work of the voice's
+// own tool entry, `synth/voice-tool.py`, handed a call the way the tool host hands it (docs/voice-plan.md, 「The
+// voice as a tool」).
+
+// The words a line is handed to the mouth as: a file, or the line itself.
+export type VoiceWords = { textFile: string } | { text: string };
+
+// What the mouth is called with: the words, where the sound goes, and the whole of the trained voice's row.
+export function voiceMouthArguments(words: VoiceWords, out: string, voice: VoiceRow): Record<string, unknown> {
+  return {
+    ...("textFile" in words ? { text_file: words.textFile } : { text: words.text }),
+    out,
+    checkpoint: voice.checkpoint,
+    reference: voice.reference,
+    cfg: voice.cfg,
+    steps: voice.steps,
+    seed: voice.seed,
+    ...(voice.style === "" ? {} : { style: voice.style }),
+    sentences: voice.bySentence,
+    prompts: Object.entries(voice.prompts).map(([language, prompt]) => ({ language, clip: prompt.clip, words: prompt.words })),
+  };
+}
+
+// A line the card never took: another held it past the wait, and the synthesiser was never reached.
+export class VoiceTurnLost extends Error {
+  constructor(said: string) {
+    super(said);
+    this.name = "VoiceTurnLost";
+  }
+}
+
+// An entry's answer, as the call protocol has it.
+export interface ToolAnswer {
+  content?: { type: string; text?: string }[];
+  isError?: boolean;
+  structuredContent?: unknown;
+}
+
+// How long an entry may take: the mouth and the transcriber stand in the card's line, the encoder does not.
+const ENTRY_TIMEOUT_MS: Record<string, number> = { mouth: 600_000, transcriber: 600_000, encoder: 60_000 };
+
+// One of the voice's entries run to its end, handed the call as the tool host hands it: the entry, its arguments,
+// and a record naming the data root, under whose voice folder the card's lock stands. Its answer is handed back
+// where it did the work; a refusal for want of a turn throws VoiceTurnLost, and any other failure an Error.
+export async function voiceEntry(entry: string, args: Record<string, unknown>): Promise<ToolAnswer> {
+  const folder = synthFolder();
+  const handed = {
+    protocol: 1,
+    kind: "call",
+    entry: `voice/${entry}`,
+    arguments: args,
+    session: { line: "voice", capabilities: [], dataRoot: settings().data_root },
+  };
+  const run = Bun.spawn(["python3", join(folder, "voice-tool.py")], {
+    cwd: folder,
+    stdin: new TextEncoder().encode(JSON.stringify(handed)),
+    stdout: "pipe",
+    stderr: "pipe",
+    timeout: ENTRY_TIMEOUT_MS[entry] ?? 60_000,
+  });
+  const [stdout, stderr, code] = await Promise.all([new Response(run.stdout).text(), new Response(run.stderr).text(), run.exited]);
+  let answer: ToolAnswer;
+
+  try {
+    answer = JSON.parse(stdout) as ToolAnswer;
+  } catch {
+    throw new Error(`the voice's ${entry} entry gave no answer (exit ${code}): ${stderr.trim().split("\n").pop() ?? ""}`);
+  }
+
+  if (answer.isError !== true) return answer;
+
+  const said = (answer.content ?? []).map((piece) => piece.text ?? "").join("\n");
+
+  if (said.startsWith("no turn:")) throw new VoiceTurnLost(said);
+
+  throw new Error(said.replace(/^ERROR: /, ""));
+}
+
+// One line spoken on this machine's card by the voice's mouth, which stands it in the card's line.
+export async function speakOnCard(words: VoiceWords, out: string, voice: VoiceRow): Promise<void> {
+  await voiceEntry("mouth", voiceMouthArguments(words, out, voice));
+}
+
+// A wav already spoken by a node written out as OGG/Opus by the voice's encoder. It stands in no line: no model is
+// loaded and the card is not touched.
+export async function encodeWav(wav: string, out: string): Promise<void> {
+  await voiceEntry("encoder", { from_wav: wav, out });
+}
+
+// How long a sound file runs, read by the maintained reader of audio containers; null where it tells none.
+export async function soundSeconds(file: string): Promise<number | null> {
+  try {
+    return (await parseFile(file, { duration: true })).format.duration ?? null;
+  } catch {
+    return null;
+  }
+}

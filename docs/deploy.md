@@ -14,6 +14,10 @@ How a commit of this repository goes live. The testbed deploys it from the repos
   without a session and its screen 200 with HTML.
 - **After health:** `scripts/voice-node.ts sync` brings every voice node up to date, pushing only where a node's stamp
   differs (`docs/voice-plan.md`, 「Building and updating them」).
+- **A deployment's own voice and names** are set once by hand, never carried by the repository: the first trained
+  voice with `scripts/voice-install.ts --add` (`docs/voice-plan.md`, 「The voices」), and the readings of the names
+  the deployment's agents and owner go by with `scripts/voice-names.ts --set`, beside the generic seed names a new
+  table is given.
 - **The proxy:** `deploy/nginx.conf` holds the script studio's two locations, the bare path redirected to the one with
   the slash and everything under it passed to the studio's port. A deployment never touches the proxy; the path and
   the port are fixed and the locations stand in the host's server block.

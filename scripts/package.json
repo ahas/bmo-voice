@@ -1,0 +1,18 @@
+{
+  "name": "bmo-voice-scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "bmo-markup": "file:../../../base/markup/package",
+    "eventsource-parser": "^4.1.2",
+    "music-metadata": "^12.2.3"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.3",
+    "typescript": "5.9.3"
+  }
+}

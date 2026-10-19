@@ -968,9 +968,9 @@ class CardTaken(Exception):
 
 
 def card_turn():
-    """The voice's ticket at the node's card arbiter, through the arbiter's client pushed beside this file,
-    under the service name the unit declares; None where the client is not there, and the lock is taken
-    as it comes."""
+    """The voice's ticket at the node's card arbiter, through the turn client the arbiter installs on the node and
+    the unit puts on the import path, under the service name the unit declares; None where the client is not there,
+    and the lock is taken as it comes."""
     try:
         from turn import TurnClient
     except ImportError:

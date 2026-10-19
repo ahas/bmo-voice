@@ -229,8 +229,9 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
   any model loads.
 - **Installing a prompt checks it first** (「How a prompt is checked」): `--prompt <name> <clip.wav> '<words>'` and
   `--prompt-en`, `none` in place of the clip to empty one, `--dry-run` to check and write nothing.
-- **Another trained checkpoint joins by name:** `--add <name> --checkpoint <dir>` copies its two weight files and adds
-  a row that is not current. **Switching is one command:** `--use <name>` makes that row the one current, and the
+- **A trained checkpoint joins by name:** `--add <name> --checkpoint <dir> --reference <clip.wav>` copies its two
+  weight files and the clip it is conditioned on and adds a row, the current one where the table held none and not
+  current otherwise. Listed with no flag, the script shows every voice and marks the current one. **Switching is one command:** `--use <name>` makes that row the one current, and the
   next briefing speaks in it. **Hearing a voice by name:** `voice say --voice <name> --text '<words>'`.
 
 ## Where the weights live
@@ -285,8 +286,7 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
   the same it is out of reach.
 - **Port 7432 on each node's loopback, and nowhere else.** Every call reaches it through the node's own shell, `ssh`
   for an ssh node and the hub's exec and file transfer for a hub node, as the node service's target gives it.
-- **What lands on each node,** under `bmo-voice/` in the account's home: the server file, the card arbiter's turn
-  client beside it, the virtual environment, a copy of the voices directory, and `spoken/` (`0700`), where a call's
+- **What lands on each node,** under `bmo-voice/` in the account's home: the server file, the virtual environment, a copy of the voices directory, and `spoken/` (`0700`), where a call's
   request and answer stand while it is under way. The token is `.config/bmo-voice/token`, `0600`.
 
 ### Which node speaks a line
@@ -315,7 +315,7 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
 - **`setup`** builds the virtual environment from the frozen package list and downloads the base model the
   checkpoints name; it installs uv where missing, refuses a node whose driver runs no CUDA 13, and runs apart on the
   node, its output in `bmo-voice/setup.log`.
-- **`push`** copies the server file, the turn client, the voices directory and the token, writes the unit, restarts
+- **`push`** copies the server file, the voices directory and the token, writes the unit, restarts
   it, waits for it to answer, and leaves a stamp of what it brought, `bmo-voice/pushed`.
 - **`sync`** is push where it is due: only where a node's stamp differs from what a push would bring now. Every
   deployment runs it once the service answers (`docs/deploy.md`), so a change to the server or a newly installed
@@ -323,10 +323,15 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
 - **`health`** asks each server what it holds; **`speak --text '<words>' --wav <path>`** speaks one line in the
   current voice or the one `--voice` names, on a free node where `--node` names none.
 - **`adapter`** answers the card arbiter (`docs/boundary-api.md`, 「The node scripts and the card adapter」):
-  `install` puts the node last on the list, runs `setup` and `push` and speaks one check line there; `uninstall` takes
+  `install` puts the node last on the list, runs `setup` and `push` and speaks there the check line of
+  `data/ko/voice-node.toml`; `uninstall` takes
   it off the list and stops and disables its unit, keeping its installation; `start`, `stop` and `health` act on its
   unit and server; `placed` reads the list.
-- **The unit** declares the server to the node's card arbiter as `BMO_CARD_SERVICE=voice`.
+- **The unit** declares the server to the node's card arbiter as `BMO_CARD_SERVICE=voice`, and names the arbiter's
+  own installation, `~/bmo-card`, on the server's import path: the server waits its turn for the card through the
+  turn client the arbiter installs there, and takes the card lock as it comes on a node without it.
+- **`setup` downloads the base model the current voice's `lora_config.json` names,** so a voice is installed
+  (「The voices」) before the first node is set up.
 
 ### How a line crosses
 
@@ -392,7 +397,7 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
 ### How a prompt is checked
 
 - **Whole briefings are spoken on the clip before any row names it:** the lines of
-  `scripts/voice-prompt-check-lines.json`, spoken the way a briefing would speak them, each on a free voice node (on
+  `data/<language>/voice-prompt-check-lines.json`, spoken the way a briefing would speak them, each on a free voice node (on
   this machine's card where the list is empty), and taken down by the `voice/transcriber` entry.
 - **A line fails** on a character error rate above 0.12 over its bare letters, one unit of one to four letters
   repeated five times or more where the line has no such run, or a pace outside 3 to 10 syllables a second in Korean

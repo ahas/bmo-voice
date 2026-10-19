@@ -1,0 +1,36 @@
+# The seed of the voice name table (docs/voice-plan.md, 「How names are said」): the rows a table first made is
+# given. Each is a spelling and what a Korean stretch and an English stretch say in its place, empty where that
+# language reads the spelling as it stands. These are words the reading gate was heard to sound out where Korean
+# has a settled spelling, and English says each as written. The names a deployment's own agents and owner go by
+# are that deployment's to add with `scripts/voice-names.ts --set` (docs/deploy.md).
+
+[[name]]
+written = "git"
+ko = "깃"
+en = ""
+
+[[name]]
+written = "GitHub"
+ko = "깃허브"
+en = ""
+
+[[name]]
+written = "GitLab"
+ko = "깃랩"
+en = ""
+
+[[name]]
+written = "Nuxt"
+ko = "넉스트"
+en = ""
+
+[[name]]
+written = "SQLite"
+ko = "에스큐엘라이트"
+en = ""
+
+# How Korean text writes a job, said the way the word is spoken.
+[[name]]
+written = "Job"
+ko = "잡"
+en = ""

@@ -21,6 +21,9 @@ impl Context {
     let db = store::connect(&settings.database, connections).await.map_err(|why| why.to_string())?;
 
     store::migrate(&db).await.map_err(|why| why.to_string())?;
+    store::voices::seed_names(&db, &store::voices::seeds(), crate::now_ms() / 1000)
+      .await
+      .map_err(|why| why.to_string())?;
 
     let units = Units::new(&settings).map_err(|why| why.to_string())?;
 

@@ -161,6 +161,9 @@ it.
 - **The adapter answers** the arbiter's verbs `install`, `uninstall`, `start`, `stop`, `health` and `placed`, run
   as `<adapter words> <verb> --node <node> --placed <node>,…`, its last line one JSON object: `ok`, `node`,
   `state` (`running`, `stopped`, `absent` or `failing`), `detail`, and for `placed` the `nodes` in order.
+- **The scripts under `scripts/`** read the settings the service reads, write the voice's own tables directly, reach
+  a node through the node service's target and login and a hub node through its hub (「bmo-node」 below), and run
+  `synth/voice-tool.py` directly the way the service does.
 
 ### The tool entries
 
@@ -234,8 +237,8 @@ is reported with the failure's own words, and the briefing it served fails as `d
 ### bmo-arbiter (`docs/api.md`)
 
 - **The declaration** `weights/voice.card.toml` and **the adapter verbs** above.
-- **The turn client** `turn.py` on each node, which the voice server holds a turn with, declaring
-  `BMO_CARD_SERVICE=voice`; **the card lock** `~/.gpu.lock`.
+- **The turn client** `~/bmo-card/turn.py` on each node (「The turn client」), which the voice server imports from
+  there and holds a turn with, declaring `BMO_CARD_SERVICE=voice`; **the card lock** `~/.gpu.lock`.
 
 ### bmo-pocket (`docs/api.md`, 「The control socket」)
 
@@ -286,7 +289,12 @@ Statements here a sibling's document does not yet match, each for that sibling t
   serves no route to attach a narration to a document, so a narration's sound is kept by the voice and served at
   `GET /briefings/{run}/sound` until it does.
 - **bmo-agency** stands a run's program in its agent's host; a briefing's run names the agent `voice`, which is
-  to stand as agency's registration for the voice's runs.
+  to stand as agency's registration for the voice's runs. It states no route that writes the `voice` an agent's
+  registration names, so `scripts/voice-install.ts --use` moves the current voice alone and an agent whose
+  registration names a voice keeps speaking in it until agency serves such a route.
+- **bmo-arbiter's turn client** stands at `~/bmo-card/turn.py` on each node the arbiter stands on; the voice server
+  imports it from there through the unit's import path rather than carrying a copy, so a node the arbiter does not
+  stand on speaks without a turn.
 - **bmo-node** serves no route that runs a command on a hub node; the voice reaches a hub node through the hub
   itself, from the target's `hubUrl`, `tokenFile` and `agent`: the hub's `POST /exec?agent=` with the bearer token
   the token file holds under `JAKE_CONTROL_TOKEN`, its answer a server-sent stream of `started`, `stdout`,

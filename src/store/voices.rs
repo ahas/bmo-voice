@@ -2,9 +2,25 @@
 //! voices」, 「How names are said」, 「The voice nodes」).
 
 use sea_orm::{DatabaseConnection, QueryResult};
+use serde::Deserialize;
 
 use super::{StoreError, all, one, run};
 pub use crate::script::reading::VoiceName;
+
+/// The seed names a table first made is given (`data/ko/voice-names.toml`).
+const SEEDS: &str = include_str!("../../data/ko/voice-names.toml");
+
+#[derive(Deserialize)]
+struct Seeds {
+  name: Vec<VoiceName>,
+}
+
+/// The seed names, as the data file holds them.
+pub fn seeds() -> Vec<VoiceName> {
+  toml::from_str::<Seeds>(SEEDS)
+    .unwrap_or_else(|why| panic!("data/ko/voice-names.toml does not read: {why}"))
+    .name
+}
 
 /// One continuation prompt of a voice: the clip it starts from and the words that clip says.
 #[derive(Clone, Debug, PartialEq)]

@@ -29,6 +29,11 @@ stands, and no other.
 - **One crate,** split into modules. A part gets a crate of its own only where it truly has to stand apart.
 - **No folder is named after its parent.** A folder's name says what it holds.
 - **Tests live in `tests/`,** never beside the code they test.
+- **A client of another service is one module named for that service:** `src/units/<service>.rs` in the crate,
+  `scripts/lib/<service>.ts` in the scripts. Such a client is temporary, standing until that service publishes its
+  own, so nothing of it is spread over the modules that use it.
+- **The build output is kept small:** the root manifest's profiles keep debug information down to line tables, no
+  incremental state, and a release stripped of debug information.
 
 ## The three binaries
 

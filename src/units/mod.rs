@@ -4,6 +4,7 @@
 pub mod agency;
 pub mod artifact;
 pub mod gate;
+pub mod hub;
 pub mod node;
 pub mod pocket;
 pub mod receiver;

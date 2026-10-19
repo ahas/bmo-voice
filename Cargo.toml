@@ -64,3 +64,14 @@ tower = { version = "0.5.2", default-features = false, features = ["util"] }
 tower-http = { version = "0.6.6", default-features = false, features = ["fs"] }
 # A path part of a unit's route percent-encoded.
 urlencoding = "2.1.3"
+
+# The build output is kept small: debug information down to line numbers, so a backtrace still reads in full and a
+# binary links quickly, and no incremental state.
+[profile.dev]
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
+incremental = false
+
+[profile.release]
+debug = false
+strip = "debuginfo"
