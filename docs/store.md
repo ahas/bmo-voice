@@ -72,8 +72,20 @@ One row per briefing that belongs to a line (`docs/voice-briefing.md`, 「Where 
 | `sound_path` | the kept sound of a full reading or a narration, under the voice's folder |
 | `awaits_line` | 1 while a summary still awaits the line its round will send |
 | `started_at` | when it was launched |
+| `finished_at` | when its run ended, however it ended; none while it runs |
 
-The runner writes the voice message the moment it is saved, before any screen is told the message landed.
+- **The run is agency's ledger row,** and its id is the row's key; the start and end are kept here as well, so the
+  rules of one summary at a time in a room, a summary still being made and a full reading still making are read
+  from this table alone.
+- **A notice turn's opening** is kept as a `summary`, as the summary it stands in for is.
+- The runner writes the voice message the moment it is saved, before any screen is told the message landed.
+
+## The migrations
+
+- **One migration makes every table** with its indexes, column for column in the shape the rows already kept read
+  in, so rows copied in keep every column their readers name. Its record stands in `voice_migrations`, so the
+  database may be shared with another service's tables. The `citext` extension is created where it is missing.
+- **A table's `rowid`** is the identity the rows already kept carry; nothing reads it.
 
 ## The folder
 

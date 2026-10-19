@@ -59,6 +59,10 @@ answers at once; the speaking runs apart, under a run of agency's ledger.
 | `POST /briefings/stop` | `chat`, `message`: the voice message a listener stopped | 204, and a `briefing-stopped` frame on the stream |
 | `GET /briefings/events` | `Last-Event-ID` or `?after=` to resume | the listener stream (below), `text/event-stream` |
 
+- **A run is named by its ledger id written as a string,** in every answer and path, as the receiver reads it.
+- **A listed briefing's `kind`** is `summary` (a summary or a notice turn's opening) or `full` (a line's full
+  reading); a briefing of a session or a narration belongs to no line and is not listed.
+
 - **A launch:** `chat` (`chat_id` is read as the same field), `text`, the words to speak, and `started_by` (`by`
   is read as the same field), naming what started it: `chat:<chatId>` for a session, `notice:<chatId>` for the
   receiver's own summary of a notice turn, `console:<chatId>` for a line's full reading, `search:<document>` or
@@ -231,7 +235,9 @@ Statements here a sibling's document does not yet match, each for that sibling t
 
 - **bmo-receiver** sends a launch with `kind` `notice` or `summary` and no `started_by`; the voice reads such a
   launch's `started_by` as `notice:<chat>` or `chat:<chat>` until it sends one. It keeps its own copy of
-  `run_cap_ms`, `failed_kind` and `emotions` in its `chat-round.toml`, which it is to read from `GET /policy`.
+  `run_cap_ms`, `failed_kind` and `emotions` in its `chat-round.toml`, which it is to read from `GET /policy`. Its
+  port reads a listed briefing's `kind` as `notice` or `summary` only and its `title` as never null, so a full
+  reading listed with `kind` `full` and no title does not read there until it takes both.
 - **bmo-receiver's `POST /say-file`** takes a caption and files but says nothing of sending an OGG/Opus file as a
   voice message, of folding a caption past a road's limit into replies, or of the road a line nobody asked for
   goes on; the voice sends its briefings there and leaves those to the receiver's roads.

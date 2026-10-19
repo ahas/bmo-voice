@@ -247,6 +247,16 @@ routes). Step 1 is this document and step 18 the review.
 | `tools/voice/transcriber.json` | 26 | step 10, VoxCPM server and tool entry |
 | `tools/voice/tsconfig.json` | 21 | step 15, Script studio tooling |
 
+## Replaced rather than copied
+
+Files whose work this repository does another way, each named with what does it now:
+
+| Old file | What does its work here |
+|---|---|
+| `bot/bmo-server/src/verbs/voice/voices.rs` | the store's `voices` and `briefings` modules, on the voice's own database; its read of a document's title from the archive is the artifact unit's `GET /api/archive/{id}` |
+| `archive/bmo-archive/src/migration/m20261010_000001_voice_awaits_line.rs` | the store's one migration, which makes `voice_briefings` with `awaits_line` among its columns |
+| `archive/archive/briefing-store.ts` | the store's `briefings` module: the TypeScript reading of `voice_briefings` served the old archive facade alone |
+
 ## Deferred tests and test data
 
 The 39 files marked deferred above are 35 tests and 4 test-data files (the script cases
