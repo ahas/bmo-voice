@@ -1,6 +1,8 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 
+import leven from "leven";
+
 import { hangulSyllables, syllableRange } from "./hangul";
 import { shellWord } from "./node-shell";
 import { dataFile } from "./settings";
@@ -56,24 +58,12 @@ export function syllables(text: string, language: VoiceLanguage): number {
   return (text.toLowerCase().match(/[a-z']+/g) ?? []).reduce((sum, word) => sum + Math.max(1, (word.replace(/e$/, "").match(/[aeiouy]+/g) ?? []).length), 0);
 }
 
+// The edits between the bare letters, against the line's own length. Every bare letter is one UTF-16 unit, a Hangul
+// syllable or a Latin letter, so the string distance is the distance in letters.
 export function characterErrorRate(asked: string, heard: string): number {
-  const reference = [...bareLetters(asked)];
-  const hypothesis = [...bareLetters(heard)];
-  let previous = hypothesis.map((_, index) => index + 1);
+  const reference = bareLetters(asked);
 
-  previous.unshift(0);
-
-  for (const [row, letter] of reference.entries()) {
-    const current = [row + 1];
-
-    for (const [place, other] of hypothesis.entries()) {
-      current.push(Math.min((previous[place + 1] as number) + 1, (current[place] as number) + 1, (previous[place] as number) + (letter === other ? 0 : 1)));
-    }
-
-    previous = current;
-  }
-
-  return (previous[hypothesis.length] as number) / Math.max(1, reference.length);
+  return leven(reference, bareLetters(heard)) / Math.max(1, reference.length);
 }
 
 // The first unit of one to four letters said `times` times in a row, or null. Korean is read by its syllables and

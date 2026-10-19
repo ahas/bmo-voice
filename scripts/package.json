@@ -9,6 +9,7 @@
   "dependencies": {
     "bmo-markup": "file:../../../base/markup/package",
     "eventsource-parser": "^4.1.2",
+    "leven": "^4.1.0",
     "music-metadata": "^12.2.3"
   },
   "devDependencies": {

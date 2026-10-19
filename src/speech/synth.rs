@@ -196,18 +196,28 @@ fn answered(called: Result<Value, String>) -> Result<(), Unspoken> {
   Err(Unspoken::Failed(text.trim_start_matches("ERROR: ").to_owned()))
 }
 
-/// How long an Ogg/Opus sound runs, read off the file: the last page's granule position counts 48 kHz samples,
-/// less the pre-skip the Opus header names. None for anything that is not one.
+/// How long an Ogg/Opus sound runs, its pages read by the ogg crate: the last packet's granule position counts 48 kHz
+/// samples, less the pre-skip its first packet, the Opus header, names. None for anything that is not one.
 pub fn ogg_opus_seconds(bytes: &[u8]) -> Option<f64> {
-  let head = bytes
-    .windows(8)
-    .position(|window| window == b"OpusHead")
-    .filter(|at| at + 12 <= bytes.len())?;
-  let pre_skip = u16::from_le_bytes([bytes[head + 10], bytes[head + 11]]);
-  let page = (0..=bytes.len().checked_sub(27)?).rev().find(|at| &bytes[*at..at + 4] == b"OggS")?;
-  let granule = i64::from_le_bytes(bytes[page + 6..page + 14].try_into().ok()?);
+  let mut packets = ogg::PacketReader::new(std::io::Cursor::new(bytes));
+  let head = packets.read_packet().ok()??;
 
-  (granule >= 0).then(|| (granule - i64::from(pre_skip)).max(0) as f64 / 48_000.0)
+  // The Opus header is the codec's own: its magic, its version, its channel count and then the pre-skip as a
+  // little-endian 16-bit count (RFC 7845, section 5.1), which no maintained crate reads apart from a whole decoder.
+  if head.data.len() < 12 || &head.data[..8] != b"OpusHead" {
+    return None;
+  }
+
+  let pre_skip = u16::from_le_bytes([head.data[10], head.data[11]]);
+  let mut granule = head.absgp_page();
+
+  while let Ok(Some(packet)) = packets.read_packet() {
+    granule = packet.absgp_page();
+  }
+
+  let granule = i64::try_from(granule).ok()?;
+
+  Some((granule - i64::from(pre_skip)).max(0) as f64 / 48_000.0)
 }
 
 /// How long a summary waits before it goes out: while an earlier summary of its room is still being made, and

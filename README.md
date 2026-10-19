@@ -22,6 +22,7 @@ the base libraries `bmo-chat`, `bmo-chat-client`, `bmo-ui` and `bmo-markup` may 
 |---|---|
 | `client/` | The console plugin bundle: the briefing player and its settings section at `/briefing`, a Nuxt layer on bmo-ui (`docs/layout.md`, 「The console plugin bundle」) |
 | `data/` | Language material the code reads by language, `data/<language>/`; every Korean line of it is in `korean-ledger.json` |
+| `deploy/` | The units the testbed's deployment keeps, the voice service and the script studio, and the studio's proxy locations |
 | `docs/` | The documents, which come before the code: start with `docs/layout.md` |
 | `policy/` | The voice's own policy values, `policy/voice.toml` |
 | `prompts/` | What the voice's own model runs are told: the training lines' writer, in English |

@@ -210,19 +210,7 @@ impl Speech {
 
 // How many words must change to turn one run of words into the other.
 fn distance(a: &[&str], b: &[&str]) -> usize {
-  let mut row: Vec<usize> = (0..=b.len()).collect();
-
-  for (i, word) in a.iter().enumerate() {
-    let mut next = vec![i + 1];
-
-    for (j, other) in b.iter().enumerate() {
-      next.push((next[j] + 1).min(row[j + 1] + 1).min(row[j] + usize::from(word != other)));
-    }
-
-    row = next;
-  }
-
-  row[b.len()]
+  strsim::generic_levenshtein(&a.to_vec(), &b.to_vec())
 }
 
 /// Where a line was said among the cues.
