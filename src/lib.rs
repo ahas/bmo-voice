@@ -3,5 +3,13 @@
 
 pub mod script;
 pub mod settings;
+pub mod speech;
 pub mod store;
 pub mod units;
+
+/// Now, in epoch milliseconds.
+pub fn now_ms() -> i64 {
+  std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .map_or(0, |since| i64::try_from(since.as_millis()).unwrap_or(i64::MAX))
+}

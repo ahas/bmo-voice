@@ -259,6 +259,8 @@ Files whose work this repository does another way, each named with what does it 
 | `lang/bmo-lang/src/voice_script.rs` | the script's `words` module, reading `data/ko/voice-script.yaml` by language |
 | `lang/bmo-lang/lang/ko/voice-script.yaml` | `data/ko/voice-script.yaml` keeps its reading tables; its gate, reading and polish sentences are the script's English faults, each with a code |
 | `bot/bmo-server/src/verbs/voice/script/{mod,reading,spoken,polish,figures}.rs` | `src/script/`, their colocated tests left out as deferred; a gate run is the script's own request handed to the gate's route with the stage's own instructions, and the prompts name the agent rather than an agent's name |
+| `bot/bmo-server/src/verbs/voice/{synth,node}.rs` | `src/speech/`, their colocated tests left out as deferred; the mouth and the encoder run through the voice's own tool entry under `synth/`, a node is reached as the node service's target and login say, a hub node through its hub's exec route, the locks stand under the voice's folder and are taken with the standard library's file locks |
+| `bot/bmo-server/src/verbs/voice/clock.rs` | `src/speech/clock.rs`, holding a speaking run to agency's clock for it rather than asking past its cap itself |
 
 ## Deferred tests and test data
 

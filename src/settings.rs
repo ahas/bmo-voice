@@ -46,6 +46,9 @@ pub struct Settings {
   pub data_root: PathBuf,
   /// The registered agent whose voice a briefing speaks in where nothing names another, by its id.
   pub agent: String,
+  /// The folder of the voice's Python side, `synth/`, where it is not the one in the release the running binary
+  /// stands in.
+  pub synth: Option<PathBuf>,
   pub units: Units,
 }
 
@@ -90,6 +93,21 @@ impl Settings {
   /// The settings where they stand.
   pub fn load() -> Result<Self, Unread> {
     Self::read(&Self::path()?)
+  }
+
+  /// The folder of the voice's Python side: the one the settings name, else `synth/` at the top of the release the
+  /// running binary stands in.
+  pub fn synth_folder(&self) -> Result<PathBuf, Unread> {
+    if let Some(named) = &self.synth {
+      return Ok(named.clone());
+    }
+
+    let binary = std::env::current_exe().map_err(|why| Unread(format!("the running binary: {why}")))?;
+    let release = binary.parent().and_then(Path::parent).ok_or_else(|| {
+      Unread(format!("{} stands in no release; name `synth` in the settings", binary.display()))
+    })?;
+
+    Ok(release.join("synth"))
   }
 
   /// The voice's own folder under the data root, where everything it keeps stands.

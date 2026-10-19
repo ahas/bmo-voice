@@ -252,8 +252,9 @@ Statements here a sibling's document does not yet match, each for that sibling t
   `GET /briefings/{run}/sound` until it does.
 - **bmo-gate** names no route for the sanitiser a unit other than the receiver calls; `voice say` sends a caption
   unsanitised until it does.
-- **bmo-node** serves no route that runs a command on a hub node; the voice reaches a hub node with the hub's
-  console as bmo-arbiter does (its `docs/api.md`, 「Node shells」), from the target's `hubUrl`, `tokenFile` and
-  `agent`.
+- **bmo-node** serves no route that runs a command on a hub node; the voice reaches a hub node through the hub
+  itself, from the target's `hubUrl`, `tokenFile` and `agent`: the hub's `POST /exec?agent=` with the bearer token
+  the token file holds under `JAKE_CONTROL_TOKEN`, its answer a server-sent stream of `started`, `stdout`,
+  `stderr`, `exit`, `error` and `ended` events.
 - **The script studio's data root** is shared with the song bench's; the studio keeps its records under the
   voice's own folder and the bench reads none of them.

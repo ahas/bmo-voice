@@ -14,11 +14,19 @@ pub struct Node {
   caller: Caller,
 }
 
-/// How a node is reached: an ssh node by its host, port, account, key and shell, or a hub node through its hub's
-/// console by the hub's address, its token file and the agent the node attaches as.
+/// How a node is reached, and the services its role reserves it for, joined by `+`, or none.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct Target {
+  #[serde(flatten)]
+  pub reach: Reach,
+  pub role: Option<String>,
+}
+
+/// An ssh node by its host, port, account, key and shell, or a hub node through its hub by the hub's address, its
+/// token file and the agent the node attaches as.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "lowercase")]
-pub enum Target {
+pub enum Reach {
   Ssh {
     host: String,
     port: u16,
