@@ -2,16 +2,12 @@
 
 use std::process::ExitCode;
 
-use bmo_voice::settings::Settings;
-
-fn main() -> ExitCode {
-  match Settings::load() {
-    Ok(settings) => {
-      eprintln!("voice-server: no route is served yet; it would listen on {}", settings.listen);
-      ExitCode::from(2)
-    }
+#[tokio::main]
+async fn main() -> ExitCode {
+  match bmo_voice::service::serve().await {
+    Ok(()) => ExitCode::SUCCESS,
     Err(why) => {
-      eprintln!("voice-server: the settings do not read: {why}");
+      eprintln!("voice-server: {why}");
       ExitCode::FAILURE
     }
   }

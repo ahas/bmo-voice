@@ -72,15 +72,21 @@ answers at once; the speaking runs apart, under a run of agency's ledger.
     reading, kept on its line and sent to no road), `narration` (a document's sound; a launch naming a `document`
     is one);
   - `title?`: what a summary is about, in one line;
-  - `message?`: the line a reading voices, or the line a voice answers;
-  - `awaits_line?`: true where a summary awaits the line its round has yet to send;
+  - `message?`: the line a reading voices, or the line a summary stands on where its round has sent it;
+  - `awaits_line?`: true where a summary awaits the line its round has yet to send, so a `message` beside it is not
+    taken as its line;
   - `document?`: the artifact document a narration is kept with;
   - `emotion?`: one of the emotions of `policy/voice.toml`; a word outside them is refused;
   - `agent?`: the registered agent whose voice speaks, the settings' `agent` where none is named;
   - `via?`: the road the turn that launched it answers on.
-- **Refusals before anything is opened:** 400 `bad_launch` (a field missing or of the wrong kind), 400
-  `nothing_to_say`, 400 `nobody_named` (no `started_by`), 422 `unknown_emotion`, 409 `switched_off` (the voice
-  briefing's switch stands off), 409 `voiceless` (the agent's registration names no voice).
+- **Where `started_by` is absent** it is read from the kind: `notice:<chat>`, `console:<chat>` for a reading,
+  `archive-doc:<document>` for a narration, `chat:<chat>` otherwise.
+- **Refusals before anything is opened:** 400 `bad_launch` (a field missing or of the wrong kind, a reading naming
+  no `message`, a narration naming no `document`, a kind the list does not hold, a title past one line of 60
+  characters), 400 `nothing_to_say`, 400 `nobody_named` (no `started_by`), 422 `unknown_emotion`, 409
+  `switched_off` (the voice briefing's switch stands off), 409 `voiceless` (the agent's registration names no
+  voice). A run whose program agency did not start is 503 `not_up`; a unit the launch needed that did not answer is
+  500 `failed`.
 - **A summary of the same room still waiting** when a newer one is launched is closed as `superseded`.
 
 ### The listener stream
@@ -90,12 +96,15 @@ that plays briefings. It carries only these frames, each with an id a client res
 
 | Event | Data |
 |---|---|
-| `briefing` | `chat`, `message` (the voice message), `text` (the words spoken), `title?`, `seconds`, `sent_at`, `emotion?`, `face?` (the face the face unit's entry answers for the emotion), `autoplay` |
+| `briefing` | `chat`, `message` (the voice message), `text` (the words spoken), `title?`, `seconds?`, `sent_at`, `emotion?`, `face?` (the face the face unit's entry answers for the emotion), `autoplay` |
 | `briefing-stopped` | `chat`, `message` |
 | `presence` | `state` (`writing`, `thinking` or `idle`) and `since` |
 
 - **A keep frame** (a comment line) goes every five seconds, so a client that hears nothing for twenty knows the
   connection dropped.
+- **Resuming:** the last 200 frames are kept; a listener naming the last id it read, in `Last-Event-ID` or
+  `?after=`, is handed every kept frame after it before the frames filed from then on. A listener naming none starts
+  with what is filed from then on.
 - **`autoplay`** is the voice briefing's autoplay switch as it stands when the frame is filed, read from the
   receiver; a client never reads the switch itself.
 - **`presence`** is worked out from the turn events the receiver's stream carries: any turn writing is
@@ -106,7 +115,7 @@ that plays briefings. It carries only these frames, each with an id a client res
 
 | Route | Request | Answer |
 |---|---|---|
-| `POST /scripts/reading` | `text`, a line as a room received it; `full?`, true for a full reading | `script`, the line made a script for speaking; `spans`, the spans the reading gate would be asked about, each `n`, `text` and `code` (true where it was code); `polish?`, for a full reading, the script as the polishing gate is shown it, with each piece of code as a numbered placeholder |
+| `POST /scripts/reading` | `text`, a line as a room received it; `full?`, true for a full reading | `script`, the line made a script for speaking; `stretches`, each Korean stretch as the reading gate would be asked about it: `text` (its names and figures said), `marked` (the stretch as the gate is shown it, each span marked by its number) and `spans`, each `n`, `text` and `code` (true where it was code); `polish`, for a full reading, the view the polishing gate is shown, `view` with each piece of code as a numbered placeholder and `codes` in their order, else null |
 
 - It reads the line by the voice's own script rules (`docs/voice-plan.md`, 「A line is spoken as a script」) and
   asks no gate. The gate's evaluation set reads its voice members' items through it.

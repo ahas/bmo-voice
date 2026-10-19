@@ -28,6 +28,8 @@ path = "src/bin/script-studio.rs"
 
 [dependencies]
 async-trait = "0.1.92"
+# The service's routes.
+axum = { version = "0.8.4", default-features = false, features = ["http1", "json", "query", "tokio"] }
 base64 = "0.22.1"
 # A hub's token file, read as the dotenv file it is.
 dotenvy = "0.15.7"
@@ -57,5 +59,8 @@ rand = "0.9.2"
 sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "runtime-tokio"] }
 tokio = { version = "1.47.0", features = ["macros", "rt", "rt-multi-thread", "net", "time", "signal", "io-util", "process", "fs", "sync"] }
 toml = { version = "0.8.23", default-features = false, features = ["parse"] }
+tower = { version = "0.5.2", default-features = false, features = ["util"] }
+# A kept sound served with the ranges a player asks for.
+tower-http = { version = "0.6.6", default-features = false, features = ["fs"] }
 # A path part of a unit's route percent-encoded.
 urlencoding = "2.1.3"

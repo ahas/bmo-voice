@@ -5,6 +5,7 @@ pub mod briefing;
 pub mod context;
 pub mod policy;
 pub mod script;
+pub mod service;
 pub mod settings;
 pub mod speech;
 pub mod store;
