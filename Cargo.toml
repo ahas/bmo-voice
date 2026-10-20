@@ -5,6 +5,7 @@ name = "bmo-voice"
 description = "The voice engine: trained voices, speech synthesis on the voice nodes, transcription, speaker encodings, script readings and the script studio."
 version = "0.1.0-rev.1"
 edition = "2024"
+license = "MIT"
 publish = false
 
 [lib]

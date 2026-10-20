@@ -70,7 +70,7 @@ flowchart TD
 - **The reading:** Hangul syllables, spaces and `. , ? !` only, so every figure, roman letter and symbol is said.
 - **The kind holds:** a question ends on `?`, an exclamation on `!`, a statement on neither, and a mixed line's
   reading differs from its text.
-- **No word the data file bans,** each read as the wording check reads a glossary entry, bmo-markup's `wording`:
+- **No word the data file bans,** each read as the wording check reads a glossary entry, bmo-text's `wording`:
   a term standing alone, and not in a phrase where it keeps its own sense. A banned term a name's reading in the
   voice name table spells is no use of the word in the reading. **No meta talk,** the data file's list.
 - **Not a duplicate:** readings reduced to their Hangul are compared with every row kept; the same reading is a

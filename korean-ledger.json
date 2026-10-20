@@ -1,21 +1,10 @@
 {
-  "data/ko/studio-notes.json": 2,
-  "data/ko/studio-tags.json": 7,
-  "data/ko/voice-lines.toml": 183,
-  "data/ko/voice-names.toml": 6,
-  "data/ko/voice-node.toml": 1,
-  "data/ko/voice-prompt-check-lines.json": 4,
-  "data/ko/voice-script.yaml": 117,
-  "policy/voice.toml": 1,
   "scripts/lib/hangul.ts": 1,
   "src/script/spoken.rs": 4,
   "src/studio/export.rs": 3,
   "src/studio/records.rs": 1,
   "src/studio/review.rs": 2,
   "src/studio/subtitles.rs": 6,
-  "studio/client/i18n/locales/ko.yaml": 207,
-  "studio/fixtures/reviews.json": 18,
-  "synth/voice-cer-sentences.json": 18,
   "synth/voice-cer.py": 9,
   "synth/voice-vox.py": 2
 }

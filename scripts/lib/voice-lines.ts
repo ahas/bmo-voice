@@ -2,12 +2,12 @@ import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renam
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { findBanned } from "bmo-markup/wording";
+import { findBanned } from "bmo-text/wording";
 
 import { hangulSyllables } from "./hangul";
 import { dataFile, releaseRoot } from "./settings";
 
-import type { BannedTerm } from "bmo-markup/wording";
+import type { BannedTerm } from "bmo-text/wording";
 import type { VoiceName } from "./store";
 
 // Korean lines for training a voice, written by Codex run straight from here rather than through any provider

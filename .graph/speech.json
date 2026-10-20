@@ -18,8 +18,8 @@
       "core/units",
       "speech/synth"
     ],
-    "base": "1ec5d658b6e9fb3731c19fd94a751bf330d423c6",
-    "changed": 1792500293777
+    "base": "d5054b330ed4847bb2580083577ea37db24d4ee6",
+    "changed": 1792520997237
   },
   {
     "id": "speech/synth",
@@ -40,7 +40,7 @@
       "core/store",
       "synth/tool"
     ],
-    "base": "1ec5d658b6e9fb3731c19fd94a751bf330d423c6",
-    "changed": 1792500293780
+    "base": "d5054b330ed4847bb2580083577ea37db24d4ee6",
+    "changed": 1792520997240
   }
 ]

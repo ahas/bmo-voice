@@ -2,12 +2,13 @@
   "name": "bmo-voice-scripts",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "bmo-markup": "file:../../../base/markup/package",
+    "bmo-text": "file:../../../base/markup/package",
     "eventsource-parser": "^4.1.2",
     "leven": "^4.1.0",
     "music-metadata": "^12.2.3"
