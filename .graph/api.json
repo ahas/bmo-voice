@@ -123,11 +123,11 @@
   {
     "id": "api/mcp",
     "title": "Voice harness plugin",
-    "what": "The plugin a coding harness takes the engine in: the bmo-voice mcp server on standard input and output, its five tools each a thin call through the client, and the ahas-voice skill, in src/mcp.rs and plugin/.",
+    "what": "The plugin a coding harness takes the engine in: the bmo-voice mcp server on standard input and output, its five tools each a thin call through the client, and the bmo-voice skill, in src/mcp.rs and plugin/.",
     "files": [
       "src/mcp.rs",
       "src/bin/bmo-voice.rs",
-      "plugin/skills/ahas-voice/SKILL.md",
+      "plugin/skills/bmo-voice/SKILL.md",
       "docs/boundary-api.md"
     ],
     "symbols": [
@@ -141,7 +141,7 @@
       "api/http"
     ],
     "base": "d5054b330ed4847bb2580083577ea37db24d4ee6",
-    "changed": 1792520997196,
+    "changed": 1792529689652,
     "boundary": {
       "side": "exposes"
     }

@@ -22,7 +22,7 @@
     "arbiter"
   ],
   "x-harness": {
-    "plugin": "ahas-voice",
+    "plugin": "bmo-voice",
     "mcp": "bmo-voice mcp",
     "entry": "A harness turns text into speech with voice_synthesize in a voice voice_voices lists, and reads the sound when voice_synthesis says it is done."
   },

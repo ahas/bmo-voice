@@ -22,7 +22,7 @@ use crate::client::{ClientFailure, VoiceClient};
 use crate::wire::{NewScriptReading, NewSynthesis, NewTranscription, PageQuery};
 
 /// The plugin a harness takes the voice in, and the command that starts its MCP server.
-pub const PLUGIN: &str = "ahas-voice";
+pub const PLUGIN: &str = "bmo-voice";
 pub const MCP: &str = "bmo-voice mcp";
 
 /// What a harness does first with it, which the server tells a harness when it starts.

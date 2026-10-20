@@ -10,7 +10,7 @@ How the repository is laid out, what each part is, and where it runs. Read this 
 | `deploy/` | The units the testbed's deployment keeps on the operations machine, and the proxy locations of the script studio |
 | `docs/` | The documents, which come before the code |
 | `.graph/` | The code dependency graph, one node per feature in its areas (`api`, `calls`, `core`, `nodes`, `script`, `speech`, `studio`, `synth`, `training`), written only by `bmo graph` |
-| `plugin/` | The harness plugin's skill, `plugin/skills/ahas-voice/`, telling a harness when and how to use the MCP server |
+| `plugin/` | The harness plugin's skill, `plugin/skills/bmo-voice/`, telling a harness when and how to use the MCP server |
 | `policy/` | The engine's own policy values, `policy/voice.toml` |
 | `prompts/` | What the engine's own model runs are told: the training lines' writer. English only |
 | `scripts/` | The node and training scripts, a Bun project of its own: the voice node install, push, sync, health, speak and card adapter, a voice installed and checked, the voice names, training stages placed on a card, the training lines written |
@@ -61,7 +61,7 @@ stands, and no other.
 
 - **The MCP server is `bmo-voice mcp`,** a command of the crate, built on the service's own client. Its tools
   are the OpenAPI document's `x-tools`, each a thin call of one route.
-- **The skill** `plugin/skills/ahas-voice/` tells a harness when and how to use the server: which voice to
+- **The skill** `plugin/skills/bmo-voice/` tells a harness when and how to use the server: which voice to
   choose, how a synthesis ends, and how a refusal reads.
 
 ## Where things run

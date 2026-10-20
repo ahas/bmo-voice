@@ -1,9 +1,9 @@
 ---
-name: ahas-voice
+name: bmo-voice
 description: Turn text into speech in a trained voice, transcribe spoken files, read a text into a script for the ear, or list the voices and voice servers a voice engine holds, through the bmo-voice MCP server. Use when a harness needs to speak a line in one of the engine's voices, take spoken material down, or prepare text as it is to be said.
 ---
 
-# ahas-voice
+# bmo-voice
 
 The voice engine keeps trained voices and speaks text in them on the voice servers of the nodes it is
 configured with. A synthesis is answered at once; the sound follows, and the member says when it is done.

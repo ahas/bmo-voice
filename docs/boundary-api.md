@@ -189,7 +189,7 @@ A refusal of the node service is read as its own answer, `answered` false and a 
 | `voice_transcribe` | `POST /transcriptions` |
 | `voice_script` | `POST /script-readings` |
 
-- **The `ahas-voice` skill** tells a harness when and how to use them. A tool's failure carries the status,
+- **The `bmo-voice` skill** tells a harness when and how to use them. A tool's failure carries the status,
   code and sentence of the refusal, or the sentence saying why nothing answered.
 
 ## The command line
