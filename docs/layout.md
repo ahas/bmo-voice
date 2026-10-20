@@ -75,5 +75,5 @@ stands, and no other.
 
 ## Tests
 
-Tests are deferred: the repository was moved with its code only, and its tests are written and run once the
-minimal services stand on bmo-next. `docs/inventory.md` lists the old tests as the record of the behaviour to keep.
+Tests live in `tests/`, never beside the code they test. The repository-wide personal-data check is
+`personal_data.rs` there (`PERSONAL-DATA.md`); `docs/inventory.md` records the behaviour the tests are to keep.

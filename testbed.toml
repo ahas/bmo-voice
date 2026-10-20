@@ -3,8 +3,8 @@
 testbed = 0
 name = "bmo-voice"
 
-# The Cargo crate, and the Bun projects of their own found by their manifests and lockfiles. The repository holds
-# no tests yet: they are written and run once the minimal services stand on bmo-next (README.md, 「Tests」).
+# The Cargo crate, and the Bun projects of their own found by their manifests and lockfiles. The crate's tests
+# stand in tests/ (README.md, 「Tests」), the repository-wide personal-data check among them.
 [test]
 languages = ["cargo", "bun"]
 # The Bun projects' packages, which their checks, the node scripts and the studio's tools and screen stand on; a

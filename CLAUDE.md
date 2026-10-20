@@ -74,4 +74,5 @@ listeners are the briefing unit's, and call this engine.
 
 - `cargo check --all-targets`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --all --check` for the
   crate; `bunx tsc --noEmit` in each Bun project; `python3 -m py_compile` for the Python under `synth/`.
-- Tests stand in `tests/`, never beside the code. None is written yet (`README.md`, 「Tests」).
+- Tests stand in `tests/`, never beside the code; the repository-wide personal-data check is one
+  (`tests/personal_data.rs`, `docs/PERSONAL-DATA.md`).

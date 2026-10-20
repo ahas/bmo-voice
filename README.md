@@ -36,17 +36,25 @@ libraries `bmo-chat`, `bmo-chat-client`, `bmo-ui` and `bmo-text` may be depended
 | `src/` | The crate: the settings, the store, the event log, the client, the MCP server, the OpenAPI document, the script rules, the voice nodes, the routes, the script studio's server, and the `voice-server`, `bmo-voice` and `script-studio` binaries |
 | `studio/` | The script studio's media tools, a Bun project with Python scripts beside it (`studio/lib/`, `studio/scripts/`, `studio/fixtures/`), and its screen, `studio/client/`, a Nuxt project on bmo-ui |
 | `synth/` | What speaks: the VoxCPM2 mouth and voice server, the encoder, the transcriber, the intelligibility measure, the tool entries and their schemas, and the frozen package list of the voice environment |
+| `tests/` | Every test of the repository, whatever its language: the repository-wide personal-data check is one (`docs/PERSONAL-DATA.md`) |
 | `weights/` | The declarations of the voice's weights: the voice server's card declaration and where the voices and the base model stand; never the weights themselves |
 
 ## Tests
 
-Tests are deferred. This repository was moved from the old single repository with its code only; its tests
-are written and run on bmo-next once the minimal services are up there, from the old tests `docs/inventory.md`
-lists as the record of the behaviour to keep. Until then a build check is the only verification.
+Tests live in `tests/`, never beside the code. The repository-wide personal-data check stands there
+(`tests/personal_data.rs`, `docs/PERSONAL-DATA.md`): no tracked file holds a mail address, a home path, a
+telephone number, a token or a private network address. `docs/inventory.md` records the behaviour the tests are
+to keep.
+
+## Personal data
+
+No file of the repository holds personal data. A value belongs to the installation's settings, an example uses
+a neutral name, and `tests/personal_data.rs` holds the rule `docs/PERSONAL-DATA.md` states.
 
 ## Checking a change
 
 - `cargo check --all-targets`: the static check.
+- `cargo test --test personal_data`: the repository-wide personal-data check.
 - `bunx tsc --noEmit` in `scripts/`: the scripts' static check.
 - `bunx nuxi typecheck` in `studio/client/`: the studio screen's static check.
 - `bunx tsc --noEmit` in `studio/` and `python3 -m py_compile studio/scripts/*.py`: the studio tools' static

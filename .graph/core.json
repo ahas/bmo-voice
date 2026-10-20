@@ -41,6 +41,22 @@
     "changed": 1792520997215
   },
   {
+    "id": "core/repository-checks",
+    "title": "Personal-data check",
+    "what": "The repository-wide check over every tracked file: no mail address outside the reserved example domains and the development address, no person's home path, telephone number, token or private network address, as docs/PERSONAL-DATA.md states it.",
+    "files": [
+      "tests/personal_data.rs",
+      "docs/PERSONAL-DATA.md"
+    ],
+    "symbols": [],
+    "aliases": [
+      "개인정보"
+    ],
+    "needs": [],
+    "base": "cbaf97e5388b435aa2f9b3a082b6d2b9b8228754",
+    "changed": 1792522065048
+  },
+  {
     "id": "core/settings",
     "title": "Voice settings and context",
     "what": "The one settings file every binary and script reads, with the listen address, token, database, data root and the node and web units, and the context of store and unit clients built from it, in src/settings.rs and src/context.rs.",
