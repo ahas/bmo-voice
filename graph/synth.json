@@ -17,13 +17,12 @@
       "synth/encoder.json",
       "synth/transcriber.json",
       "synth/transcribed.json",
-      "synth/briefing.json",
       "weights/voice.card.toml",
       "weights/checkpoints.toml"
     ],
     "symbols": [],
     "aliases": [],
     "needs": [],
-    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
   }
 ]

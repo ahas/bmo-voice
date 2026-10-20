@@ -11,13 +11,13 @@ import { soundSeconds, speakOnCard, voiceCapMs, voiceEntry, voiceQueueWaitMs } f
 
 import type { VoiceLanguage, VoiceRow } from "./store";
 
-// Whether a continuation prompt speaks a briefing before any briefing is spoken on it (docs/voice-plan.md, 「How a
-// prompt is checked before it is installed」). A handful of lines of a briefing's length are spoken the way a
+// Whether a continuation prompt speaks a line before any line is spoken on it (docs/voice-plan.md, 「How a
+// prompt is checked before it is installed」). A handful of lines of a line's length are spoken the way a
 // briefing would speak them, with the new clip and its words in place of that language's prompt, a recogniser takes
 // each down, and a line whose words did not come through, that runs one sound over and over, or that runs far
 // longer or shorter than its words take to say is a fault. A clip with any faulty line is not installed.
 
-// What a line may come to and still pass. A clip that speaks a briefing lands well inside each, and a clip that
+// What a line may come to and still pass. A clip that speaks a line lands well inside each, and a clip that
 // falls apart lands far outside: the bars sit between the two, not at the edge of either.
 export const checkBars = {
   // Levenshtein distance over the bare letters, against the line's own length.
@@ -132,7 +132,7 @@ export async function checkPrompt(check: PromptCheck): Promise<LineVerdict[]> {
 // ------------------------------------------------------------------- the roads the check takes
 
 // The lines a prompt is checked on in one language, `data/<language>/voice-prompt-check-lines.json`: whole
-// briefings, with no figure in them, since a recogniser writes a figure as digits and the letters would then differ
+// lines, with no figure in them, since a recogniser writes a figure as digits and the letters would then differ
 // where the voice did not.
 export function checkLines(language: VoiceLanguage): string[] {
   const file = dataFile(language, "voice-prompt-check-lines.json");
@@ -156,7 +156,7 @@ export async function transcribeFiles(files: readonly string[], language: VoiceL
 }
 
 // The clip put where every voice node on the list keeps its copy of the voices directory, at the same place under
-// it, before any row names it: a node then holds it by the time a briefing asks for it. A node that could not be
+// it, before any row names it: a node then holds it by the time a synthesis asks for it. A node that could not be
 // given it is named with what it met, and holds no file of that name.
 export async function putClipOnNodes(clip: string, root: string): Promise<string[]> {
   const bytes = new Uint8Array(readFileSync(clip));
@@ -179,8 +179,8 @@ export async function putClipOnNodes(clip: string, root: string): Promise<string
   return missed;
 }
 
-// One line spoken in the candidate row the way a briefing would speak it: on a free voice node where the list has
-// any, on this machine's card behind the briefings' own line where it is empty.
+// One line spoken in the candidate row the way a synthesis would speak it: on a free voice node where the list has
+// any, on this machine's card behind the syntheses' own line where it is empty.
 export async function speakForCheck(voice: VoiceRow, text: string, out: string): Promise<SpokenLine> {
   mkdirSync(dirname(out), { recursive: true });
 

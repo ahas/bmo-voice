@@ -23,14 +23,14 @@
   any record and no room's words.
 - **The reading follows the voice:** names by the voice name table (`docs/voice-plan.md`, 「How names are said」),
   listed under the instructions, figures by its figure rules, roman words by their sound, symbols as they are said.
-  Unlike a live briefing, a web address is spelt out in the reading, since the list is there to teach the voice hard
-  notation.
+  Unlike a line spoken to a room, a web address is spelt out in the reading, since the list is there to teach the
+  voice hard notation.
 
 ## The spread
 
-- **Emotion:** every emotion a briefing may be spoken with, `policy/voice.toml`'s `emotions`.
+- **Emotion:** every emotion a voice may be spoken with, `policy/voice.toml`'s `emotions`.
 - **Length band,** by the reading's length in Hangul syllables: a word or two (1 to 8), a short sentence (9 to 30),
-  an ordinary sentence (31 to 80), a long briefing (81 to 180). The bands' names are the data file's.
+  an ordinary sentence (31 to 80), a long line (81 to 180). The bands' names are the data file's.
 - **Kind:** a statement, a question, an exclamation, and a mixed line holding figures, English words, commands,
   brackets, symbols or a web address, whose reading therefore differs from its text.
 - **A cell is one emotion, one band and one kind,** and every cell has the same target, twenty lines unless the run

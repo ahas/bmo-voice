@@ -20,7 +20,7 @@ A studio for checking the provided source material and recording the line spans 
 - **The media tools under `studio/`** read the same settings, through `BMO_VOICE_SETTINGS` or the release's
   `settings.toml`, and the same `BMO_SCRIPT_DATA`, so the server, the TypeScript tools and the Python tools stand on
   one data root. The Korean they write into records stands in `data/ko/`: the tags, their defaults and the group of
-  a file at the top of the material in `studio-tags.json`, the notes and the import's evidence sentence in
+  a file at the top of the material in `studio-tags.json`, and the notes and the import's evidence sentence in
   `studio-notes.json`.
 - **A refusal of the API** answers `error`, an English sentence, and `code`, which the screen words for its reader:
   `signed_out`, `sign_in_throttled`, `bad_sign_in`, `wrong_sign_in`, `sign_in_unavailable`, `foreign_origin`,
@@ -34,14 +34,19 @@ A studio for checking the provided source material and recording the line spans 
   `studio/fixtures/reviews.json`, each with what the TypeScript reading makes of it or the sentence it refuses it
   with, so neither reading drifts from the other unseen. `studio/scripts/fixtures.ts` writes it again after the
   reading changes.
-- **Screen:** the Nuxt app in `studio/client/`, a host of bmo-ui, generated into static files. The server hands them
+- **Screen:** the Nuxt app in `studio/client/`, a host of bmo-ui at the version packed beside it, generated into
+  static files. The server hands them
   out as they are and answers every other GET under the prefix, a deep link included, with the app's `index.html`.
   Paths under `api/`, `media/` and `subtitle/` are the server's own.
-- **The screen's words** are keys: the studio's own under `script.*`, and every key bmo-ui reads. The words the
-  repository carries are English, `studio/client/i18n/locales/en.yaml`. A deployment that speaks another language
-  hands the generate step its pack, the file `BMO_SCRIPT_PACK` names, in the language `BMO_SCRIPT_LANGUAGE` names,
-  answering the same keys; the screen then speaks that language, and English otherwise. A refusal of the server is
-  shown as the pack's `script.error.<code>` where it has one, and as the server's own sentence otherwise.
+- **The screen's words** are keys: the studio's own under `script.*`, and every key bmo-ui reads. The repository
+  carries both packs, English and Korean, `studio/client/i18n/locales/en.yaml` and
+  `studio/client/i18n/locales/ko.yaml`; every key bmo-ui reads is answered in each, the keys its share-link
+  dialog adds among them. The deployment generates the screen in Korean from the packed Korean file; a
+  deployment that speaks another language hands the generate step its own pack, the file `BMO_SCRIPT_PACK`
+  names, in the language `BMO_SCRIPT_LANGUAGE` names, answering the same keys, and English stands where none is
+  named. The deployment names the zone every time the screen shows in `BMO_SCRIPT_ZONE`, `Asia/Seoul` where it
+  names none. A refusal of the server is shown as the pack's `script.error.<code>` where it has one, and as the
+  server's own sentence otherwise.
 - **The tags a line is stored with** are data, not words: the emotion, delivery, music, overlap and non-verbal sound
   choices and a new line's defaults stand in `data/ko/studio-tags.json`, which the screen reads.
 - **Data:** files and records stand in the studio's data root and are never committed.

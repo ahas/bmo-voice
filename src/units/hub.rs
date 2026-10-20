@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -67,11 +67,11 @@ pub async fn hub_exec<F>(
   target: &HubTarget,
   command: &str,
   env: &BTreeMap<String, String>,
-  started: &Mutex<Option<String>>,
+  started: Arc<Mutex<Option<String>>>,
   mut on_line: F,
 ) -> ExecEnd
 where
-  F: AsyncFnMut(&str),
+  F: FnMut(&str),
 {
   let token = match hub_token(target) {
     Ok(token) => token,
@@ -135,7 +135,7 @@ where
             let line = String::from_utf8_lossy(&line[..line.len() - 1]).into_owned();
 
             if !line.trim().is_empty() {
-              on_line(&line).await;
+              on_line(&line);
             }
           }
         }
@@ -179,7 +179,7 @@ where
   let rest = String::from_utf8_lossy(&pending).into_owned();
 
   if !rest.trim().is_empty() {
-    on_line(&rest).await;
+    on_line(&rest);
   }
 
   end.unwrap_or_else(|| ExecEnd::Error("the hub's stream closed without the command's end".into()))

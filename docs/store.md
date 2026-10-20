@@ -1,15 +1,15 @@
 # The store
 
-Everything the voice keeps stands in its own database and in its own folder under the data root, `voice/`, and
-nowhere else. No other unit reads them; they reach what is in them through the API (`docs/boundary-api.md`).
+Everything the engine keeps stands in its own database and in its own folder under the data root, `voice/`,
+and nowhere else. No other unit reads them; they reach what is in them through the API
+(`docs/boundary-api.md`).
 
 ## The database
 
-- **A PostgreSQL database of the voice's own,** at the address the settings' `database` names, read and written
-  through sea-orm. The service runs the migrations as it starts; the unit command runs them too before it reads
-  or writes.
-- **The node and training scripts** read and write the same tables, at the same address, through the settings
-  file the service reads.
+- **A PostgreSQL database of the engine's own,** at the address the settings' `database` names, read and
+  written through sea-orm. The service runs the migrations as it starts.
+- **The node and training scripts** read and write the same tables, at the same address, through the
+  settings file the service reads.
 
 ### `voices`
 
@@ -18,12 +18,13 @@ One row per trained voice.
 | Column | What it holds |
 |---|---|
 | `name` | the voice's name, the key |
+| `language` | the language its lines are spoken in, as the language data names it |
 | `checkpoint` | its checkpoint directory, as a name under the voices folder |
 | `reference` | its reference clip, as a name under the voices folder (`reference/<key>.wav`) |
 | `cfg` | how hard the model holds to its conditioning |
 | `steps` | diffusion steps per patch |
 | `current` | 1 for the one current voice, 0 for every other; at most one row is current |
-| `set_at` | when the row was last written |
+| `set_at` | when the row was last written, in epoch seconds |
 | `style` | its delivery instruction, plain words without brackets, empty for none |
 | `seed` | the seed every line is spoken on, from 0 up |
 | `by_sentence` | 1 where a line is spoken a sentence at a time |
@@ -53,38 +54,71 @@ The voice node list: the nodes whose voice server speaks a line (`docs/voice-pla
 | `position` | its place in the list, the order free nodes are tried in |
 | `added_at` | when it was put on the list |
 
-It starts empty. The card arbiter changes it through the voice's adapter; nothing else keeps a list of voice nodes.
+It starts empty. The card arbiter changes it through the voice's adapter; nothing else keeps a list of voice
+nodes.
 
 ### `voice_briefings`
 
-One row per briefing that belongs to a line (`docs/voice-briefing.md`, 「Where each voice is written down」).
+The rows the briefing unit's briefings stood in, kept as they are. Nothing in this engine reads or writes
+them; the briefings that belong to a line are the briefing unit's own records.
+
+### `voice_syntheses`
+
+One row per text handed to the engine.
 
 | Column | What it holds |
 |---|---|
-| `run_id` | the briefing's run, the key |
-| `chat_id` | the room |
-| `message_id` | the line it voices or awaits; none yet for a summary launched while its turn is still writing |
-| `kind` | `summary` or `full` (a line's full reading) |
-| `title` | a summary's title |
-| `voice_message_id` | the voice message it went out as |
-| `sent_at` | when it went out |
-| `seconds` | the length of its sound |
-| `sound_path` | the kept sound of a full reading or a narration, under the voice's folder |
-| `awaits_line` | 1 while a summary still awaits the line its round will send |
-| `started_at` | when it was launched |
-| `finished_at` | when its run ended, however it ended; none while it runs |
+| `id` | the synthesis's id, the key |
+| `voice_name` | the voice it is spoken in |
+| `text` | the words |
+| `emotion` | the emotion it was asked for; null where none was |
+| `state` | `waiting`, `speaking`, `done` or `failed` |
+| `duration_ms` | the sound's length once it is done; null before |
+| `created_at` | when it was taken in, in epoch milliseconds |
 
-- **The run is agency's ledger row,** and its id is the row's key; the start and end are kept here as well, so the
-  rules of one summary at a time in a room, a summary still being made and a full reading still making are read
-  from this table alone.
-- **A notice turn's opening** is kept as a `summary`, as the summary it stands in for is.
-- The runner writes the voice message the moment it is saved, before any screen is told the message landed.
+### `voice_transcriptions`
+
+One row per set of sound files handed to the transcriber.
+
+| Column | What it holds |
+|---|---|
+| `id` | the transcription's id, the key |
+| `language` | the language its files are spoken in |
+| `state` | `waiting`, `running`, `done` or `failed` |
+| `text` | what was heard, one file's words to a line; null until done |
+| `created_at` | when it was taken in, in epoch milliseconds |
+
+### `voice_encodings`
+
+One row per recording encoded into a sound.
+
+| Column | What it holds |
+|---|---|
+| `id` | the encoding's id, the key |
+| `state` | `waiting`, `done` or `failed` |
+| `from_wav` | the recording's path |
+| `sound_path` | where the encoded sound was written; null before |
+| `created_at` | when it was taken in, in epoch milliseconds |
+
+### `voice_events`
+
+The events the service publishes, for a reader resuming.
+
+| Column | What it holds |
+|---|---|
+| `id` | the event number, the key |
+| `kind` | the event's kind |
+| `at` | when it happened, in epoch milliseconds |
+| `data` | the member, as the event's data answers it |
+
+The last 1,000 events are kept; every write past them lets the oldest go.
 
 ## The migrations
 
-- **One migration makes every table** with its indexes, column for column in the shape the rows already kept read
-  in, so rows copied in keep every column their readers name. Its record stands in `voice_migrations`, so the
-  database may be shared with another service's tables. The `citext` extension is created where it is missing.
+- **Each migration makes its tables** with their indexes, column for column in the shape the rows already
+  read in, so rows copied in keep every column their readers name. Its record stands in
+  `voice_migrations`, so the database may be shared with another service's tables. The `citext` extension is
+  created where it is missing.
 - **A table's `rowid`** is the identity the rows already kept carry; nothing reads it.
 
 ## The folder
@@ -94,8 +128,9 @@ Under the data root's `voice/`:
 | Place | What it holds |
 |---|---|
 | `voices/` | the installed voices, a folder per checkpoint, and `reference/` (`weights/checkpoints.toml`) |
-| `sounds/` | the kept sounds of full readings and narrations, one `<run>.ogg` each, OGG/Opus; a full reading's row names its file in `sound_path` |
-| `locks/` | `voice-synth.lock`, the line in front of this machine's card, and `voice-node-<node>.lock`, one per voice node, taken by the run that speaks through it |
+| `syntheses/` | a synthesis's sound, one `<id>.ogg` each, OGG/Opus |
+| `encodings/` | an encoding's sound, one `<id>.ogg` each, OGG/Opus |
+| `locks/` | `voice-node-<node>.lock`, one per voice node, taken by the run that speaks through it |
 | `voice.token` | the bearer token every voice server checks, `0600` |
 | `studio/` | the script studio's data root where the settings name no other (`docs/script-studio.md`) |
 | `voice-lines/` | the training lines' files (`docs/voice-lines.md`) |

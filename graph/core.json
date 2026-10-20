@@ -2,7 +2,7 @@
   {
     "id": "core/deployment",
     "title": "Voice deployment",
-    "what": "How the testbed deploys the voice: testbed.toml's setup, build and deploy, the voice and studio units and the studio's proxy locations in deploy/.",
+    "what": "How the testbed deploys the voice: testbed.toml's setup, build and deploy, the voice and studio units, the studio's proxy locations, and the Korean pack its screen is generated with, in deploy/.",
     "files": [
       "testbed.toml",
       "deploy/bmo-voice.service",
@@ -14,16 +14,16 @@
     "symbols": [],
     "aliases": [],
     "needs": [
-      "briefing/service",
+      "api/service",
       "studio/server",
       "nodes/scripts"
     ],
-    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
   },
   {
     "id": "core/policy",
     "title": "Voice policy values",
-    "what": "The voice's own policy, policy/voice.toml: a briefing run's cap, the failed notice's kind and the emotions a briefing may carry, served at GET /policy.",
+    "what": "The engine's own policy, policy/voice.toml: how long one synthesis may take and the emotions a voice may be asked to speak with, read once in src/policy.rs and listed by the voices route.",
     "files": [
       "policy/voice.toml",
       "src/policy.rs"
@@ -31,12 +31,12 @@
     "symbols": [],
     "aliases": [],
     "needs": [],
-    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
   },
   {
     "id": "core/settings",
     "title": "Voice settings and context",
-    "what": "The one settings file every binary and script reads (listen, database, data root, unit addresses, studio values) and the context of store and unit clients built from it, in src/settings.rs and src/context.rs.",
+    "what": "The one settings file every binary and script reads (listen, database, data root, the node and account units, studio values) and the context of store and unit clients built from it, in src/settings.rs and src/context.rs.",
     "files": [
       "src/settings.rs",
       "src/context.rs",
@@ -48,19 +48,24 @@
     "symbols": [],
     "aliases": [],
     "needs": [],
-    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
   },
   {
     "id": "core/store",
     "title": "Voice store",
-    "what": "The voice's own Postgres database: the voices, voice names, voice node list and briefing rows, its migration and the names table's seed from data/ko/voice-names.toml, in src/store/.",
+    "what": "The engine's own Postgres database: the voices, voice names, voice node list, syntheses, transcriptions, encodings and events, its migrations and the names table's seed, in src/store/.",
     "files": [
       "src/store/mod.rs",
       "src/store/voices.rs",
-      "src/store/briefings.rs",
+      "src/store/syntheses.rs",
+      "src/store/transcriptions.rs",
+      "src/store/encodings.rs",
+      "src/store/events.rs",
       "src/store/migration/mod.rs",
       "src/store/migration/m20261019_000001_tables.rs",
+      "src/store/migration/m20261020_000001_speech.rs",
       "src/store/migration/tables.sql",
+      "src/store/migration/speech.sql",
       "data/ko/voice-names.toml",
       "docs/store.md"
     ],
@@ -69,21 +74,31 @@
     "needs": [
       "core/settings"
     ],
-    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
+  },
+  {
+    "id": "core/events",
+    "title": "Voice event log",
+    "what": "The service's one event log: each event numbered and kept for a reader resuming, and the stream or page GET /events answers, in src/events.rs and src/store/events.rs.",
+    "files": [
+      "src/events.rs",
+      "src/store/events.rs"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [
+      "core/store"
+    ],
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
   },
   {
     "id": "core/units",
     "title": "Clients of other units",
-    "what": "One temporary client module per sibling the voice calls, gate, receiver, agency, artifact, node, the jake hub, pocket and web, each holding only the voice's calls, in src/units/.",
+    "what": "One temporary client module per sibling the engine calls, the node service, the jake hub and the account service the studio signs in against, each holding only the engine's calls, in src/units/.",
     "files": [
       "src/units/mod.rs",
-      "src/units/gate.rs",
-      "src/units/receiver.rs",
-      "src/units/agency.rs",
-      "src/units/artifact.rs",
       "src/units/node.rs",
       "src/units/hub.rs",
-      "src/units/pocket.rs",
       "src/units/web.rs",
       "docs/boundary-api.md"
     ],
@@ -92,6 +107,6 @@
     "needs": [
       "core/settings"
     ],
-    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
   }
 ]

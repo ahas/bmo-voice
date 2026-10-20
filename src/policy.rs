@@ -9,11 +9,9 @@ const SOURCE: &str = include_str!("../policy/voice.toml");
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct VoicePolicy {
-  /// How long a briefing's run may take, in milliseconds, before its clock asks whether to keep it.
+  /// How long one synthesis may take, in milliseconds, from its being taken in to its sound.
   pub run_cap_ms: i64,
-  /// The kind a notice of a briefing that did not go out is queued under.
-  pub failed_kind: String,
-  /// The emotions a briefing may be said with.
+  /// The emotions a voice may be asked to speak with.
   pub emotions: Vec<String>,
 }
 

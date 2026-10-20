@@ -7,7 +7,7 @@
       "dependencies": {
         "@nuxt/ui": "^4.11.2",
         "@nuxtjs/i18n": "^10.6.0",
-        "bmo-ui": "file:vendor/bmo-ui-0.1.0.tgz",
+        "bmo-ui": "file:vendor/bmo-ui-0.2.0.tgz",
         "nuxt": "^4.5.2",
         "vue": "^3.5.24",
         "vue-i18n": "^11.4.8",
@@ -171,6 +171,8 @@
     "@floating-ui/utils": ["@floating-ui/utils@0.2.12", "", {}, "sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww=="],
 
     "@floating-ui/vue": ["@floating-ui/vue@2.0.1", "", { "dependencies": { "@floating-ui/dom": "^1.8.0", "@floating-ui/utils": "^0.2.12" }, "peerDependencies": { "vue": ">=3.3.0" } }, "sha512-043dyEKD9TDSfz080YH2vobubgg+NIo/9Fw4RAl7sEMpD8Am1DNrrSTl/GpMBjyGHoD/FbJY2QLawY+HSQsEIA=="],
+
+    "@iconify-json/material-icon-theme": ["@iconify-json/material-icon-theme@1.2.72", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-zNe7VGXvUGMeexC8DTSa+NNF2ng5gLAgQL8GQgEBLfqnG7W52dfL/X8cwNx5OmhaZkA+fuKZ6DFVrDdg5vqp/Q=="],
 
     "@iconify-json/material-symbols": ["@iconify-json/material-symbols@1.2.95", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-n34GNbwe8We3LPXK2N8JuQewEQkITJiRsmX/0UYJsOyKzviVl22mNfLUiGGtXLKDPqxZa17q1Hg57zdA3BYa0w=="],
 
@@ -808,7 +810,7 @@
 
     "birpc": ["birpc@4.2.0", "", {}, "sha512-KxgKcZPfrtzJDDALHPguGpGJUrzdgpymyiQQgzFjWreHMOpWrnFNVREr5J48x2DBh8ZVioscrV1SBkDipGiX+Q=="],
 
-    "bmo-ui": ["bmo-ui@vendor/bmo-ui-0.1.0.tgz", { "dependencies": { "@iconify-json/material-symbols": "^1.2.93", "@nuxt/ui": "^4.11.2", "@tanstack/vue-table": "8.21.3", "dayjs": "^1.11.23", "mermaid": "12.0.0", "monaco-editor": "^0.56.0", "tailwindcss": "^4.1.16", "vue": "^3.5.24", "vue-router": "^5.2.0" }, "peerDependencies": { "@nuxtjs/i18n": "^10.6.0", "nuxt": "^4.5.2", "vue-i18n": "^11.4.8" } }, "sha512-G/iD9qNxOZFmS5eVqwnvC+RlvVI1rvouDB0I8pmYYChj6oBBHDzkifVBO3zK7jjZsSFUDPvTOpCFZ7ZaF1OuSA=="],
+    "bmo-ui": ["bmo-ui@vendor/bmo-ui-0.2.0.tgz", { "dependencies": { "@iconify-json/material-icon-theme": "^1.2.72", "@iconify-json/material-symbols": "^1.2.93", "@nuxt/ui": "^4.11.2", "@tanstack/vue-table": "8.21.3", "dayjs": "^1.11.23", "mermaid": "12.0.0", "monaco-editor": "^0.56.0", "tailwindcss": "^4.1.16", "vue": "^3.5.24", "vue-router": "^5.2.0" }, "peerDependencies": { "@nuxtjs/i18n": "^10.6.0", "nuxt": "^4.5.2", "vue-i18n": "^11.4.8" } }, "sha512-pkGtnM7DglG23b7BQNOrDLlL/ZTPXWAO3DvsB9WJN7HLhaulNFkQwzGRRPtTM1UY7INdw9hr81Vqy0tI+vFoDg=="],
 
     "brace-expansion": ["brace-expansion@5.0.12", "", { "dependencies": { "balanced-match": "^4.0.2" } }, "sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ=="],
 

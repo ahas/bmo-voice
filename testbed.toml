@@ -7,13 +7,12 @@ name = "bmo-voice"
 # no tests yet: they are written and run once the minimal services stand on bmo-next (README.md, 「Tests」).
 [test]
 languages = ["cargo", "bun"]
-# The Bun projects' packages, which their checks, the node scripts, the studio's tools, its screen's generate step and
-# the plugin bundle's types stand on; a release runs them too.
+# The Bun projects' packages, which their checks, the node scripts and the studio's tools and screen stand on; a
+# release runs them too.
 setup = [
   "cd scripts && bun install --frozen-lockfile",
   "cd studio && bun install --frozen-lockfile",
   "cd studio/client && bun install --frozen-lockfile",
-  "cd client && bun install --frozen-lockfile",
 ]
 
 [check]
@@ -23,7 +22,7 @@ quick = ["korean", "layout", "dependencies"]
 korean_ledger = "korean-ledger.json"
 # The base libraries every unit may build on. The voice reaches every other unit through the routes and commands
 # `docs/boundary-api.md` states.
-base_libraries = ["bmo-chat", "bmo-chat-client", "bmo-ui", "bmo-markup"]
+base_libraries = ["bmo-chat", "bmo-chat-client", "bmo-ui", "bmo-text"]
 
 [[check.step]]
 id = "check"
@@ -44,7 +43,7 @@ command = "cargo fmt --all --check"
 binaries = ["voice-server", "bmo-voice", "script-studio"]
 
 # The voice's own deploy tree and the shared data root its settings and everything it keeps stand under
-# (docs/deploy.md). The plugin bundle is not deployed here: the web console extends it in its own build.
+# (docs/deploy.md).
 [deploy]
 root = "~/.local/share/bmo-voice"
 link = "deploy"
@@ -59,7 +58,7 @@ health = '''cd ~/.local/share/bmo-voice/deploy && bin/bmo-voice health && test "
 [[deploy.step]]
 id = "studio-screen"
 phase = "before-flip"
-command = "cd studio/client && bun run generate"
+command = "cd studio/client && BMO_SCRIPT_PACK=i18n/locales/ko.yaml BMO_SCRIPT_LANGUAGE=ko bun run generate"
 
 # Every voice node brought up to date once the service answers, pushing only where a node's stamp differs.
 [[deploy.step]]

@@ -1,0 +1,73 @@
+[
+  {
+    "id": "api/service",
+    "title": "Voice engine API",
+    "what": "The HTTP API the voice-server binary answers: health, events, voices, syntheses and their sound, transcriptions, encodings, script readings and voice servers, with the wire bodies they take and answer, in src/http.rs and src/wire.rs.",
+    "files": [
+      "src/http.rs",
+      "src/wire.rs",
+      "src/service/mod.rs",
+      "src/bin/voice-server.rs"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [
+      "core/events",
+      "core/policy",
+      "core/store",
+      "core/units",
+      "script/reading",
+      "speech/nodes",
+      "speech/synth"
+    ],
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
+  },
+  {
+    "id": "api/client",
+    "title": "Voice engine client",
+    "what": "The engine's published client: one method for each route, sending and reading the wire bodies and carrying a refusal back as its status, code and sentence, in src/client.rs.",
+    "files": [
+      "src/client.rs"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [
+      "api/service"
+    ],
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
+  },
+  {
+    "id": "api/harness-plugin",
+    "title": "Voice harness plugin",
+    "what": "The plugin a coding harness takes the engine in: the bmo-voice mcp server on standard input and output, its five tools each a thin call through the client, and the ahas-voice skill, in src/mcp.rs and plugin/.",
+    "files": [
+      "src/mcp.rs",
+      "src/bin/bmo-voice.rs",
+      "plugin/skills/ahas-voice/SKILL.md"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [
+      "api/client",
+      "api/service"
+    ],
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
+  },
+  {
+    "id": "api/openapi",
+    "title": "Voice OpenAPI document",
+    "what": "The engine's OpenAPI 3.1 contract, generated from its wire types and tools, kept as docs/openapi.json and printed by bmo-voice openapi, in src/openapi.rs.",
+    "files": [
+      "src/openapi.rs",
+      "docs/openapi.json",
+      "docs/boundary-api.md"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [
+      "api/harness-plugin",
+      "api/service"
+    ],
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
+  }
+]

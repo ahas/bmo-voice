@@ -536,7 +536,7 @@ export interface RunOptions {
   atOnce: number;
   rounds: number;
   emotions: readonly string[];
-  // Every emotion a briefing may be spoken with, which the status counts by.
+  // Every emotion a voice may be spoken with, which the status counts by.
   allEmotions: readonly string[];
   prefix: string;
   codex: CodexChoice;

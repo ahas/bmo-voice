@@ -23,20 +23,13 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use tokio::io::AsyncWriteExt;
 
-use super::{clock, shell_word, synth};
+use super::{shell_word, synth};
 use crate::now_ms;
 use crate::settings::Settings;
 use crate::store::voices::{self, VoiceRow};
 use crate::units::Units;
-use crate::units::agency::Agency;
 use crate::units::hub::{ExecEnd, HubTarget, hub_exec};
 use crate::units::node::Reach;
-
-/// A run's clock as a call on a node is held to it: agency, and the run's name its clock stands under.
-pub struct RunClock<'a> {
-  pub agency: &'a Agency,
-  pub run: &'a str,
-}
 
 /// The voice's own name, the one a node's row may reserve the node for.
 pub const SERVICE: &str = "voice";
@@ -223,13 +216,14 @@ impl NodeShell {
           text = format!("printf '%s' \"$BMO_NODE_INPUT\" | base64 -d | {{\n{command}\n}}");
         }
 
-        let lines = Mutex::new(Vec::<String>::new());
-        let started = Mutex::new(None);
-        let end = hub_exec(target, &text, &env, &started, async |line: &str| {
-          lines.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(line.to_owned());
+        let lines = std::sync::Arc::new(Mutex::new(Vec::<String>::new()));
+        let started = std::sync::Arc::new(Mutex::new(None));
+        let gathered = std::sync::Arc::clone(&lines);
+        let end = hub_exec(target, &text, &env, started, move |line: &str| {
+          gathered.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(line.to_owned());
         })
         .await;
-        let stdout = lines.into_inner().unwrap_or_else(std::sync::PoisonError::into_inner).join("\n");
+        let stdout = lines.lock().unwrap_or_else(std::sync::PoisonError::into_inner).join("\n");
 
         match end {
           ExecEnd::Exit { code, stderr } => Ok(ShellRun {
@@ -298,10 +292,10 @@ fn tail(text: &str, most: usize) -> String {
 /// The shell of a node by its name, as the node service says it is reached. A name the service does not list, a
 /// node that cannot be reached as it stands, and a node its role reserves for other services are all the node out
 /// of reach.
-pub async fn node_shell(units: &Units, name: &str) -> Result<NodeShell, NodeError> {
+pub async fn node_shell(units: &Units, name: String) -> Result<NodeShell, NodeError> {
   let target = units
     .node
-    .target(name)
+    .target(name.clone())
     .await
     .map_err(|why| unreachable(format!("there is no reachable node called {name}: {why}")))?;
 
@@ -327,7 +321,7 @@ pub async fn node_shell(units: &Units, name: &str) -> Result<NodeShell, NodeErro
     Reach::Ssh { host, .. } => {
       let args = units
         .node
-        .login(name)
+        .login(name.clone())
         .await
         .map_err(|why| unreachable(why.to_string()))?
         .ok_or_else(|| unreachable(format!("{name} has no SSH route")))?;
@@ -531,11 +525,10 @@ pub struct Spoken {
   pub checkpoint: String,
 }
 
-/// How one line is asked of a node: within `timeout_ms`, held to the run's clock past it where one is handed and
-/// given up a grace past it where none is, and the node's own asker waiting `node_wait_ms`.
-pub struct Call<'a> {
+/// How one line is asked of a node: within `timeout_ms`, given up a grace past it, and the node's own asker
+/// waiting `node_wait_ms`.
+pub struct Call {
   pub timeout_ms: i64,
-  pub clock: Option<&'a RunClock<'a>>,
   pub node_wait_ms: Option<i64>,
 }
 
@@ -543,15 +536,11 @@ pub struct Call<'a> {
 async fn speak_on_node(
   shell: &NodeShell,
   request: &Value,
-  call: Call<'_>,
+  call: Call,
 ) -> Result<(Vec<u8>, Spoken), NodeError> {
   let id = format!("{:x}-{:08x}", now_ms(), rand::random::<u32>());
   let wait_seconds = (call.node_wait_ms.unwrap_or(call.timeout_ms) + 999) / 1000;
-  let started = now_ms();
-  let given_up_at = AtomicI64::new(match call.clock {
-    None => started + call.timeout_ms + GRACE_MS,
-    Some(_) => i64::MAX,
-  });
+  let given_up_at = AtomicI64::new(now_ms() + call.timeout_ms + GRACE_MS);
   let dir = Mutex::new(None::<String>);
   let work = async {
     let input = request.to_string();
@@ -614,18 +603,7 @@ async fn speak_on_node(
       },
     ))
   };
-  let watch = async {
-    if let Some(held) = call.clock {
-      clock::watch(held.agency, held.run, started, call.timeout_ms).await;
-      given_up_at.store(now_ms(), Ordering::SeqCst);
-    }
-
-    std::future::pending::<()>().await;
-  };
-  let spoken = tokio::select! {
-    spoken = work => spoken,
-    () = watch => unreachable!("the watch never ends by itself"),
-  };
+  let spoken = work.await;
   let dir = dir.into_inner().unwrap_or_else(std::sync::PoisonError::into_inner);
 
   // The line and its sound leave the node with the call; a node gone meanwhile keeps them until the next call's
@@ -721,13 +699,13 @@ pub async fn take(
   settings: &Settings,
   checkpoint: &str,
   wait_ms: i64,
-  still_wanted: impl AsyncFn() -> bool,
+  still_wanted: impl Fn() -> bool,
 ) -> Result<Taken, NotSpoken> {
   let started = now_ms();
   let warm = checkpoint.rsplit('/').find(|part| !part.is_empty()).unwrap_or_default();
 
   loop {
-    if !still_wanted().await {
+    if !still_wanted() {
       return Err(NotSpoken::Withdrawn);
     }
 
@@ -741,7 +719,7 @@ pub async fn take(
         continue;
       };
 
-      match node_shell(units, &name).await {
+      match node_shell(units, name.clone()).await {
         Ok(shell) => {
           let state = health(&shell).await;
 
@@ -818,8 +796,8 @@ pub async fn take(
 }
 
 /// One line to speak through the node list: the voice, the words, where the sound goes, the whole of what it may
-/// take with the wait for a node included, the most of it the wait may have, the run's clock past the cap, how
-/// long the node's own asker may wait.
+/// take with the wait for a node included, the most of it the wait may have, and how long the node's own asker
+/// may wait.
 pub struct Speech<'a> {
   pub db: &'a DatabaseConnection,
   pub units: &'a Units,
@@ -829,7 +807,6 @@ pub struct Speech<'a> {
   pub out: &'a Path,
   pub cap_ms: i64,
   pub wait_ms: i64,
-  pub clock: Option<&'a RunClock<'a>>,
   pub node_wait_ms: Option<i64>,
 }
 
@@ -848,7 +825,7 @@ pub struct Heard {
 /// node is let go however the call ends, and a line taken back once a node is held is never spoken.
 pub async fn speak_through_free_node(
   speech: Speech<'_>,
-  still_wanted: impl AsyncFn() -> bool,
+  still_wanted: impl Fn() -> bool,
 ) -> Result<Heard, NotSpoken> {
   let started = now_ms();
   let mut card_held = false;
@@ -870,13 +847,12 @@ pub async fn speak_through_free_node(
 
     card_held |= taken.card_held;
 
-    if !still_wanted().await {
+    if !still_wanted() {
       return Err(NotSpoken::Withdrawn);
     }
 
     let call = Call {
       timeout_ms: (speech.cap_ms - waited_ms).max(1_000),
-      clock: speech.clock,
       node_wait_ms: speech.node_wait_ms.map(|wait| (wait - waited_ms).max(1_000)),
     };
 

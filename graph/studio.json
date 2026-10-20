@@ -2,13 +2,14 @@
   {
     "id": "studio/screen",
     "title": "Script studio screen",
-    "what": "The studio's single-page screen on bmo-ui: episodes, the video, the line editor and the line list, its English words and the tag data, in studio/client/.",
+    "what": "The studio's single-page screen on bmo-ui: episodes, the video, the line editor and the line list, its English and Korean words and the tag data, in studio/client/.",
     "files": [
       "studio/client/app/app.vue",
       "studio/client/app/pages/index.vue",
       "studio/client/app/components/ScriptDialogueList.vue",
       "studio/client/nuxt.config.ts",
       "studio/client/i18n/locales/en.yaml",
+      "studio/client/i18n/locales/ko.yaml",
       "studio/client/package.json",
       "studio/client/tsconfig.json",
       "data/ko/studio-tags.json"
@@ -18,7 +19,7 @@
     "needs": [
       "studio/server"
     ],
-    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
   },
   {
     "id": "studio/server",
@@ -40,7 +41,7 @@
       "core/settings",
       "core/units"
     ],
-    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
   },
   {
     "id": "studio/tools",
@@ -76,6 +77,6 @@
     "needs": [
       "studio/server"
     ],
-    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
   }
 ]

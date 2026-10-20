@@ -1,321 +1,245 @@
-# Boundary API
+# The voice engine's boundary
 
-Everything the voice serves and everything it calls. Another unit reaches the voice only through what this
-document states, and the voice reaches another unit only through the routes, commands and protocols that unit's
-own document states, named here with the section they stand in.
+Fixed at 0.1.0-rev.1.
 
-## Versioning
+Every route this engine answers, its event stream, the calls it makes, its harness plugin, its command line
+and its settings. The engine is an upstream: a coding harness takes it as its first entry point through its
+MCP server, with no console and no other unit running. Speaking to listeners on a schedule is a caller's
+work, which calls this engine; briefings, their rooms and their listeners belong to the briefing unit.
 
-- **The boundary carries the repository's one version,** in semver, the version in `VERSION` and the crate's
-  manifest.
-- **The major moves on a change a caller reads:** a route taken away or renamed, a field taken away or given
-  another meaning, a refusal's code changed, the stream's frames changed, a command's words or exit codes changed.
-- **The minor moves on an addition:** a route, a field, a frame kind, a code. The patch moves on anything else.
-- **A change to this document is made in the same commit as the code that serves it,** and moves the version as
-  above.
+`docs/openapi.json` is the contract: an OpenAPI 3.1 document written from the service's own types, stating
+every route with its parameters, its body, its answers and the codes it can answer, the bodies' schemas, the
+events under `x-events`, the harness plugin under `x-harness` and its tools under `x-tools`. `bmo-voice
+openapi` prints it as the repository keeps it. A change to anything here changes this document and that one
+in the same commit, and moves the version (「Versions」).
 
 ## Conventions
 
-- **Bodies are JSON both ways,** keys in snake_case, times in epoch milliseconds, a field written with a question
-  mark optional or null.
-- **Every route but `GET /health` wants the bearer token** the settings' `token_file` names under the data root's
-  `env/`; a request without it is answered 401 `unauthorised`.
-- **A refusal** is a status and a body of `error`, one English sentence, and `code`, snake_case. The codes are in
-  「Codes」 below. Words a person reads in another language are a console's language pack, keyed by the code.
+The common wire format and the API design rules are bmo-chat's `docs/conventions.md`; this engine keeps them.
 
-## Settings
+- **Every route, `GET /health` among them, needs `Authorization: Bearer <token>`,** the token of the
+  settings' token file; a missing or wrong token is answered 401 `unauthorized`. A token file that holds
+  nothing lets no caller in.
+- **Bodies are JSON, both ways, with field names in camelCase.**
+- **Times are integers of epoch milliseconds,** each field ending in `At`; spans end in `Ms` and counts in
+  `Count`.
+- **A failure** is a non-2xx answer whose body is `code`, a kebab-case code a caller matches on, and
+  `error`, an English sentence for a log (「Codes」). A method and path no route answers is 404 `no-route`.
+- **A list is a page,** `{"items": [...], "more": boolean}`. `more` says whether anything stands past the
+  last item. A list takes `after`, the cursor its route states, and `limit`, 1 to 1,000 and 100 where
+  absent.
+- **A byte answer** is a member's `sound`, carries OGG/Opus, and honours `Range`.
+- **Nothing in the API names an agent, a room, an owner or a worker.** Who a caller speaks for is its own
+  business.
 
-The service and the unit command read one TOML file (`docs/layout.md`, 「Settings」):
+## Health
 
-| Key | Meaning |
-|---|---|
-| `listen` | where the service listens |
-| `address` | the service's own address, as the units it hands work to call it back |
-| `token_file` | the file under the data root's `env/` holding the token callers present |
-| `database` | the address of the voice's own database (`docs/store.md`) |
-| `data_root` | the runtime data root; everything the voice keeps stands under its `voice/` folder |
-| `agent` | the registered agent whose voice speaks where nothing names another, by its id |
-| `[units.<unit>]` | `address` and `token_file?` of each unit called: `gate`, `receiver`, `agency`, `artifact`, `node`, `pocket`, and `web` for the script studio's sign-in |
-| `[studio]` | optional, the script studio's deployment values: `source_root?`, `source_url?`, `speakers?`, `cloud?` and `cloud_home?` (`docs/script-studio.md`, 「Access and service」) |
+`GET /health` answers `ready`, `reason` (null while ready) and `version`. A service that answers has its
+store open and migrated.
 
-## What the voice serves
+## Events
 
-### Health
-
-| Route | Answer |
-|---|---|
-| `GET /health` | `ok`, `version` |
-
-### Briefings
-
-A briefing is a line said out loud in a room in an agent's trained voice (`docs/voice-briefing.md`). Launching one
-answers at once; the speaking runs apart, under a run of agency's ledger.
-
-| Route | Request | Answer |
-|---|---|---|
-| `POST /briefings` | a launch (below) | 201: `run`, the briefing's run, and `unit`, the name of the run that speaks it |
-| `GET /briefings?chat=&awaiting=` | `chat`, a room; `awaiting=true` for only the summaries still awaiting their line | `briefings`: each `run`, `chat`, `message?` (the line it voices or awaits), `voice_message?` (the voice message it went out as), `kind`, `title?`, `awaits_line`, `started_at`, `finished` |
-| `POST /briefings/{run}/line` | `message`, the line a summary's round sent | 204; 404 `no_briefing` for a run the voice keeps no briefing of |
-| `GET /briefings/{run}/sound` | | the kept sound of a full reading or a narration, OGG/Opus, answering ranges; 404 `no_sound` where none is kept |
-| `POST /briefings/stop` | `chat`, `message`: the voice message a listener stopped | 204, and a `briefing-stopped` frame on the stream |
-| `GET /briefings/events` | `Last-Event-ID` or `?after=` to resume | the listener stream (below), `text/event-stream` |
-
-- **A run is named by its ledger id written as a string,** in every answer and path, as the receiver reads it.
-- **A listed briefing's `kind`** is `summary` (a summary or a notice turn's opening) or `full` (a line's full
-  reading); a briefing of a session or a narration belongs to no line and is not listed.
-
-- **A launch:** `chat` (`chat_id` is read as the same field), `text`, the words to speak, and `started_by` (`by`
-  is read as the same field), naming what started it: `chat:<chatId>` for a session, `notice:<chatId>` for the
-  receiver's own summary of a notice turn, `console:<chatId>` for a line's full reading, `search:<document>` or
-  `archive-doc:<document>` for a narration, or the launcher's own name. Beside them:
-  - `kind?`: `briefing` (a session's, where none is named), `notice` (a notice turn's opening the receiver speaks
-    itself), `summary` (a notice turn's summary; a launch naming a `title` is one), `reading` (a line's full
-    reading, kept on its line and sent to no road), `narration` (a document's sound; a launch naming a `document`
-    is one);
-  - `title?`: what a summary is about, in one line;
-  - `message?`: the line a reading voices, or the line a summary stands on where its round has sent it;
-  - `awaits_line?`: true where a summary awaits the line its round has yet to send, so a `message` beside it is not
-    taken as its line;
-  - `document?`: the artifact document a narration is kept with;
-  - `emotion?`: one of the emotions of `policy/voice.toml`; a word outside them is refused;
-  - `agent?`: the registered agent whose voice speaks, the settings' `agent` where none is named;
-  - `via?`: the road the turn that launched it answers on.
-- **Where `started_by` is absent** it is read from the kind: `notice:<chat>`, `console:<chat>` for a reading,
-  `archive-doc:<document>` for a narration, `chat:<chat>` otherwise.
-- **Refusals before anything is opened:** 400 `bad_launch` (a field missing or of the wrong kind, a reading naming
-  no `message`, a narration naming no `document`, a kind the list does not hold, a title past one line of 60
-  characters), 400 `nothing_to_say`, 400 `nobody_named` (no `started_by`), 422 `unknown_emotion`, 409
-  `switched_off` (the voice briefing's switch stands off), 409 `voiceless` (the agent's registration names no
-  voice). A run whose program agency did not start is 503 `not_up`; a unit the launch needed that did not answer is
-  500 `failed`.
-- **A summary of the same room still waiting** when a newer one is launched is closed as `superseded`.
-
-### The listener stream
-
-`GET /briefings/events` is what a listener holds open: the console's briefing player, a face display, any client
-that plays briefings. It carries only these frames, each with an id a client resumes from:
+`GET /events` is the service's one stream, server-sent events, or a page of the same events to a reader
+asking `Accept: application/json`.
 
 | Event | Data |
 |---|---|
-| `briefing` | `chat`, `message` (the voice message), `text` (the words spoken), `title?`, `seconds?`, `sent_at`, `emotion?`, `face?` (the face the face unit's entry answers for the emotion), `autoplay` |
-| `briefing-stopped` | `chat`, `message` |
-| `presence` | `state` (`writing`, `thinking` or `idle`) and `since` |
+| `synthesis.created` | the synthesis as `GET /syntheses/{synthesisId}` answers it, state `waiting` |
+| `synthesis.ended` | the synthesis, state `done` or `failed` |
+| `transcription.ended` | the transcription, state `done` or `failed` |
+| `voice.changed` | a voice as `GET /voices/{voiceName}` answers it |
 
-- **A keep frame** (a comment line) goes every five seconds, so a client that hears nothing for twenty knows the
-  connection dropped.
-- **Resuming:** the last 200 frames are kept; a listener naming the last id it read, in `Last-Event-ID` or
-  `?after=`, is handed every kept frame after it before the frames filed from then on. A listener naming none starts
-  with what is filed from then on.
-- **`autoplay`** is the voice briefing's autoplay switch as it stands when the frame is filed, read from the
-  receiver; a client never reads the switch itself.
-- **`presence`** is worked out from the turn events the receiver's stream carries: any turn writing is
-  `writing`, otherwise any turn running is `thinking`, otherwise `idle`. It is filed once a stream has the
-  picture and again only when the state moves, and carries nothing of any room.
+- **A frame's `event` is the kind,** its `id` the event number, a signed 64-bit integer that only grows,
+  and its `data` is `{"id", "kind", "at", "data"}`, the inner `data` being the member.
+- **A reader resumes** with `Last-Event-ID` or `?after=`, and narrows with `kinds`, a comma-separated list.
+  The last 1,000 events are kept; a resume from before them is answered 410 `gone`, and the reader reads
+  the collections again.
+- **A page** is read with `after` and `limit`.
+- **A comment line every fifteen seconds** keeps a stream open.
 
-### A line's script reading
+## Voices
 
-| Route | Request | Answer |
+| Route | Query | Answer |
 |---|---|---|
-| `POST /scripts/reading` | `text`, a line as a room received it; `full?`, true for a full reading | `script`, the line made a script for speaking; `stretches`, each Korean stretch as the reading gate would be asked about it: `text` (its names and figures said), `marked` (the stretch as the gate is shown it, each span marked by its number) and `spans`, each `n`, `text` and `code` (true where it was code); `polish`, for a full reading, the view the polishing gate is shown, `view` with each piece of code as a numbered placeholder and `codes` in their order, else null |
+| `GET /voices` | `after`, `limit` | a page of voices, in name order |
+| `GET /voices/{voiceName}` | | one voice |
 
-- It reads the line by the voice's own script rules (`docs/voice-plan.md`, 「A line is spoken as a script」) and
-  asks no gate. The gate's evaluation set reads its voice members' items through it.
+- **A voice:** `name` (its key), `language` (the language data's code for the language it speaks),
+  `checkpoint` (where its weights stand), `emotions` (the emotions it may be asked to speak with) and
+  `changedAt` (epoch milliseconds of its last change).
+- **The cursor is the last voice's `name`.** A name no voice holds is answered 404 `not-found`.
+- **The emotions are the engine's policy values** (`policy/voice.toml`, 「The policy」), the same for every
+  voice.
 
-### The voice's policy values
+## Syntheses
 
-| Route | Answer |
-|---|---|
-| `GET /policy` | `run_cap_ms`, `emotions`, `failed_kind`: the values of `policy/voice.toml` |
-
-- The voice owns these values; a unit above it that needs one reads it here.
-
-### A briefing heard, from its own runner
-
-| Route | Request | Answer |
+| Route | Body or query | Answer |
 |---|---|---|
-| `POST /briefings/heard` | a `briefing` frame's data (「The listener stream」) | 204, the frame filed on the listener stream |
+| `POST /syntheses` | `voiceName`, `text`, `emotion?`, `style?`, `seed?` | 201, the synthesis |
+| `GET /syntheses/{synthesisId}` | | one synthesis |
+| `GET /syntheses/{synthesisId}/sound` | | the sound, OGG/Opus, with `Range` |
 
-- A briefing's runner runs apart from the service, so it files the frame of what it put in the room here, with the
-  service's own token. No other unit calls it.
+- **A synthesis:** `id`, `voiceName`, `text`, `emotion`, `state`, `durationMs` (null until done) and
+  `createdAt`. Its `state` is `waiting` (taken in), `speaking` (a voice server is speaking it), `done` (its
+  sound stands) or `failed`.
+- **A synthesis is answered at once;** the speaking runs apart on one free voice server of the voice nodes,
+  and the caller reads the member again until its state is `done` or `failed`. `done` carries
+  `durationMs`, the sound's length read from its Ogg pages.
+- **`text` must hold something to say.** A voice no list holds is answered 404 `not-found`; an `emotion`
+  outside the voice's is answered 422 `unknown-emotion`. `style` and `seed` are laid over the voice's row
+  for this one synthesis.
+- **The sound** is answered only once the state is `done`; before that, and where a failed synthesis left
+  none, 404 `not-found`. A sound is kept under the data root, never in the database.
+- **One synthesis speaks one text.** There is no list route: a caller that wants to know a synthesis it
+  started reads its member or listens to the stream.
 
-### The unit command
+## Transcriptions
 
-`bmo-voice` is the command `bmo` hands the voice's words to (bmo-cli's boundary, 「Unit commands」). Asked
-`nouns`, it prints `voice say`, `voice brief` and `runner voice`; each noun's two words, or its one-word name, run
-it.
-
-| Words | Name and alias | What it does |
+| Route | Body | Answer |
 |---|---|---|
-| `voice say --text <words> [--chat <chat>] [--voice <name>]`, or `--file <sound> [--caption <words>]` | `voice-say`, `voice` | says one line out loud in a room while the caller waits, or sends a sound file it is handed; the room is the owner's private chat where none is named |
-| `voice brief --chat <chat> --by <who> [--text <words>] [--emotion <emotion>] [--title <title>] [--document <id>] [--via <road>]` | `voice-brief` | launches a briefing as `POST /briefings` does, the words on standard input where `--text` names none, the agent the one `BMO_TURN_AGENT` names, and ends once the run is up |
-| `runner voice <chat> <words-file> [<run> [<unit>]] [--reply-to <message>] [--voices <line>] [--no-transcript] [--emotion <emotion>] [--summary] [--keep] [--document <id>] [--agent <agent>] [--via <road>]` | `voice-runner` | the run a launch started: reads, speaks and sends the line, and closes its run |
+| `POST /transcriptions` | `language`, `files` | 201, the transcription |
+| `GET /transcriptions/{transcriptionId}` | | one transcription |
 
-- **`health`**, which `bmo` does not dispatch, is the deployment's: it asks the service the settings name for its
-  `GET /health` and exits 0 where it answers `ok`, 1 otherwise, opening no store of its own.
-- Exit 0 on success, 1 on a refusal, which is printed on standard error as its English sentence, 2 on words that
-  do not read.
-- **A briefing's run** is opened in agency's ledger under the agent `voice` and launched there as this command's
-  `voice-runner`, with `BMO_VOICE_SETTINGS` naming the settings the launcher read.
+- **A transcription:** `id`, `language`, `state`, `text` (null until done) and `createdAt`. Its state is
+  `waiting`, `running`, `done` or `failed`.
+- **`files` are paths on the engine's own machine,** one or more, in the order their words are answered. A
+  language other than `ko` or `en` is answered 400 `bad-request`.
+- **The answer is immediate,** state `waiting`; the transcription runs apart and ends `done`, with `text`
+  holding one file's words to a line in the order given, or `failed`. The end is published as
+  `transcription.ended`.
 
-### The node scripts and the card adapter
+## Encodings
 
-- **`weights/voice.card.toml`** declares the voice server to the card arbiter, its adapter the node scripts'
-  `voice-node.ts adapter` (`docs/voice-plan.md`, 「The voice nodes」).
-- **The adapter answers** the arbiter's verbs `install`, `uninstall`, `start`, `stop`, `health` and `placed`, run
-  as `<adapter words> <verb> --node <node> --placed <node>,…`, its last line one JSON object: `ok`, `node`,
-  `state` (`running`, `stopped`, `absent` or `failing`), `detail`, and for `placed` the `nodes` in order.
-- **The scripts under `scripts/`** read the settings the service reads, write the voice's own tables directly, reach
-  a node through the node service's target and login and a hub node through its hub (「bmo-node」 below), and run
-  `synth/voice-tool.py` directly the way the service does.
+`POST /encodings` with `fromWav`, the path of a reference recording on the engine's machine, writes it out
+as an OGG/Opus sound and answers 201 with an encoding: `id`, `state` (`done`) and `createdAt`. A path that
+is no readable file is answered 422 `unreadable-source`; a failed encode is 500 `failed`. The sound is kept
+under the data root; no route serves it.
 
-### The tool entries
+## Script readings
 
-`synth/tool.toml` declares the tool `synth` and its entries for the system alone, called through the tool host's
-control socket (bmo-pocket's `docs/api.md`, 「The control socket」): `voice/mouth`, `voice/encoder`,
-`voice/transcriber` and `voice/briefing` (`docs/voice-plan.md`, 「The voice as a tool」).
+`POST /script-readings` with `text` and `language?` answers 200 with `script`, the text made speakable by the
+engine's own reading rules, and `sentences`, the script cut after each of its end marks, their marks kept.
+It asks no model, takes no card turn and keeps nothing. A language other than `ko` or `en` is answered 400
+`bad-request`.
 
-- **The executable answers the tool host's call protocol 1** (bmo-pocket's `docs/api.md`, 「The call protocol」)
-  with the voice's own `synth/tool_protocol.py`, so the placement needs nothing of the tool host's own helpers.
-- **The voice's own runs call the same executable directly,** handing it the call object the host would, with a
-  record naming the data root; the mouth's lock is the data root's `voice/locks/voice-synth.lock` either way.
-- **`voice/briefing`** runs the voice's unit command, the one `BMO_VOICE_BINARY` names, else `bmo-voice` on the
-  path.
+## Voice servers
 
-## What the voice calls
+`GET /voice-servers` answers a page of the voice servers on the voice nodes, in the node list's order.
 
-Each call goes to the unit's address under `[units]` with the unit's token as a bearer where it names a token file,
-in the conventions that unit's document gives the route's family. A refusal is read as the unit's document gives
-it, carried as the voice's error naming the unit, its status, its code and its sentence; a unit that does not answer
-is reported with the failure's own words, and the briefing it served fails as `docs/voice-briefing.md` says.
-
-### bmo-gate (`docs/boundary-api.md`, 「For the voice unit: the voice gates」 and 「For the console」)
-
-| Call | Route | Used for |
-|---|---|---|
-| one run of a gate | `POST /stages/{stage}/runs` with `prompt`, `chat?`, `message?`, `agent?`, `thinking`, `alongside` | the reading gate, `voice-reading`, and the polishing gate, `voice-polish`, each with the stage's own instructions; `answer` null is no answer, 409 `stopped` a stop, anything else that is no answer the gate's fault |
-| a gate's options | `GET /options/{key}` | whether the polishing gate is switched on: off only where `enabled` is false or zero |
-| the sanitiser | `POST /sanitised` with `text`, `label`, `chat?` | a briefing's words and a voice message's caption made safe to hand on, before anything is made of them; where the gate does not answer, the words go on as they are and the run's log says so |
-
-### bmo-receiver (`docs/boundary-api.md`)
-
-| Call | Route | Used for |
-|---|---|---|
-| voice a notice | `POST /rooms/{chat}/notices` with `fact`, `intent`, `follow_up?`, `optional`, `kind?`, `expires_at?`, `events`, `rides_until?` | a briefing that did not go out told to its room by the room's voice; answers the instruction's `id` |
-| the switch | `GET /voice-briefing` | `on` and `autoplay`: whether briefings are on, and whether they play by themselves |
-| a room's answerers | `GET /rooms/{chat}/answerers` | `voice`, the agent that speaks for a room |
-| the owner | `GET /owner` | `chat`, the owner's private chat, where a line nobody asked for goes |
-| a send with files | `POST /say-file`, a form of `chatId`, `text?`, `replyTo?` and the `file` | a voice message put in a room, its reading as the caption; answers `messageId`, `sent` and `failed` |
-| a message | `GET /rooms/{chat}/messages/{message}` | `text`, the line a full reading voices; 404 for a message the receiver does not keep |
-| the event stream | `GET /events` | the turn events presence is worked out from |
-| a room's name | `GET /console/rooms/{chat}/title` | `title`, what a briefing's run is called where a person watches it |
-| a message changed | `POST /event` with `type` `message`, `chatId` and `messageId` | a screen showing the room reads the line a briefing voices again once the briefing's run ends |
-
-### bmo-agency (`docs/api.md`)
-
-| Call | Route | Used for |
-|---|---|---|
-| the agents | `GET /agents` | each agent's `name` and the `voice` its row names, or none |
-| open a run | `POST /runs` with `agent`, `chat_id?`, `unit`, `depth`, `cap_ms?`, `started_at`, `started_by?` | the ledger row of a briefing's run; answers its `id` |
-| launch it | `POST /runs/{id}/launch` with `title`, `agent` and `command` (`program`, `args`, `cwd`, `environment`) | the briefing's runner started in its agent's host |
-| close it | `POST /runs/{id}/close` with `finished_at` and `outcome` | how the run ended: `done`, `failed`, `refused`, `superseded`; a run closed already, 409, keeps its closing |
-| its clock | `GET /runs/clock?run=` | `capEnds` and `keptUntil`: how long a run past its cap is kept, before a line is cut |
-| a note | `POST /log/notes` with `agent`, `run`, `chat?`, `text`, `state?` | what the runner tells its run's log on its way |
-
-### bmo-artifact (`docs/api.md`, 「Documents (HTTP)」)
-
-| Call | Route | Used for |
-|---|---|---|
-| a document | `GET /api/archive/{id}` | a narration's title |
-
-### bmo-node (`docs/api.md`)
-
-| Call | Route | Used for |
-|---|---|---|
-| a node's target | `GET /nodes/{name}/target` | how a voice node is reached: `kind`, then an ssh node's `host`, `port`, `user`, `keyPath?` and `shell?`, or a hub node's `hubUrl`, `tokenFile` and `agent` |
-| a node's login | `POST /nodes/login` with `node` | `ssh`, the arguments that open a batch SSH login to an ssh node, or null |
-| the node list | `GET /nodes` | each node's `name`, in the list's order: the nodes `scripts/voice-train.ts nodes` looks at where none is named |
-
-- A refusal of the node service is its answer: `answered` false and a `refusal` carrying its `code` and `message`,
-  carried as the voice's error like any other.
-
-### bmo-arbiter (`docs/api.md`)
-
-- **The declaration** `weights/voice.card.toml` and **the adapter verbs** above.
-- **The turn client** `~/bmo-card/turn.py` on each node (「The turn client」), which the voice server imports from
-  there and holds a turn with, declaring `BMO_CARD_SERVICE=voice`; **the card lock** `~/.gpu.lock`.
-- **A training step runs inside the turn client as a command,** `turn.py --service voice -- <command>`, on the
-  arbiter's own interpreter where its installation carries one; an exit of 3 is the voice having no place on the node.
-- **Whether a card is free for a training step** is read from the node arbiter's `GET /units` on the node's loopback
-  (「The node arbiter's units」), at the port `CARD_TURN_PORT` names in `~/.config/bmo-card/env`, else 7439: its
-  `card`, `lockHeldBy`, `claim` and `queue`, each ticket's `rest`. It is asked through the node's own shell with the
-  node's Python standard library.
-
-### bmo-pocket (`docs/api.md`, 「The control socket」)
-
-| Call | Route | Used for |
-|---|---|---|
-| an entry described | `GET /catalogue/{namespace}/{name}` | the capabilities the entry asks, which the call's record holds |
-| a system entry | `POST /calls` with `session` (a record of `line` `voice`, those capabilities, `dataRoot` and a privileged turn), `tool` `face/expression` and its `arguments` | the face a briefing shows for its emotion, filed on its `briefing` frame |
-
-- The control socket is the path `[units.pocket]`'s `address` names; it takes no token.
-
-### bmo-web (`docs/boundary.md`, 「sumida's own routes」)
-
-| Call | Route | Used for |
-|---|---|---|
-| sign-in | `POST /sumida/auth/session` with `name` and `password`, then `DELETE /sumida/auth/session` with the `bmo.sid` cookie it answered | the script studio's sign-in: a name and a password the account service takes are a login, a 401 is a wrong one; the studio keeps its own session after |
+- **A voice server:** `nodeName` (its key), `state` and `voiceNames`. `state` is `running` where the node's
+  server answers, `absent` where the node cannot be reached or its server does not answer.
+- **`voiceNames`** are the voices whose checkpoint the server holds loaded, in name order; empty where it
+  holds none or does not answer.
+- **The cursor is the last server's `nodeName`.**
 
 ## Codes
 
 | Code | Status | Meaning |
 |---|---|---|
-| `unauthorised` | 401 | no token, or another one |
-| `bad_launch` | 400 | a launch whose fields do not read |
-| `nothing_to_say` | 400 | a launch with no words |
-| `nobody_named` | 400 | a launch naming nobody who started it |
-| `unknown_emotion` | 422 | an emotion outside the policy's |
-| `switched_off` | 409 | the voice briefing's switch stands off |
-| `voiceless` | 409 | the agent's registration names no voice |
-| `no_briefing` | 404 | no briefing of that run |
-| `no_sound` | 404 | no kept sound for that run |
+| `bad-request` | 400 | the body or the query is not the shape the route takes; the sentence names what is wrong |
+| `unauthorized` | 401 | the token is missing or wrong |
+| `no-route` | 404 | no route answers the method and path |
+| `not-found` | 404 | nothing stands at the key the path names |
+| `gone` | 410 | the events since the number asked for are no longer kept |
+| `unknown-emotion` | 422 | the emotion is not one of the engine's policy values |
+| `unreadable-source` | 422 | an encoding's wav is not a file the engine can read |
+| `failed` | 500 | the engine failed; the sentence is the failure |
 
-## Contract gaps
+## The voice servers and the card
 
-Statements here a sibling's document does not yet match, each for that sibling to take up:
+- **Each voice node runs `synth/voice-vox.py` on the voice environment** as the user unit
+  `bmo-voice.service`, listening on the node's loopback and taking a line on the node's own shell
+  (`docs/voice-plan.md`, 「The voice nodes」).
+- **A voice server takes its turn on the node's card through the card arbiter's own turn client,** installed
+  on the node by the arbiter, and holds the card lock while it speaks. The engine reaches no arbiter route
+  itself; the card turn is the node's.
+- **Which node speaks a line is read at every synthesis** from the voice node list, and how each node is
+  reached is the node service's answer for it. A node out of reach is never quietly replaced by this
+  machine's card.
 
-- **bmo-web holds every language pack,** and none for the script studio's screen yet. The studio carries its words
-  in English and takes a pack at generate time (`docs/script-studio.md`, 「Access and service」); the Korean pack of
-  its `script.*` keys, and of bmo-ui's keys for it, is bmo-web's to hold and hand the deployment.
+## What the engine calls
 
-- **No unit serves the wording glossary.** bmo-markup reads a glossary at a path its caller names and holds none,
-  so the training lines hold the Korean banned terms a line is checked against in their own data file,
-  `data/ko/voice-lines.toml`, until a unit serves the glossary and the voice reads it from there.
+### bmo-node
 
-- **bmo-receiver** sends a launch with `kind` `notice` or `summary` and no `started_by`; the voice reads such a
-  launch's `started_by` as `notice:<chat>` or `chat:<chat>` until it sends one. It keeps its own copy of
-  `run_cap_ms`, `failed_kind` and `emotions` in its `chat-round.toml`, which it is to read from `GET /policy`. Its
-  port reads a listed briefing's `kind` as `notice` or `summary` only and its `title` as never null, so a full
-  reading listed with `kind` `full` and no title does not read there until it takes both.
-- **bmo-receiver's `POST /say-file`** takes a caption and files but says nothing of sending an OGG/Opus file as a
-  voice message, of folding a caption past a road's limit into replies, or of the road a line nobody asked for
-  goes on; the voice sends its briefings there and leaves those to the receiver's roads. Nor does any route say
-  before a send whether a room's road carries a voice, so a road that carries none is met at the send and told to
-  the room as a briefing that did not go out.
-- **bmo-receiver's sends** name no room-file rule for a sound file `voice say` is handed, so the voice sends what it
-  is handed and the receiver's roads keep their own rules.
-- **bmo-artifact** sends `chat_id` and no `kind`; the voice reads a body naming a `document` as a narration. It
-  serves no route to attach a narration to a document, so a narration's sound is kept by the voice and served at
-  `GET /briefings/{run}/sound` until it does.
-- **bmo-agency** stands a run's program in its agent's host; a briefing's run names the agent `voice`, which is
-  to stand as agency's registration for the voice's runs. It states no route that writes the `voice` an agent's
-  registration names, so `scripts/voice-install.ts --use` moves the current voice alone and an agent whose
-  registration names a voice keeps speaking in it until agency serves such a route.
-- **bmo-arbiter's turn client** stands at `~/bmo-card/turn.py` on each node the arbiter stands on; the voice server
-  imports it from there through the unit's import path rather than carrying a copy, so a node the arbiter does not
-  stand on speaks without a turn.
-- **bmo-node** serves no route that runs a command on a hub node; the voice reaches a hub node through the hub
-  itself, from the target's `hubUrl`, `tokenFile` and `agent`: the hub's `POST /exec?agent=` with the bearer token
-  the token file holds under `JAKE_CONTROL_TOKEN`, its answer a server-sent stream of `started`, `stdout`,
-  `stderr`, `exit`, `error` and `ended` events.
-- **The script studio's data root** is shared with the song bench's; the studio keeps its records under the
-  voice's own folder and the bench reads none of them.
+| Call | Route | Used for |
+|---|---|---|
+| a node's target | `GET /nodes/{name}/target` | how a voice node is reached: `kind`, then an ssh node's `host`, `port`, `user`, `keyPath?` and `shell?`, or a hub node's `hubUrl`, `tokenFile` and `agent` |
+| a node's login | `POST /nodes/login` with `node` | `ssh`, the arguments that open a batch SSH login to an ssh node, or null |
+
+A refusal of the node service is read as its own answer, `answered` false and a `refusal` carrying `code` and
+`message`, and carried as the engine's failure.
+
+### bmo-web
+
+| Call | Route | Used for |
+|---|---|---|
+| sign-in | `POST /sumida/auth/session` with `name` and `password`, then `DELETE /sumida/auth/session` with the `bmo.sid` cookie it answered | the script studio's sign-in: a name and a password the account service takes are a login, a 401 is a wrong one; the studio keeps its own session after |
+
+## The harness plugin
+
+- **The MCP server is `bmo-voice mcp`,** on standard input and output. It calls the engine at the settings'
+  address with the settings' token; `--address` and `--token` name them instead.
+- **Its tools,** each a thin call of one route through the engine's own client:
+
+| Tool | Route |
+|---|---|
+| `voice_voices` | `GET /voices` |
+| `voice_synthesize` | `POST /syntheses` |
+| `voice_synthesis` | `GET /syntheses/{synthesisId}` |
+| `voice_transcribe` | `POST /transcriptions` |
+| `voice_script` | `POST /script-readings` |
+
+- **The `ahas-voice` skill** tells a harness when and how to use them. A tool's failure carries the status,
+  code and sentence of the refusal, or the sentence saying why nothing answered.
+
+## The command line
+
+`bmo-voice` serves the harness plugin and the document; it speaks nothing by itself.
+
+| Word | What it does |
+|---|---|
+| `health` | asks the service the settings name for `GET /health`, with its token, and exits 0 where it answers ready, 1 otherwise |
+| `mcp` | runs the harness plugin's MCP server; `--address` and `--token` name the engine |
+| `openapi` | prints `docs/openapi.json` as the repository keeps it |
+
+## The policy
+
+`policy/voice.toml` holds the engine's own policy values, read once at start: `run_cap_ms`, how long one
+synthesis may take, and `emotions`, the emotions a voice may be asked to speak with. No route serves them;
+the voices list them, and a synthesis outside them is refused.
+
+## Settings
+
+The service and the command read one TOML file, `settings.toml` at the top of the release or the file
+`BMO_VOICE_SETTINGS` names.
+
+| Key | Meaning |
+|---|---|
+| `listen` | where the service listens |
+| `address` | the service's own address, as the command and the plugin call it |
+| `token_file` | the file under the data root's `env/` holding the token callers present |
+| `database` | the address of the engine's own database (`docs/store.md`) |
+| `data_root` | the runtime data root; everything the engine keeps stands under its `voice/` folder |
+| `synth` | optional, the folder of the engine's Python side, `synth/` where it is not in the release |
+| `[units.node]` | `address` and `token_file?` of the node service |
+| `[units.web]` | `address` and `token_file?` of the account service the script studio signs in against |
+| `[studio]` | optional, the script studio's deployment values (`docs/script-studio.md`, 「Access and service」) |
+
+Every token stands in its own file under the data root's `env/`, never in the settings, a log, a command
+line or an environment variable.
+
+## The script studio
+
+The script studio has its own server and screen (`docs/script-studio.md`). It is not part of the engine's
+upstream API: its screen speaks a language pack the repository holds, its API refuses with its own codes,
+and its server calls the engine's synthesis and reading rules through the crate rather than HTTP.
+
+## Versions
+
+- **The repository has one version,** in `VERSION` and the crate's manifest, shared by the engine, its
+  client, its plugin and its OpenAPI document.
+- **Before its first release it is `0.1.0` and counts revisions:** the first `0.1.0` is the base, and every
+  later bump is one revision, written `0.1.0-rev.<n>` with `n` counting from 1. Major, minor and patch never
+  move before the first release, a breaking change included.
+- **The first release drops the suffix.** From then on the version moves by semver; a removed or renamed
+  route or field, or a field that becomes required, is a major version.

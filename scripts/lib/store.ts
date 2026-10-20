@@ -20,7 +20,7 @@ export interface VoicePrompt {
 // A voice's continuation prompts by language; a language it has none for is absent.
 export type VoicePrompts = Partial<Record<VoiceLanguage, VoicePrompt>>;
 
-// One voice a briefing can be spoken in: the trained weights, the clip they are conditioned on, and the settings
+// One voice a line can be spoken in: the trained weights, the clip they are conditioned on, and the settings
 // the synthesiser is asked for. `current` is the one that speaks where nothing names another; exactly one row
 // carries it.
 export interface VoiceRow {

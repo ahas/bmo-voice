@@ -2,7 +2,7 @@
   {
     "id": "nodes/install",
     "title": "Voice install and names",
-    "what": "A trained voice brought into the data root and its settings, a continuation prompt checked on whole briefings before it is given, and the voice name table, in scripts/voice-install.ts and scripts/voice-names.ts.",
+    "what": "A trained voice brought into the data root and its settings, a continuation prompt checked on whole lines before it is given, and the voice name table, in scripts/voice-install.ts and scripts/voice-names.ts.",
     "files": [
       "scripts/voice-install.ts",
       "scripts/voice-names.ts",
@@ -18,7 +18,7 @@
     "needs": [
       "nodes/scripts"
     ],
-    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
   },
   {
     "id": "nodes/scripts",
@@ -46,6 +46,6 @@
       "core/store",
       "synth/tool"
     ],
-    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
   }
 ]

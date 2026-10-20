@@ -1,5 +1,4 @@
 {
-  "client/shared/briefings.ts": 1,
   "data/ko/studio-notes.json": 2,
   "data/ko/studio-tags.json": 7,
   "data/ko/voice-lines.toml": 183,
@@ -14,8 +13,8 @@
   "src/studio/records.rs": 1,
   "src/studio/review.rs": 2,
   "src/studio/subtitles.rs": 6,
+  "studio/client/i18n/locales/ko.yaml": 207,
   "studio/fixtures/reviews.json": 18,
-  "synth/briefing.json": 10,
   "synth/voice-cer-sentences.json": 18,
   "synth/voice-cer.py": 9,
   "synth/voice-vox.py": 2

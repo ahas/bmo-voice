@@ -1,5 +1,5 @@
 [Unit]
-Description=bmo-voice: briefings spoken in a trained voice (docs/boundary-api.md in the voice's repository)
+Description=bmo-voice: the voice engine, speaking a text in a trained voice on the voice nodes (docs/boundary-api.md in the voice's repository)
 After=network-online.target
 Wants=network-online.target
 # Without its settings the service has no listen address, database or token, so the unit does not start where the

@@ -1,7 +1,7 @@
-//! What the voice runs on this machine (docs/voice-plan.md, 「One voice environment」, 「One at a time on the
-//! operations machine's card」, 「Which road speaks a line」, 「The voice as a tool」): the line in front of the card
-//! every call to the synthesiser stands in, the voice's mouth and encoder run through its own tool entry, how long
-//! a spoken sound runs, and what a room is told of a briefing that did not go out.
+//! What the engine runs on this machine (docs/voice-plan.md, 「One voice environment」, 「One at a time on the
+//! operations machine's card」, 「The voice as a tool」): the voice's mouth, encoder and transcriber run through
+//! its own tool entry, the line in front of the card every call to the synthesiser stands in, and how long a
+//! spoken sound runs.
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -12,23 +12,24 @@ use tokio::io::AsyncWriteExt;
 
 use crate::settings::Settings;
 use crate::store::voices::VoiceRow;
-use crate::units::receiver::Notice;
 
-/// How long the mouth may take, its stand in the card's line included, and how long the encoder may.
+/// How long the mouth may take, its stand in the card's line included, and how long the encoder and the
+/// transcriber may.
 const MOUTH_TIMEOUT: Duration = Duration::from_secs(600);
 const ENCODER_TIMEOUT: Duration = Duration::from_secs(60);
+const TRANSCRIBER_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// The voice's tool entry in the synth folder, which runs the mouth and the encoder.
 const TOOL_ENTRY: &str = "voice-tool.py";
 
-/// How long a run stands in the line before it gives up its turn: three ordinary briefings fit inside it, and a
-/// wait longer than it means the card is wedged rather than busy.
+/// How long a run stands in the line before it gives up its turn: three ordinary lines fit inside it, and a wait
+/// longer than it means the card is wedged rather than busy.
 pub const QUEUE_WAIT_MS: i64 = 5 * 60_000;
 
 /// How the mouth's refusal begins when the wait ran out and the line was never spoken.
 const NO_TURN: &str = "no turn:";
 
-/// The pause after the last summary heard before the next of its room goes out.
+/// The pause after one line before the next may begin.
 pub const SUMMARY_PAUSE_MS: i64 = 600;
 
 /// The one lock file in front of this machine's card: one for the machine rather than one per room, since what is
@@ -220,61 +221,27 @@ pub fn ogg_opus_seconds(bytes: &[u8]) -> Option<f64> {
   Some((granule - i64::from(pre_skip)).max(0) as f64 / 48_000.0)
 }
 
-/// How long a summary waits before it goes out: while an earlier summary of its room is still being made, and
-/// otherwise until the last one heard has run its length and a breath after it. Nought is its turn.
-pub fn summary_wait_ms(making: i64, heard_until: Option<i64>, now: i64) -> i64 {
-  if making > 0 {
-    return SUMMARY_PAUSE_MS;
+/// Spoken files taken down in one language: what was heard, each file's words in the order given, one to a line.
+pub async fn transcribe(language: &str, files: &[String], settings: &Settings) -> Result<String, String> {
+  let answer = call_entry(
+    settings,
+    "voice/transcriber",
+    json!({ "language": language, "files": files }),
+    TRANSCRIBER_TIMEOUT,
+  )
+  .await?;
+
+  if answer["isError"] == true {
+    return Err(said(&answer).join("\n").trim_start_matches("ERROR: ").to_owned());
   }
 
-  heard_until.map_or(0, |until| (until + SUMMARY_PAUSE_MS - now).max(0))
-}
+  let heard = answer["structuredContent"]["heard"]
+    .as_array()
+    .into_iter()
+    .flatten()
+    .filter_map(|one| one["heard"].as_str())
+    .map(str::to_owned)
+    .collect::<Vec<_>>();
 
-/// Why a briefing that was going to be heard never arrived, told in plain terms rather than the reason itself.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Fault {
-  Voice,
-  Synth,
-  Node,
-  Sound,
-  Sending,
-  Stopped,
-  Queue,
-  Transcript,
-}
-
-impl Fault {
-  // What went wrong, as the room's session is told it.
-  fn fact(self) -> &'static str {
-    match self {
-      Self::Voice => "no trained voice to speak it in is installed",
-      Self::Synth => "the part that makes the sound did not answer",
-      Self::Node => "the machine that makes the voice could not be reached or did not answer",
-      Self::Sound => "the sound was made, but its file could not be read",
-      Self::Sending => "the sound was made, but it could not be posted to the room",
-      Self::Stopped => "the briefing was stopped partway through",
-      Self::Queue => "another briefing was speaking first, and this one never got its turn",
-      Self::Transcript => "",
-    }
-  }
-}
-
-/// What the room's session is told when a briefing does not arrive, so it says so in the room's own voice. Every
-/// ending carries that nothing more is coming from this briefing, so the session never promises a retry.
-pub fn failure_notice(fault: Fault) -> Notice {
-  if fault == Fault::Transcript {
-    return Notice {
-      fact: "The voice briefing's sound was posted to this room, but part of the text meant to go with it could not be sent.".to_owned(),
-      intent: "tell the room the voice arrived but part of its text did not.".to_owned(),
-      follow_up: Some("The sound will not be sent again, and nothing more is coming from this briefing.".to_owned()),
-      ..Notice::default()
-    };
-  }
-
-  Notice {
-    fact: format!("The voice briefing meant for this room did not go out: {}.", fault.fact()),
-    intent: "tell the room the voice briefing is not coming, and roughly why.".to_owned(),
-    follow_up: Some("This briefing is over; no voice will follow and nothing will be retried.".to_owned()),
-    ..Notice::default()
-  }
+  Ok(heard.join("\n"))
 }

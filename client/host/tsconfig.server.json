@@ -1,6 +1,0 @@
-{
-  // The server routes read with the host's sign-in declared, standing outside server/ so a host extending the layer
-  // reads none of it and keeps its own sign-in's types.
-  "extends": "../.nuxt/tsconfig.server.json",
-  "include": ["../.nuxt/types/nitro-nuxt.d.ts", "../.nuxt/types/nitro.d.ts", "../server/**/*", "../shared/**/*", "./server.d.ts"]
-}

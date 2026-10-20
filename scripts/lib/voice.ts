@@ -18,8 +18,8 @@ const policy = Bun.TOML.parse(readFileSync(join(releaseRoot, "policy/voice.toml"
 // How long a line may take before it is called off.
 export const voiceCapMs: number = policy.run_cap_ms;
 
-// The emotions a briefing may be spoken with.
-export const briefingEmotions: readonly string[] = policy.emotions;
+// The emotions a voice may be spoken with.
+export const voiceEmotions: readonly string[] = policy.emotions;
 
 // -------------------------------------------------------------- the line in front of the card
 
@@ -30,7 +30,7 @@ export async function readyVoiceLock(path: string): Promise<void> {
   await Bun.write(path, "");
 }
 
-// How long a run stands in that line before it gives up its turn. Three ordinary briefings ahead of you fit inside
+// How long a run stands in that line before it gives up its turn. Three ordinary lines ahead of you fit inside
 // this, and a wait longer than it means the card is wedged rather than busy.
 export const voiceQueueWaitMs = 5 * 60_000;
 
@@ -42,7 +42,7 @@ export const voiceQueueExit = 75;
 // voice row starts with, and the row is where it is changed.
 export const trainedDelivery = "A calm, steady voice, slightly lower pitch, even pacing, restrained expression";
 
-// What the trained mouth refuses in an instruction, said before a row is written that no briefing could speak: a
+// What the trained mouth refuses in an instruction, said before a row is written that no voice could speak: a
 // bracket would close the instruction early and have the rest read aloud, and the mouth takes a sentence rather
 // than a script. The mouth holds the same two limits on its side (`synth/voice-vox.py`).
 export const mostDelivery = 300;

@@ -1,6 +1,0 @@
-{
-  // The app read on its own. The routes' types reach this project through Nuxt's typed fetch, so the host's sign-in
-  // is declared here too; the routes themselves are read in `tsconfig.server.json`.
-  "extends": "../.nuxt/tsconfig.app.json",
-  "include": ["../.nuxt/nuxt.d.ts", "../app/**/*", "../shared/**/*", "./server.d.ts"]
-}

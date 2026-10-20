@@ -1,6 +1,6 @@
 -- Every table of the voice with its indexes, column for column in the shape the rows already kept read in, so a
--- table copied in keeps every column its readers name. A briefing's start and end are kept on its own row
--- (docs/store.md).
+-- table copied in keeps every column its readers name. The briefing unit's own rows stand in a table of their
+-- own, which nothing in this engine reads.
 
 CREATE EXTENSION IF NOT EXISTS citext;
 

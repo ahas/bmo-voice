@@ -2,6 +2,7 @@
 //! store may share a database with another service's tables without either's record standing in the other's way.
 
 mod m20261019_000001_tables;
+mod m20261020_000001_speech;
 
 use sea_orm_migration::prelude::*;
 
@@ -9,14 +10,26 @@ use sea_orm_migration::prelude::*;
 pub const MIGRATIONS_TABLE: &str = "voice_migrations";
 
 /// Every table the store's migrations make, beside the record of what ran.
-pub const OWN_TABLES: [&str; 4] = ["voices", "voice_names", "voice_nodes", "voice_briefings"];
+pub const OWN_TABLES: [&str; 8] = [
+  "voices",
+  "voice_names",
+  "voice_nodes",
+  "voice_briefings",
+  "voice_syntheses",
+  "voice_transcriptions",
+  "voice_encodings",
+  "voice_events",
+];
 
 pub struct Migrator;
 
 #[async_trait::async_trait]
 impl MigratorTrait for Migrator {
   fn migrations() -> Vec<Box<dyn MigrationTrait>> {
-    vec![Box::new(m20261019_000001_tables::Migration)]
+    vec![
+      Box::new(m20261019_000001_tables::Migration),
+      Box::new(m20261020_000001_speech::Migration),
+    ]
   }
 
   fn migration_table_name() -> DynIden {

@@ -87,12 +87,12 @@ impl Node {
   }
 
   /// How a node is reached by its name.
-  pub async fn target(&self, name: &str) -> Result<Target, UnitError> {
-    self.answer(self.caller.request(Method::GET, &["nodes", name, "target"])).await
+  pub async fn target(&self, name: String) -> Result<Target, UnitError> {
+    self.answer(self.caller.request(Method::GET, &["nodes", &name, "target"])).await
   }
 
   /// The arguments that open a batch SSH login to a node, ahead of the command; none where it has no SSH route.
-  pub async fn login(&self, name: &str) -> Result<Option<Vec<String>>, UnitError> {
+  pub async fn login(&self, name: String) -> Result<Option<Vec<String>>, UnitError> {
     let login: Login = self
       .answer(self.caller.request(Method::POST, &["nodes", "login"]).json(&json!({ "node": name })))
       .await?;

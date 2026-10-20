@@ -1,0 +1,245 @@
+# The script studio's words in Korean (docs/script-studio.md, 「Access and service」): the studio's own keys under
+# `script`, and every key bmo-ui reads under `common` and `files`. The deployment generates the screen with this
+# pack; a deployment speaking another language hands the generate step its own pack answering the same keys.
+script:
+  title:
+    # The line editor's heading.
+    edit_line: 대사 편집
+    # The episode panel's heading.
+    episodes: 에피소드
+    # The line list's heading.
+    lines: 대사 목록
+    # The sign-in card's heading.
+    login: 스튜디오에 로그인
+    # The span editor's heading.
+    range: 발화 구간
+    # The page's title.
+    studio: 대사 스튜디오
+  label:
+    all_files: 모든 파일
+    all_seasons: 모든 시즌
+    annotated_line: 감정 표시가 붙은 대사
+    # Whether the voiced character appears in the episode.
+    agent_appears: 등장인물 등장
+    # Whether the voiced character really speaks in the episode.
+    agent_speaks: 등장인물 발화
+    clip_id: 클립 ID
+    delivery: 말투
+    # {progress}: how many downloads are done of how many.
+    downloads: "다운로드 {progress}"
+    emotion: 감정
+    end: 끝
+    english_line: 영어 대사
+    events: 비언어 소리
+    file_path: 소리 파일 경로
+    has_lines: 대사나 후보 있음
+    # {n}: the number of lines.
+    line_count: "대사 {n}개"
+    lines: 대사
+    music: 배경 음악
+    new_line: 새 대사
+    no_range: 구간 없음
+    none: 없음
+    notes: 메모
+    overlap: 다른 화자 겹침
+    password: 비밀번호
+    playable: 재생 가능
+    review_note: 근거와 검토 메모
+    review_state: 검토 상태
+    reviewed: 검토함
+    source: 출처
+    speaks: 발화함
+    speaks_unknown: 발화 미확인
+    start: 시작
+    # The line under the page's title.
+    subtitle: 음성 자료 기록
+    unclassified: 미분류
+    unknown: 미확인
+    user_id: 이름
+    whole_video: 영상 전체
+    "yes": "예"
+    zoom_range: 구간으로 확대
+  action:
+    add: 추가
+    delete: 삭제
+    discard: 버리기
+    download_original: 원본 내려받기
+    export_csv: CSV 내보내기
+    login: 로그인
+    logout: 로그아웃
+    play_range: 구간 재생
+    refresh: 새로 고침
+    set_now: 현재 위치로
+    step_back: −0.1초
+    step_forward: +0.1초
+    view_range: 구간 보기
+  placeholder:
+    annotated_line: "<슬픔> …"
+    english_line: 들리는 대로 적은 영어 대사
+    episode_pick: 에피소드 검색 후 선택
+    events: 웃음, 울음 같은 소리 선택
+    notes: 배경음, 화자 겹침, 불확실한 전사
+    review_note: 확인한 장면, 출처, 무발화 등장
+    title_search: 제목 검색
+  aria:
+    check_state: 확인 상태
+    downloads: 다운로드
+    edit_panel: 대사 편집 패널
+    episode_panel: 에피소드 패널
+    episode_panel_width: 에피소드 패널 너비
+    episode_pick: 에피소드 선택
+    episode_search: 에피소드 검색
+    line_range: 대사 구간
+    lines_panel: 대사 목록 패널
+    lines_panel_width: 대사 패널 너비
+    open_lines: 대사 목록 열기
+    playback_rate: 재생 속도
+    season: 시즌
+    video: 에피소드 영상. 왼쪽과 오른쪽 화살표로 0.1초씩 움직입니다
+    video_and_edit: 영상과 대사 편집
+    video_info: 영상과 그 정보
+    video_width: 영상과 편집기 너비
+    view_range: 이 구간 보기
+  status:
+    dirty: 저장하지 않은 변경
+    download_complete: 다운로드 완료
+    download_failed: 다운로드 실패
+    download_queued: 대기 중
+    downloading: 다운로드 중
+    episodes_loading: 에피소드를 불러오는 중…
+    loading: 스튜디오를 불러오는 중…
+    needs_review: 검토 필요
+    unsaved: 저장 안 됨
+  message:
+    add_lines: 확인한 대사를 추가하세요.
+    check_download: 위의 원본 내려받기로 파일을 확인하세요.
+    check_ranges: 대사마다 시작과 끝을 확인하세요.
+    delete_confirm: 고른 대사를 삭제할까요?
+    discard_confirm: 저장하지 않은 변경을 버릴까요?
+    file_path_hint: 추출한 소리 파일의 경로를 기록합니다.
+    lines_after_pick: 에피소드를 고르면 대사가 보입니다.
+    logout_confirm: 저장하지 않고 로그아웃할까요?
+    no_subtitles: 이 영상의 영어 자막을 아직 찾지 못했습니다. 구간은 직접 정할 수 있습니다.
+    pick_episode: 에피소드를 고르세요.
+    pick_line: 목록에서 대사를 고르거나 새로 추가하세요.
+    range_hint: 손잡이를 끌거나 왼쪽과 오른쪽 키로 0.1초씩 움직이세요.
+    range_in_video: 영상 길이 안에서 시작과 끝을 정하세요.
+    review_hint: 대사와 구간을 확인하고 검토함으로 바꾼 뒤 저장하세요.
+    save_to_apply: 저장해야 반영됩니다.
+    saved: 저장했습니다.
+    source_note: "등장인물의 대사를 대조한 출처입니다. 팬 대본이므로 모든 대사를 찾았다거나 영상을 검토했다는 뜻은 아닙니다."
+    subtitle_match: 구간이 빈 대사는 저장할 때 영어 자막과 대조합니다. 한 곳에서 맞는 대사만 시각이 정해집니다.
+    time_format: 시각은 02:13.450처럼 적습니다.
+    wait_download: 다운로드가 끝나야 영상이 재생됩니다.
+  error:
+    episode_failed: 에피소드를 불러오지 못했습니다.
+    load_failed: 스튜디오를 불러오지 못했습니다.
+    reload_failed: 목록을 다시 읽지 못했습니다.
+    request_failed: 요청을 처리하지 못했습니다.
+    save_failed: 저장하지 못했습니다.
+    video_unplayable: 영상을 재생할 수 없습니다.
+common:
+  title:
+    share_link: 링크 공유
+  action:
+    cancel: 취소
+    choose_all: 모두 선택
+    choose_none: 모두 해제
+    close: 닫기
+    close_all_tabs: 모든 탭 닫기
+    close_other_tabs: 다른 탭 닫기
+    close_right_tabs: 오른쪽 탭 닫기
+    copy: 복사
+    create_link: 링크 만들기
+    discard: 버리기
+    fit_screen: 화면에 맞추기
+    more: 더보기
+    next_picture: 다음 그림
+    pause: 일시 정지
+    pin: 고정
+    play: 재생
+    previous_picture: 이전 그림
+    save: 저장
+    unpin: 고정 해제
+    unshare: 공유 해제
+    zoom_in: 확대
+    zoom_out: 축소
+  aria:
+    close_named: "{name} 닫기"
+    column_width: "{name} 너비"
+    decrease: 줄이기
+    download_named: "{name} 내려받기"
+    image_zoom: "{title} 확대"
+    increase: 늘리기
+    more_notices: "알림 {n}개 더"
+    pinned_named: "{name}, 고정됨"
+    share_address: 공유 주소
+  error:
+    editor_failed: 편집기를 불러오지 못했습니다.
+    link_copy_failed: 링크를 복사하지 못했습니다.
+    picture_failed: 그림을 불러오지 못했습니다.
+    share_create_failed: 링크를 만들지 못했습니다.
+    share_read_failed: 링크를 읽지 못했습니다.
+    unshare_failed: 링크를 해제하지 못했습니다.
+    video_failed: 영상을 불러오지 못했습니다.
+  label:
+    # A dayjs format the day is written in.
+    day_format: YYYY년 M월 D일
+    days: "{d}일"
+    days_hours: "{d}일 {h}시간"
+    expired: 만료됨
+    expiry: 만료
+    forever: 무기한
+    hours: "{h}시간"
+    hours_minutes: "{h}시간 {m}분"
+    left_days: "{n}일 남음"
+    left_hours: "{n}시간 남음"
+    left_minutes: "{n}분 남음"
+    left_under_minute: 1분 미만 남음
+    link: 링크
+    minutes: "{m}분"
+    minutes_seconds: "{m}분 {s}초"
+    palette_forest: 숲
+    palette_lemon: 레몬
+    palette_sea: 바다
+    palette_sunset: 노을
+    palette_teal: 청록
+    palette_violet: 보라
+    play_position: 재생 위치
+    properties: 속성
+    seconds: "{n}초"
+    share_until: "{date}까지"
+    short_day_format: M월 D일
+    theme_forest: 숲
+    theme_sea: 바다
+    theme_sunset: 노을
+    theme_teal: 청록
+    theme_violet: 보라
+    unplayable: 재생할 수 없음
+  message:
+    discard_confirm: 변경을 버릴까요?
+    link_copied: 링크를 복사했습니다.
+    preview_badge: 배지
+    preview_field: 입력란
+    preview_link: 링크
+    preview_meta: 세부 정보
+    preview_note: 메모
+  status:
+    copied: 복사함
+    loading: 불러오는 중…
+    picture_loading: 그림을 불러오는 중…
+    share_loading: 링크를 불러오는 중…
+    video_loading: 영상을 불러오는 중…
+files:
+  action:
+    keep_both: 둘 다 두기
+    replace: 바꾸기
+    skip: 건너뛰기
+  aria:
+    name_field: 이름
+  label:
+    progress: "{all}개 중 {done}개 ({percent})"
+  message:
+    conflict: 이미 쓰는 이름이 있습니다.
+  status:
+    uploading: 올리는 중…

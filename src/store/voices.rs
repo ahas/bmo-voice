@@ -34,6 +34,8 @@ pub struct Prompt {
 #[derive(Clone, Debug, PartialEq)]
 pub struct VoiceRow {
   pub name: String,
+  pub language: String,
+  pub set_at: i64,
   pub checkpoint: String,
   pub reference: String,
   pub cfg: f64,
@@ -62,6 +64,8 @@ fn voice_row(row: &QueryResult) -> Result<VoiceRow, StoreError> {
 
   Ok(VoiceRow {
     name: row.try_get("", "name")?,
+    language: row.try_get("", "language")?,
+    set_at: row.try_get("", "set_at")?,
     checkpoint: row.try_get("", "checkpoint")?,
     reference: row.try_get("", "reference")?,
     cfg: row.try_get("", "cfg")?,
@@ -71,6 +75,15 @@ fn voice_row(row: &QueryResult) -> Result<VoiceRow, StoreError> {
     prompts,
     by_sentence: row.try_get::<i64>("", "by_sentence")? == 1,
   })
+}
+
+/// Every voice the table holds, in name order.
+pub async fn rows(db: &DatabaseConnection) -> Result<Vec<VoiceRow>, StoreError> {
+  all(db, r#"SELECT * FROM "voices" ORDER BY "name""#, vec![])
+    .await?
+    .iter()
+    .map(voice_row)
+    .collect()
 }
 
 /// The voice of a name, or none where the table holds no such voice.

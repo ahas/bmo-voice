@@ -1,0 +1,1240 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "bmo-voice",
+    "version": "0.1.0-rev.1",
+    "description": "The voice engine: trained voices, speech synthesis on the voice servers of the nodes, transcription, speaker encodings and scripts for the ear. A synthesis is answered at once and the sound follows. Bodies are JSON with camelCase keys, times are integers of epoch milliseconds and spans of milliseconds end in Ms. A list is a page, `after` being the last member's name. Every failure is a non-2xx answer whose body is `code` and `error`. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`. Speaking to listeners on a schedule is a caller's work and calls this engine; the briefings that did so are another service's."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "the voice service"
+    }
+  ],
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "x-layer": "upstream",
+  "x-stage": 4,
+  "x-calls": [
+    "arbiter"
+  ],
+  "x-harness": {
+    "plugin": "ahas-voice",
+    "mcp": "bmo-voice mcp",
+    "entry": "A harness turns text into speech with voice_synthesize in a voice voice_voices lists, and reads the sound when voice_synthesis says it is done."
+  },
+  "tags": [
+    {
+      "name": "health"
+    },
+    {
+      "name": "events"
+    },
+    {
+      "name": "voices"
+    },
+    {
+      "name": "syntheses"
+    },
+    {
+      "name": "transcriptions"
+    },
+    {
+      "name": "encodings"
+    },
+    {
+      "name": "script-readings"
+    },
+    {
+      "name": "voice-servers"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "readHealth",
+        "tags": [
+          "health"
+        ],
+        "summary": "Readiness and version.",
+        "responses": {
+          "200": {
+            "description": "Readiness and version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized"
+        ]
+      }
+    },
+    "/events": {
+      "get": {
+        "operationId": "listEvents",
+        "tags": [
+          "events"
+        ],
+        "summary": "The service's one event stream (SSE), or a page of it with Accept: application/json.",
+        "responses": {
+          "200": {
+            "description": "The service's one event stream (SSE), or a page of it with Accept: application/json.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "Server-sent events, each an event."
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request",
+          "gone"
+        ],
+        "parameters": [
+          {
+            "name": "kinds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "A comma-separated list of the kinds wanted."
+            },
+            "description": "A comma-separated list of the kinds wanted."
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64",
+              "description": "The number of the last event read; the events start past it."
+            },
+            "description": "The number of the last event read; the events start past it."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0,
+              "description": "1 to 1,000; 100 where absent. For a page only."
+            },
+            "description": "1 to 1,000; 100 where absent. For a page only."
+          }
+        ]
+      }
+    },
+    "/voices": {
+      "get": {
+        "operationId": "listVoices",
+        "tags": [
+          "voices"
+        ],
+        "summary": "The trained voices, each with its model and emotions.",
+        "responses": {
+          "200": {
+            "description": "The trained voices, each with its model and emotions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoicePage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request"
+        ],
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "The last voice's name; the page starts past it.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "1 to 1,000; 100 where absent.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ]
+      }
+    },
+    "/voices/{voiceName}": {
+      "get": {
+        "operationId": "readVoice",
+        "tags": [
+          "voices"
+        ],
+        "summary": "One voice.",
+        "responses": {
+          "200": {
+            "description": "One voice.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Voice"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "not-found"
+        ],
+        "parameters": [
+          {
+            "name": "voiceName",
+            "in": "path",
+            "required": true,
+            "description": "The voice's name.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/syntheses": {
+      "post": {
+        "operationId": "createSynthesis",
+        "tags": [
+          "syntheses"
+        ],
+        "summary": "Speak a text in a voice; the synthesis is answered at once and its sound follows.",
+        "responses": {
+          "201": {
+            "description": "Speak a text in a voice; the synthesis is answered at once and its sound follows.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Synthesis"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request",
+          "not-found",
+          "unknown-emotion"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewSynthesis"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/syntheses/{synthesisId}": {
+      "get": {
+        "operationId": "readSynthesis",
+        "tags": [
+          "syntheses"
+        ],
+        "summary": "One synthesis and its state.",
+        "responses": {
+          "200": {
+            "description": "One synthesis and its state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Synthesis"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "not-found"
+        ],
+        "parameters": [
+          {
+            "name": "synthesisId",
+            "in": "path",
+            "required": true,
+            "description": "The synthesis's id.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ]
+      }
+    },
+    "/syntheses/{synthesisId}/sound": {
+      "get": {
+        "operationId": "readSynthesisSound",
+        "tags": [
+          "syntheses"
+        ],
+        "summary": "A synthesis's sound, OGG/Opus, with Range.",
+        "responses": {
+          "200": {
+            "description": "A synthesis's sound, OGG/Opus, with Range.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "contentEncoding": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "not-found"
+        ],
+        "parameters": [
+          {
+            "name": "synthesisId",
+            "in": "path",
+            "required": true,
+            "description": "The synthesis's id.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ]
+      }
+    },
+    "/transcriptions": {
+      "post": {
+        "operationId": "createTranscription",
+        "tags": [
+          "transcriptions"
+        ],
+        "summary": "Transcribe sound files in a language.",
+        "responses": {
+          "201": {
+            "description": "Transcribe sound files in a language.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transcription"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewTranscription"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transcriptions/{transcriptionId}": {
+      "get": {
+        "operationId": "readTranscription",
+        "tags": [
+          "transcriptions"
+        ],
+        "summary": "One transcription and its words.",
+        "responses": {
+          "200": {
+            "description": "One transcription and its words.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transcription"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "not-found"
+        ],
+        "parameters": [
+          {
+            "name": "transcriptionId",
+            "in": "path",
+            "required": true,
+            "description": "The transcription's id.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ]
+      }
+    },
+    "/encodings": {
+      "post": {
+        "operationId": "createEncoding",
+        "tags": [
+          "encodings"
+        ],
+        "summary": "Encode a reference recording into a speaker encoding.",
+        "responses": {
+          "201": {
+            "description": "Encode a reference recording into a speaker encoding.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Encoding"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request",
+          "unreadable-source"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewEncoding"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/script-readings": {
+      "post": {
+        "operationId": "createScriptReading",
+        "tags": [
+          "script-readings"
+        ],
+        "summary": "Read a text into a script for the ear.",
+        "responses": {
+          "200": {
+            "description": "Read a text into a script for the ear.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptReading"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewScriptReading"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/voice-servers": {
+      "get": {
+        "operationId": "listVoiceServers",
+        "tags": [
+          "voice-servers"
+        ],
+        "summary": "The voice servers on the nodes and the voices each has loaded.",
+        "responses": {
+          "200": {
+            "description": "The voice servers on the nodes and the voices each has loaded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceServerPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request"
+        ],
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "The last node's name; the page starts past it.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "1 to 1,000; 100 where absent.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "x-events": [
+    "synthesis.created",
+    "synthesis.ended",
+    "transcription.ended",
+    "voice.changed"
+  ],
+  "x-tools": [
+    {
+      "name": "voice_voices",
+      "description": "The trained voices, each with its model and emotions.",
+      "input": {
+        "description": "A list's cursor and size.",
+        "type": "object",
+        "properties": {
+          "after": {
+            "description": "The name of the last member read; the page starts past it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "description": "1 to 1,000; 100 where absent.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          }
+        }
+      },
+      "output": {
+        "$ref": "#/components/schemas/VoicePage"
+      },
+      "route": "GET /voices"
+    },
+    {
+      "name": "voice_synthesize",
+      "description": "Speak a text in a voice; the synthesis is answered at once and its sound follows.",
+      "input": {
+        "description": "A text to speak.",
+        "type": "object",
+        "properties": {
+          "voiceName": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "emotion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "style": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "seed": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "default": null
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "voiceName",
+          "text"
+        ]
+      },
+      "output": {
+        "$ref": "#/components/schemas/Synthesis"
+      },
+      "route": "POST /syntheses"
+    },
+    {
+      "name": "voice_synthesis",
+      "description": "One synthesis and its state.",
+      "input": {
+        "description": "One synthesis, by its id.",
+        "type": "object",
+        "properties": {
+          "synthesisId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "synthesisId"
+        ]
+      },
+      "output": {
+        "$ref": "#/components/schemas/Synthesis"
+      },
+      "route": "GET /syntheses/{synthesisId}"
+    },
+    {
+      "name": "voice_transcribe",
+      "description": "Transcribe sound files in a language.",
+      "input": {
+        "description": "Sound files to take down in one language.",
+        "type": "object",
+        "properties": {
+          "language": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "language",
+          "files"
+        ]
+      },
+      "output": {
+        "$ref": "#/components/schemas/Transcription"
+      },
+      "route": "POST /transcriptions"
+    },
+    {
+      "name": "voice_script",
+      "description": "Read a text into a script for the ear.",
+      "input": {
+        "description": "A text read into a script for the ear.",
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "language": {
+            "description": "The language the text is in; the voice's own where absent.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "text"
+        ]
+      },
+      "output": {
+        "$ref": "#/components/schemas/ScriptReading"
+      },
+      "route": "POST /script-readings"
+    }
+  ],
+  "x-moved-out": [
+    {
+      "route": "GET /events",
+      "to": "briefing",
+      "why": "The old stream was the listeners' briefing stream; the engine's own stream is new."
+    },
+    {
+      "route": "GET /briefings",
+      "to": "briefing",
+      "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine."
+    },
+    {
+      "route": "POST /briefings",
+      "to": "briefing",
+      "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine."
+    },
+    {
+      "route": "GET /briefings/{briefingId}",
+      "to": "briefing",
+      "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine."
+    },
+    {
+      "route": "PATCH /briefings/{briefingId}",
+      "to": "briefing",
+      "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine."
+    },
+    {
+      "route": "POST /briefings/{briefingId}/lines",
+      "to": "briefing",
+      "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine."
+    },
+    {
+      "route": "GET /briefings/{briefingId}/sound",
+      "to": "briefing",
+      "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine."
+    },
+    {
+      "route": "GET /settings",
+      "to": "briefing",
+      "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine."
+    },
+    {
+      "route": "PATCH /settings",
+      "to": "briefing",
+      "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine."
+    }
+  ],
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "error"
+        ],
+        "description": "Every failure: a kebab-case code a caller decides on, and an English sentence it decides nothing on."
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "ready": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why it is not ready; null while it is."
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ready",
+          "version"
+        ],
+        "description": "Whether the service can answer, and its version."
+      },
+      "EventPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          },
+          "more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "more"
+        ],
+        "description": "One page of a list: its items, and whether anything stands past the last of them."
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The event number, which only grows."
+          },
+          "kind": {
+            "type": "string",
+            "description": "`synthesis.created`, `synthesis.ended`, `transcription.ended` or `voice.changed`."
+          },
+          "at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When it happened, in epoch milliseconds."
+          },
+          "data": {
+            "description": "The member as a GET answers it."
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "at",
+          "data"
+        ],
+        "description": "One event of the service."
+      },
+      "VoicePage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Voice"
+            }
+          },
+          "more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "more"
+        ],
+        "description": "One page of a list: its items, and whether anything stands past the last of them."
+      },
+      "Voice": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The voice's name, its key."
+          },
+          "language": {
+            "type": "string",
+            "description": "The language it speaks, as the language data names it."
+          },
+          "checkpoint": {
+            "type": "string",
+            "description": "The checkpoint its weights stand at."
+          },
+          "emotions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The emotions it may be asked to speak with."
+          },
+          "changedAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Epoch milliseconds of its last change."
+          }
+        },
+        "required": [
+          "name",
+          "language",
+          "checkpoint",
+          "emotions",
+          "changedAt"
+        ],
+        "description": "One trained voice."
+      },
+      "NewSynthesis": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "voiceName": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "emotion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "One of the voice's emotions; the voice's own where absent.",
+            "default": null
+          },
+          "style": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A delivery laid over the voice, where it names one.",
+            "default": null
+          },
+          "seed": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "default": null
+          }
+        },
+        "required": [
+          "voiceName",
+          "text"
+        ],
+        "description": "A text to speak."
+      },
+      "Synthesis": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "voiceName": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "emotion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/SynthesisState"
+          },
+          "durationMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "How long its sound runs; null until it is done."
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Epoch milliseconds."
+          }
+        },
+        "required": [
+          "id",
+          "voiceName",
+          "text",
+          "state",
+          "createdAt"
+        ],
+        "description": "One synthesis."
+      },
+      "SynthesisState": {
+        "oneOf": [
+          {
+            "type": "string",
+            "const": "waiting",
+            "description": "Taken in, not yet speaking."
+          },
+          {
+            "type": "string",
+            "const": "speaking",
+            "description": "One voice server is speaking it."
+          },
+          {
+            "type": "string",
+            "const": "done",
+            "description": "Its sound stands at `/syntheses/{synthesisId}/sound`."
+          },
+          {
+            "type": "string",
+            "const": "failed",
+            "description": "It could not be spoken."
+          }
+        ],
+        "description": "Where a synthesis stands in its life."
+      },
+      "NewTranscription": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "language",
+          "files"
+        ],
+        "description": "Sound files to take down in one language."
+      },
+      "Transcription": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "language": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "description": "`waiting`, `running`, `done` or `failed`."
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "What was heard, the files in the order given; null until it is done."
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Epoch milliseconds."
+          }
+        },
+        "required": [
+          "id",
+          "language",
+          "state",
+          "createdAt"
+        ],
+        "description": "One transcription."
+      },
+      "NewEncoding": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "fromWav": {
+            "type": "string",
+            "description": "The wav to encode."
+          }
+        },
+        "required": [
+          "fromWav"
+        ],
+        "description": "A reference recording to encode."
+      },
+      "Encoding": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "state": {
+            "type": "string",
+            "description": "`done` or `failed`."
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Epoch milliseconds."
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "createdAt"
+        ],
+        "description": "One speaker encoding."
+      },
+      "NewScriptReading": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The language the text is in; the voice's own where absent.",
+            "default": null
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "description": "A text read into a script for the ear."
+      },
+      "ScriptReading": {
+        "type": "object",
+        "properties": {
+          "script": {
+            "type": "string"
+          },
+          "sentences": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "script",
+          "sentences"
+        ],
+        "description": "A text as a script for the ear: the whole of it, and its sentences."
+      },
+      "VoiceServerPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VoiceServer"
+            }
+          },
+          "more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "more"
+        ],
+        "description": "One page of a list: its items, and whether anything stands past the last of them."
+      },
+      "VoiceServer": {
+        "type": "object",
+        "properties": {
+          "nodeName": {
+            "type": "string",
+            "description": "The node's name, its key."
+          },
+          "state": {
+            "type": "string",
+            "description": "`running` where the server answers, `absent` where the node does not."
+          },
+          "voiceNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The voices whose checkpoints the server holds loaded, in name order."
+          }
+        },
+        "required": [
+          "nodeName",
+          "state",
+          "voiceNames"
+        ],
+        "description": "One voice server on one node."
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "A failure, in the common error shape.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "The service's token, from the caller's own configuration."
+      }
+    }
+  }
+}

@@ -139,6 +139,8 @@ script:
     save_failed: It could not be saved.
     video_unplayable: The video cannot be played.
 common:
+  title:
+    share_link: Share link
   action:
     cancel: Cancel
     choose_all: Choose all
@@ -148,6 +150,7 @@ common:
     close_other_tabs: Close other tabs
     close_right_tabs: Close tabs to the right
     copy: Copy
+    create_link: Create link
     discard: Discard
     fit_screen: Fit to screen
     more: More
@@ -158,6 +161,7 @@ common:
     previous_picture: Previous picture
     save: Save
     unpin: Unpin
+    unshare: Stop sharing
     zoom_in: Zoom in
     zoom_out: Zoom out
   aria:
@@ -169,14 +173,23 @@ common:
     increase: Increase
     more_notices: "{n} more notices"
     pinned_named: "{name}, pinned"
+    share_address: Share address
   error:
     editor_failed: The editor could not be loaded.
+    link_copy_failed: The link could not be copied.
     picture_failed: The picture could not be loaded.
+    share_create_failed: The link could not be made.
+    share_read_failed: The link could not be read.
+    unshare_failed: The link could not be ended.
     video_failed: The video could not be loaded.
   label:
     # A dayjs format the day is written in.
     day_format: MMM D, YYYY
     days: "{d} d"
+    expiry: Expires
+    link: Link
+    share_until: "Until {date}"
+    short_day_format: MMM D
     days_hours: "{d} d {h} h"
     expired: Expired
     forever: Forever
@@ -205,6 +218,7 @@ common:
     unplayable: Cannot be played
   message:
     discard_confirm: Discard the changes?
+    link_copied: Link copied.
     preview_badge: Badge
     preview_field: Field
     preview_link: Link
@@ -213,6 +227,7 @@ common:
   status:
     copied: Copied
     loading: Loading…
+    share_loading: Loading the link…
     picture_loading: Loading the picture…
     video_loading: Loading the video…
 files:

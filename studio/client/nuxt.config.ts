@@ -28,7 +28,13 @@ export default defineNuxtConfig({
     }
   },
   appConfig: {
-    bmoUi: { locale: language }
+    // The library's words, and the zone and date words every time it shows is read in. The deployment names
+    // the zone in BMO_SCRIPT_ZONE; the runtime's own zone stands where it names none.
+    bmoUi: {
+      locale: language,
+      zone: process.env.BMO_SCRIPT_ZONE ?? "Asia/Seoul",
+      dateLocale: language
+    }
   },
   // A generated page has no server to ask for an icon, so every icon the studio draws is bundled.
   icon: {

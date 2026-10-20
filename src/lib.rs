@@ -1,8 +1,12 @@
-//! The voice: briefings spoken in a trained voice, the voice servers on the voice nodes, voice training and the
-//! script studio (`docs/layout.md`).
+//! The voice engine: trained voices, speech synthesis on the voice servers of the voice nodes, transcription,
+//! speaker encodings, script readings, and the script studio (`docs/layout.md`).
 
-pub mod briefing;
+pub mod client;
 pub mod context;
+pub mod events;
+pub mod http;
+pub mod mcp;
+pub mod openapi;
 pub mod policy;
 pub mod script;
 pub mod service;
@@ -11,6 +15,7 @@ pub mod speech;
 pub mod store;
 pub mod studio;
 pub mod units;
+pub mod wire;
 
 /// Now, in epoch milliseconds.
 pub fn now_ms() -> i64 {

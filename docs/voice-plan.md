@@ -1,8 +1,8 @@
 # The voice
 
-How a line becomes sound: the synthesiser, the roads a line takes to it, how a written line is made a script for
-speaking, the trained voices and their table, where the voices are trained, the voice servers on the voice nodes,
-and what reaches the room. Where a briefing is asked for, switched and heard is `docs/voice-briefing.md`.
+How a text becomes sound: the synthesiser, the road it takes to the voice nodes, how a written line is made a
+script for speaking, the trained voices and their table, where the voices are trained, and the voice servers on
+the voice nodes. What a caller does with the sound is the caller's.
 
 ## The synthesiser
 
@@ -26,37 +26,23 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
   recogniser's interpreter for a process that runs the tool entry itself, a run by hand or a test; a call through
   the tool host carries none of its caller's variables, and each runs on the voice environment under the call's
   home.
-- **No interpreter at all** is a failure, told to the room as every failed briefing is.
+- **No interpreter at all** is a failure.
 
 ## Which road speaks a line
 
-- **Every line is spoken in a trained voice,** the row of the voices table the agent's registration names
-  (`docs/voice-briefing.md`, 「Whose voice」). Where it is spoken is settled by whether the voice node list holds
-  any node:
+- **Every line is spoken in a trained voice,** one row of the voices table, named by the synthesis itself. Where
+  it is spoken is settled by the voice node list:
   - a voice node listed: spoken on the voice server of one free voice node, and encoded on the operations machine
     by the `voice/encoder` entry;
-  - no voice node: spoken on the operations machine's own card by the `voice/mouth` entry, whose mouth hands its
-    wav to the encoder.
-- **A row naming a voice the table does not hold,** a voice whose weights are not on the operations machine where
-  no voice node is listed, and a voice server that does not answer fail the briefing: nothing is spoken, the room
-  is told that the briefing did not go out and why, and the run closes as `failed`.
-- **`synth/voice-vox.py`** is the trained voice's mouth, both on the operations machine and as the voice server.
+  - no voice node listed: the synthesis fails. The engine keeps no fallback onto the operations machine's card.
+- **A voice the table does not hold, a node out of reach and a voice server that does not answer** leave the
+  synthesis `failed`; nothing is spoken and the failure is the member's state.
+- **`synth/voice-vox.py`** is the trained voice's mouth, both on the operations machine's card and as the voice
+  server.
 - **`synth/voice-encode.py`** is the encoder: it loads no model, takes a wav a mouth spoke and writes it as
-  OGG/Opus, with nothing laid over the voice (「What reaches the room」).
-- **`runner voice`** (a briefing) and **`voice say`** (the hand tool) choose the road the same way and put the
-  result in the room as a voice message, through the receiver.
+  OGG/Opus, with nothing laid over the voice.
 - **No formatting gate:** sound has no markup. The line is made a script for speaking instead (「A line is spoken
   as a script」).
-
-## The caption
-
-- **What it carries:** the very sentence handed to the synthesiser, the one that passed the reading gate, as the
-  voice message's caption. A line's full reading and a narration go to no road and have no caption.
-- **Wrapping:** in an expandable quote, with the original's `&`, `<` and `>` escaped.
-- **Overflow:** what exceeds a caption's 1024 UTF-16 units is sent as folded replies to the same voice, 4096
-  units each, without dropping line breaks or characters.
-- **Partial failure:** where the follow-up text fails after the voice was sent, the room is told the sound arrived
-  and only the text did not all arrive. The script is never resent as an ordinary answer.
 
 ## One at a time on the operations machine's card
 
@@ -80,12 +66,10 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
   - **`voice/encoder`** writes a wav as OGG/Opus, in no line, since the card is not touched.
   - **`voice/transcriber`** takes spoken files down in one language, each answered with what was heard, in the
     order given.
-  - **`voice/briefing`** launches a briefing as `voice brief` does and answers once the run is up, never waiting
-    for it to be spoken.
 - **Its executable is `synth/voice-tool.py`,** on the system's `python3` and the standard library alone, placed
   with the mouth, the encoder and the transcriber it runs and the tool host's Python helper; each file it runs runs
   on the voice environment's interpreter.
-- **Timeouts:** a minute for a call, ten for the mouth and the transcriber, the run cap for a briefing's speaking.
+- **Timeouts:** a minute for a call, ten for the mouth and the transcriber, and the run cap for one synthesis.
 
 ## Encoding
 
@@ -94,8 +78,8 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
 
 ## A line is spoken as a script
 
-- **A line written for a room is markdown, and a voice reads its marks.** So the runner makes the line a script for
-  speaking first, mechanically, before the names and the reading gate; no model rewrites its words here.
+- **A line written for a room is markdown, and a voice reads its marks.** The engine makes the line a script for
+  speaking first, mechanically, before the names and the figures; no model rewrites its words here.
   - A list item whose head is a bold title, or a title closed by a colon, is joined to what follows it as one
     sentence, the title taking its topic particle by its last syllable.
   - An item's other lines are joined to it with a space, so one item is one sentence.
@@ -104,7 +88,7 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
   - A table row is its cells joined by commas, its separator row dropped.
   - Bullets, heading marks, quote marks, rules, bold, italics, strike-through and link targets are dropped and their
     words kept; a picture is its description.
-  - A fenced code block is not spoken at all; inline code is kept as code for the gate.
+  - A fenced code block is not spoken at all; inline code is kept as code.
 - **A web address is said to be attached,** never read out:
   - an address is found by the web address rule of bmo-markup: it runs to the next space or Korean letter, and the
     punctuation after it and a closing bracket it did not open are the sentence's;
@@ -116,62 +100,18 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
     said;
   - one sentence closes the script, however many addresses were taken out, in the line's language and politeness,
     as the reading table words it.
-- **The particle after a title** is settled last, once the gate has read the title.
-- **The script is what the synthesiser, the caption and the log carry;** the room's record keeps the line as
-  written.
-
-## A full reading is polished for listening
-
-- **Only a line's full reading** is handed to the polishing gate, `voice-polish`, once the script is made and
-  before the names and the reading gate. A summary and a narration were written to be heard.
-- **The gate rewrites the script as sentences said aloud** and drops nothing and adds nothing. Each piece of code is
-  shown to it as a numbered placeholder, and the runner puts the code back where the placeholder ends up.
-- **The answer is checked against the script,** and fails as a whole on any of these:
-  1. every placeholder stands exactly once, and no other stands;
-  2. every figure is said exactly as many times as the script says it, every roman word at least once, and none of
-     either stands that the script does not hold; a name may be said once more or once less;
-  3. every ordinal from the second on is said at least as many times as the script says it, and the first at least
-     as many times as a second follows it;
-  4. the answer's syllables are between 0.6 and 1.7 times the script's.
-- **A failure reads the mechanical script:** a check that fails, no answer, a stop or a wait past the gate's time
-  leaves the script as the runner made it. The run's log says which was read and why. It is asked once.
-- **Its switch and wait are the gate's options,** read from the gate (`GET /options/voice-polish`). Switched off,
-  every full reading is the mechanical script.
-
-## The reading gate
-
-- **Each Korean stretch is read once** by the gate `voice-reading` before it becomes speech, and only its non-Korean
-  spans are rewritten the way they are read: English words, abbreviations, product names, and figures joined to a
-  roman word, transcribed into Korean pronunciation by sound.
-- **The Korean is never written by the model.** It is shown the whole stretch with each span to read marked and
-  numbered, answers one reading per number, and the runner puts each reading back where its span stood.
-- **A span** is a run of characters that are neither Hangul nor white space and hold a roman letter or a figure,
-  with neighbours separated only by spaces taken as one span, and the closing full stop, comma, question mark,
-  exclamation mark or ellipsis left out, as is a formatting mark clinging to either end.
-- **A span that was code** is marked as code, and the gate says it so a listener hears what it names: a file by its
-  name without folders or extension, an identifier by its words, a command by what it runs, an address by its site,
-  a long id by its first four characters.
-- **The particle after a span follows its reading:** a particle standing right after a span, with nothing Korean
-  after it, is given the form that fits how the reading ends, from the particle pairs of the reading table.
-- **Names and figures are said first** (「How names are said」, 「How figures are said」), so the gate never reads a
-  name the table holds or a figure standing on its own.
-- **Skipped when not needed:** a line with nothing to transcribe does not go to the model.
-- **The answer is checked:** every numbered span has a reading, none empty, and no reading holds a Latin letter or a
-  figure. A stretch whose answer fails is asked once more; only a second failure is the gate's.
-- **If the gate cannot answer, nothing is said.** Having the original read as it is would be the very fault this
-  gate prevents. The room is told in text that the briefing did not go out and why, and the run closes as failed.
+- **The particle after a title** is settled last, once the title's reading stands.
+- **The script is what the synthesiser is handed and what `POST /script-readings` answers.**
 
 ### Which sentences are English
 
-- **One rule, read by the runner and by the mouth alike:** the runner decides by it what the gate is given, the
-  mouth which prompt and which language a piece is spoken in.
+- **One rule, read by the mouth:** it decides by it which prompt and which language a piece is spoken in.
 - **A sentence** ends at a full stop, a question or exclamation mark or an ellipsis before a space, and at every
   line break.
 - **Its language:** Korean where it holds a Hangul syllable; English where it holds none and has at least two words
   with a lower-case letter; otherwise it takes the language of the next sentence that says one, or the last before
   it. A line where no sentence says is English if it has a roman letter and Korean otherwise.
-- **Neighbouring sentences of one language are one stretch.** English is spoken as English and never reaches the
-  gate.
+- **Neighbouring sentences of one language are one stretch.** English is spoken as English.
 
 ## How names are said
 
@@ -181,14 +121,14 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
   not a deployment: `scripts/voice-names.ts` lists the table, `--set <spelling> <korean> <english>` writes a row,
   `--remove <spelling>` takes one off. A Korean reading carries no roman letter and an English one no Hangul.
 - **A table first made is given the seed names** of `data/ko/voice-names.toml`; a table that stands is left as it is.
-- **Where it applies:** to each stretch once the line is cut into its languages and before the gate.
+- **Where it applies:** to each stretch once the line is cut into its languages, before the figures.
 - **How a spelling is matched:** whatever its case, and only as a word of its own: no letter or figure before it, no
   roman letter or figure after it, a Korean particle allowed. The longest spelling is tried first.
 
 ## How figures are said
 
-- **A figure is said by rule,** never by a model, in each Korean stretch once its names are said and before the
-  reading gate. An English stretch keeps its figures.
+- **A figure is said by rule,** never by a model, in each Korean stretch once its names are said. An English
+  stretch keeps its figures.
 - **What it reads:** a figure with the marks it is written with (`#`, a thousands comma, a decimal point, a colon, a
   slash, a tilde, `%`, a currency sign), not a figure in or only spaces away from a run holding a roman letter
   unless a counter follows it, and not a figure inside code.
@@ -198,11 +138,6 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
   a fraction; a date year first; an hour native from 1 to 12 and Sino-Korean otherwise; a clock time; a ratio; a
   range; percent, degrees, currency and a leading minus. A counter is a word of its own, and the particle after a
   figure follows its reading.
-
-## The room's record keeps the original
-
-- **A voice message is stored as what was said,** the line as written. The transcription the synthesiser received
-  stays only in that run's log and the caption.
 
 ## The voices
 
@@ -231,8 +166,8 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
   `--prompt-en`, `none` in place of the clip to empty one, `--dry-run` to check and write nothing.
 - **A trained checkpoint joins by name:** `--add <name> --checkpoint <dir> --reference <clip.wav>` copies its two
   weight files and the clip it is conditioned on and adds a row, the current one where the table held none and not
-  current otherwise. Listed with no flag, the script shows every voice and marks the current one. **Switching is one command:** `--use <name>` makes that row the one current, and the
-  next briefing speaks in it. **Hearing a voice by name:** `voice say --voice <name> --text '<words>'`.
+  current otherwise. Listed with no flag, the script shows every voice and marks the current one. **Switching is
+  one command:** `--use <name>` makes that row the one current.
 
 ## Where the weights live
 
@@ -298,20 +233,19 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
 
 ### Which node speaks a line
 
-- **A briefing is spoken on one free node,** held for the whole of its line, so briefings set off together are spoken
-  side by side on different nodes.
+- **A synthesis is spoken on one free node,** held for the whole of its line, so syntheses set off together are
+  spoken side by side on different nodes.
 - **Free means both:** no other run here holds the node (a lock file of its own under `voice/locks/`, taken without
   waiting), and the node's server answers its health, is not speaking and says its card has room.
 - **A warm node goes first:** a server that already holds the voice's checkpoint in host memory. Otherwise the list's
   order decides.
 - **No node free, but one whose card lock other work holds:** the line is asked of that node and waits its turn in
   the node's own queue, the warm one first.
-- **Every node taken or busy:** the run asks again every two seconds for five minutes; past it the briefing did not
-  get a turn. The speaking itself is held to what is left of the briefing's cap.
+- **Every node taken or busy:** the run asks again every two seconds for five minutes; past it the synthesis has
+  no turn and ends `failed`. The speaking itself is held to what is left of the synthesis's cap.
 - **On the node** the server waits up to a minute for its turn, in the card arbiter's hold queue through the turn
   client; past it, or where the card has no room once the turn came, it answers 503 and the run chooses again.
-- **A line its caller takes back while it waits** (the switch turned off, a newer summary of the same room) gives up
-  its place at once.
+- **A caller that gives up its call** ends the speaking the call had started; the synthesis ends `failed`.
 - **Every node out of reach fails the run at once,** naming each node and what it met. It is not spoken on the
   operations machine's card instead: a line quietly spoken elsewhere would hide the fault.
 
@@ -389,7 +323,7 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
 - **A piece the card runs out of memory for is spoken once more,** as its sentences one by one on an emptied cache;
   only a second shortfall fails the line.
 
-## What reaches the room
+## What the sound carries
 
 - **Nothing is laid over the voice:** no band filter, resampling, bit reduction, noise or imitation, on any road.
 - **The mouth matches its output's peak to 0.95,** and **the encoder only ever lowers:** a sound over the ceiling is
@@ -403,9 +337,9 @@ and what reaches the room. Where a briefing is asked for, switched and heard is 
 
 ### How a prompt is checked
 
-- **Whole briefings are spoken on the clip before any row names it:** the lines of
-  `data/<language>/voice-prompt-check-lines.json`, spoken the way a briefing would speak them, each on a free voice node (on
-  this machine's card where the list is empty), and taken down by the `voice/transcriber` entry.
+- **Whole lines are spoken on the clip before any row names it:** the lines of
+  `data/<language>/voice-prompt-check-lines.json`, spoken the way a synthesis speaks them, each on a free voice
+  node, and taken down by the `voice/transcriber` entry.
 - **A line fails** on a character error rate above 0.12 over its bare letters, one unit of one to four letters
   repeated five times or more where the line has no such run, or a pace outside 3 to 10 syllables a second in Korean
   or 2 to 8 in English. One failed line refuses the clip.

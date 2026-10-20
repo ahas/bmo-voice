@@ -120,7 +120,7 @@ export function cardFree(probe: CardProbe): boolean {
     && probe.units.length === 0;
 }
 
-// A card the voice server stands on is shared with it, loaded or not, since a briefing may load it at any moment.
+// A card the voice server stands on is shared with it, loaded or not, since a synthesis may load it at any moment.
 export function cardKind(probe: CardProbe): CardKind {
   return probe.server ? "shared" : "own";
 }

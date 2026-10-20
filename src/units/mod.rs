@@ -1,13 +1,8 @@
 //! The other units the voice calls, each a client of only the routes that unit's own document states
 //! (`docs/boundary-api.md`, 「What the voice calls」).
 
-pub mod agency;
-pub mod artifact;
-pub mod gate;
 pub mod hub;
 pub mod node;
-pub mod pocket;
-pub mod receiver;
 pub mod web;
 
 use serde::de::DeserializeOwned;
@@ -17,12 +12,9 @@ use crate::settings::{Settings, Unit};
 /// Every unit the voice calls, each at the address the settings name.
 #[derive(Clone, Debug)]
 pub struct Units {
-  pub gate: gate::Gate,
-  pub receiver: receiver::Receiver,
-  pub agency: agency::Agency,
-  pub artifact: artifact::Artifact,
+  /// The node service: how each voice node is reached.
   pub node: node::Node,
-  pub pocket: pocket::Pocket,
+  /// The account service the script studio signs a person in against.
   pub web: web::Web,
 }
 
@@ -34,12 +26,7 @@ impl Units {
     let caller = |name: &'static str, unit: &Unit| Caller::new(name, settings, unit, http.clone());
 
     Ok(Self {
-      gate: gate::Gate::new(caller("gate", &units.gate)?),
-      receiver: receiver::Receiver::new(caller("receiver", &units.receiver)?),
-      agency: agency::Agency::new(caller("agency", &units.agency)?),
-      artifact: artifact::Artifact::new(caller("artifact", &units.artifact)?),
       node: node::Node::new(caller("node", &units.node)?),
-      pocket: pocket::Pocket::new(&units.pocket.address),
       web: web::Web::new(caller("web", &units.web)?),
     })
   }

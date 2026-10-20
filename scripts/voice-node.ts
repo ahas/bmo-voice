@@ -13,7 +13,7 @@
 //       [--cfg 1.5] [--steps 16] [--style '<instruction>'] [--seed 0] [--sentences on|off]
 //
 // Every verb but speak acts on every node of the voice node list, side by side, unless `--node` names one; speak
-// takes a free node the way a briefing does unless `--node` names one. A node is one the node service lists,
+// takes a free node the way a synthesis does unless `--node` names one. A node is one the node service lists,
 // reached through its own shell as the node service's target gives it. What lands on it lives under one directory
 // in its home: the server file, its virtualenv and a copy of the data root's voices directory laid out the same,
 // which is what lets a request name a voice by its place under that directory. The unit and the token file are the
@@ -399,7 +399,7 @@ async function speakRequest(text: string): Promise<VoiceNodeRequest> {
   };
 }
 
-// Spoken on the node `--node` names, or on a free node of the list taken the way a briefing takes one and let go
+// Spoken on the node `--node` names, or on a free node of the list taken the way a synthesis takes one and let go
 // once the line is back.
 async function speak(): Promise<void> {
   const text = argValue("--text");

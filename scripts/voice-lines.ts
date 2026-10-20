@@ -12,7 +12,7 @@ import { join } from "node:path";
 
 import { voiceFolder } from "./lib/settings";
 import { store } from "./lib/store";
-import { briefingEmotions } from "./lib/voice";
+import { voiceEmotions } from "./lib/voice";
 import { readMaterial, run, statusText } from "./lib/voice-lines";
 
 const usage = [
@@ -48,7 +48,7 @@ const out = flag("--out") ?? join(voiceFolder(), "voice-lines");
 const material = readMaterial();
 
 if (args[0] === "status") {
-  console.log(statusText(out, briefingEmotions, material));
+  console.log(statusText(out, voiceEmotions, material));
   process.exit(0);
 }
 
@@ -61,8 +61,8 @@ const persona = flag("--persona") ?? fail(`name the agent's persona with --perso
 const model = flag("--model") ?? fail(`name the Codex model with --model\n${usage}`);
 const effort = flag("--effort") ?? fail(`name the Codex reasoning effort with --effort\n${usage}`);
 
-if (only !== null && !briefingEmotions.includes(only)) {
-  fail(`--emotion is one of ${briefingEmotions.join(", ")}`);
+if (only !== null && !voiceEmotions.includes(only)) {
+  fail(`--emotion is one of ${voiceEmotions.join(", ")}`);
 }
 
 if (!existsSync(persona)) {
@@ -76,8 +76,8 @@ try {
       perCell: wholeFlag("--per-cell", 20),
       atOnce: wholeFlag("--at-once", 2),
       rounds: wholeFlag("--rounds", 5),
-      emotions: only === null ? briefingEmotions : [only],
-      allEmotions: briefingEmotions,
+      emotions: only === null ? voiceEmotions : [only],
+      allEmotions: voiceEmotions,
       prefix: flag("--prefix") ?? "ko",
       codex: { model, effort },
       persona: readFileSync(persona, "utf8"),

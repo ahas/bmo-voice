@@ -12,9 +12,11 @@ dependency direction owns it and the ones above read it through that service's A
 only what it uses itself, since the same thing kept in several places is the wrong structure (archive document
 #301, 「원칙」).
 
-This repository is `bmo-voice`: briefings spoken in a trained voice and sent to a room and to the listeners, the
-voice servers that synthesise on the voice nodes, the scripts that install, push and train voices, the script
-studio where the lines a voice is trained on are recorded, and the console's briefing player as a plugin bundle.
+This repository is `bmo-voice`: the voice engine, which keeps trained voices, speaks a text in one of them on the
+voice servers of the voice nodes, transcribes spoken files, encodes recordings and reads a text into a script for
+the ear; the scripts that install, push and train voices; the script studio where the lines a voice is trained on
+are recorded; and the harness plugin that offers the engine to a coding harness. Briefings, their rooms and their
+listeners are the briefing unit's, and call this engine.
 
 ## The documents come first
 
@@ -33,7 +35,7 @@ studio where the lines a voice is trained on are recorded, and the console's bri
 - **Other units are reached only through their published routes and commands,** as `docs/boundary-api.md`
   states. Nothing here imports another unit's code or reads its files, its paths or its database.
 - **Dependencies:** crates and packages from their registries, pinned in their manifests, and of other
-  repositories only the base libraries `bmo-chat`, `bmo-chat-client`, `bmo-ui` and `bmo-markup`.
+  repositories only the base libraries `bmo-chat`, `bmo-chat-client`, `bmo-ui` and `bmo-text`.
 - **No agent is known by name.** The code handles a registered agent by its id; its name, label and voice come
   from the registration and the voice's own tables.
 - **A variation belongs to its member,** never to a central table or a branch on a name.

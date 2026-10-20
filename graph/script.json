@@ -2,12 +2,11 @@
   {
     "id": "script/reading",
     "title": "Script reading rules",
-    "what": "How a line becomes a script to speak: stretches by language, names and figures said by rule, the reading and polishing gates' requests and their faults, read from data/ko/voice-script.yaml, in src/script/.",
+    "what": "How a line becomes a script to speak: stretches by language, names and figures said by rule, the spans a Korean voice has no reading for, read from data/ko/voice-script.yaml, in src/script/.",
     "files": [
       "src/script/mod.rs",
       "src/script/reading.rs",
       "src/script/spoken.rs",
-      "src/script/polish.rs",
       "src/script/figures.rs",
       "src/script/words.rs",
       "data/ko/voice-script.yaml",
@@ -18,6 +17,6 @@
     "needs": [
       "core/units"
     ],
-    "base": "bb3e4170fb3e31acae0995cdf32fa0125f94e3e6"
+    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
   }
 ]

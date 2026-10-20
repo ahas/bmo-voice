@@ -21,12 +21,8 @@ pub struct Unit {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Units {
-  pub gate: Unit,
-  pub receiver: Unit,
-  pub agency: Unit,
-  pub artifact: Unit,
+  /// How each voice node is reached, and its login.
   pub node: Unit,
-  pub pocket: Unit,
   /// The account service the script studio signs a person in against.
   pub web: Unit,
 }
@@ -44,8 +40,6 @@ pub struct Settings {
   pub database: String,
   /// The runtime data root.
   pub data_root: PathBuf,
-  /// The registered agent whose voice a briefing speaks in where nothing names another, by its id.
-  pub agent: String,
   /// The folder of the voice's Python side, `synth/`, where it is not the one in the release the running binary
   /// stands in.
   pub synth: Option<PathBuf>,

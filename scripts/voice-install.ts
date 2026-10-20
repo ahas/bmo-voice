@@ -1,8 +1,8 @@
-// The trained voices, brought where a briefing may rely on them and written into the table that says which one
+// The trained voices, brought where a synthesis may rely on them and written into the table that says which one
 // speaks.
 //
 // The weights are trained in an experiment directory, a scratch area another job may prune, rewrite or clean. A
-// briefing is a live service, so what it speaks with lives in the runtime data root instead: outside every checkout,
+// the engine is a live service, so what it speaks with lives in the runtime data root instead: outside every checkout,
 // taken by the deploy's own backup. This copies what a voice actually needs (the LoRA weights and the config that
 // names their base model, and the clip the voice is conditioned on) and nothing else. `resume.pt` is optimiser state
 // for resuming training and has no part in speaking, so it stays where it was made.
@@ -18,7 +18,7 @@
 // it with none. `--seed <name> <n>` sets the seed it is spoken at, which is what names the one delivery of a line its
 // row was chosen on. `--prompt <name> <clip.wav> '<words>'` gives a voice a continuation prompt (a clip of it speaking
 // Korean and the words the clip says) which every Korean stretch of a line is then spoken on from; `--prompt-en`
-// gives it the English one its English stretches are spoken on from. Either is given only once whole briefings
+// gives it the English one its English stretches are spoken on from. Either is given only once whole lines
 // spoken on the clip came through, and `--dry-run` asks that of a clip without giving it. `--sentences <name> on|off`
 // says whether it speaks a line a sentence at a time, each on from that prompt, or in one pass. A voice spoken on the
 // node needs its files there too, which `bun scripts/voice-node.ts push` brings at once and the next deployment
@@ -142,7 +142,7 @@ if (styleOf !== null) {
 // A continuation prompt is the voices row's, one pair of columns a language; `none` empties the pair and takes the
 // clip away. A clip is copied into the voice's own directory under a name made of its content
 // (`prompt-<digest>.wav` for Korean, `prompt-en-<digest>.wav` for English) and put in the same place on every voice
-// node, then checked by speaking whole briefings on it (docs/voice-plan.md, 「How a prompt is checked before it is
+// node, then checked by speaking whole lines on it (docs/voice-plan.md, 「How a prompt is checked before it is
 // installed」). Only a clip that passed is written into the row with its words, which is all the mouth reads, and
 // `--dry-run` stops short of that. Named by its content, a clip a node was not given is refused by that node rather
 // than spoken against the words of the clip before it.
@@ -198,7 +198,7 @@ if (promptFlag !== null) {
   const room = mkdtempSync(join(tmpdir(), "voice-prompt-check-"));
   let verdicts: LineVerdict[];
 
-  console.log(`voice-install: checking ${basename(clip)} on whole briefings before ${name} speaks on it`);
+  console.log(`voice-install: checking ${basename(clip)} on whole lines before ${name} speaks on it`);
 
   try {
     verdicts = await checkPrompt({
@@ -245,7 +245,7 @@ if (use !== null) {
     await refuseUnknown(use);
   }
 
-  // The voice an agent speaks in is its registration's where that names one (docs/voice-briefing.md, 「Whose
+  // The voice an agent speaks in is its registration's where that names one (docs/voice-plan.md, 「The voices」, 「Whose
   // voice」); agency states no route to write it, so that stays the registration's to change.
   console.log(`voice-install: ${use} is the current voice; an agent whose registration names a voice of its own still speaks in that one`);
   await list();

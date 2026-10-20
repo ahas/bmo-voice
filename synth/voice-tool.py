@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""The voice as a tool (docs/voice-plan.md, 「The voice as a tool」): the mouth, the encoder, the
-transcriber and the briefing, each an entry for the system, answered by running the file that does the work.
+"""The voice as a tool (docs/voice-plan.md, 「The voice as a tool」): the mouth, the encoder and the
+transcriber, each an entry for the system, answered by running the file that does the work.
 
 It runs on the system's `python3` and the standard library alone, from the voice tool's placed folder, where the
 build places it with the three files it runs and the answer of the tool host's call protocol it answers through,
@@ -10,7 +10,6 @@ on the voice environment's interpreter (docs/voice-plan.md, 「One voice environ
 
 import json
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -106,39 +105,9 @@ def transcriber(call):
     return tool_protocol.structured({"heard": [{"file": one["file"], "heard": one["heard"]} for one in heard]})
 
 
-def unit_command():
-    """The voice's unit command: the one `BMO_VOICE_BINARY` names where the process holds it, else `bmo-voice` on
-    the path, else the one in a release above the placed folder."""
-    named = os.environ.get("BMO_VOICE_BINARY") or shutil.which("bmo-voice")
-    if named:
-        return Path(named)
-    here = Path.cwd().resolve()
-    return next((tree / "bin" / "bmo-voice" for tree in [here, *here.parents] if (tree / "bin" / "bmo-voice").is_file()), None)
-
-
-def briefing(call):
-    """A briefing launched as `bmo-voice voice-brief` launches one, answered once its run is up; its refusals are
-    the command's."""
-    command = unit_command()
-    if command is None:
-        return tool_protocol.failure("the voice's unit command, bmo-voice, is not found")
-
-    said = call.arguments
-    line = [str(command), "voice-brief", "--chat", str(said["chat"]), "--by", said["by"], "--text", said["text"]]
-    for field in ("emotion", "title", "document"):
-        if said.get(field) is not None:
-            line += [f"--{field}", str(said[field])]
-
-    ran = run(line, cwd=command.parent)
-    if ran.returncode != 0:
-        return tool_protocol.refusal((ran.stderr.strip() or ran.stdout.strip()) or f"bmo-voice voice-brief exited {ran.returncode}")
-    return tool_protocol.text(ran.stdout.strip())
-
-
 if __name__ == "__main__":
     tool_protocol.answer({
         "voice/mouth": mouth,
         "voice/encoder": encoder,
         "voice/transcriber": transcriber,
-        "voice/briefing": briefing,
     })
