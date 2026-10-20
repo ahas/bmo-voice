@@ -30,6 +30,15 @@ listeners are the briefing unit's, and call this engine.
 - A document states what is true now: no change history, no rationale told through an earlier design, no pasted
   source, signature or config fragment, and no file-and-line pins.
 
+## The code graph
+
+- **`.graph/` is the code dependency graph,** one node per feature: the files it is made of, the names worth
+  knowing, what it needs, and the APIs this repository exposes and calls. It is read before a change to find where
+  the change belongs and what it reaches.
+- **It is written only by `bmo graph`,** in this checkout; nothing else edits `.graph/`. A change to a file a node
+  names, to an edge, or to a boundary goes in the same commit as the code.
+- `bmo graph check` says nothing where the graph is whole.
+
 ## Boundaries
 
 - **Other units are reached only through their published routes and commands,** as `docs/boundary-api.md`

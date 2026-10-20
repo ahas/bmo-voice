@@ -2,28 +2,31 @@
   {
     "id": "nodes/install",
     "title": "Voice install and names",
-    "what": "A trained voice brought into the data root and its settings, a continuation prompt checked on whole lines before it is given, and the voice name table, in scripts/voice-install.ts and scripts/voice-names.ts.",
+    "what": "A trained voice brought into the data root and its settings, its continuation prompt spoken and checked before it is given, and the voice name table, in scripts/voice-install.ts and scripts/voice-names.ts.",
     "files": [
       "scripts/voice-install.ts",
       "scripts/voice-names.ts",
       "scripts/lib/voice-prompt-check.ts",
       "scripts/lib/hangul.ts",
       "data/ko/voice-prompt-check-lines.json",
-      "data/en/voice-prompt-check-lines.json"
+      "data/en/voice-prompt-check-lines.json",
+      "docs/voice-plan.md"
     ],
     "symbols": [
-      "checkPrompt"
+      "checkPrompt",
+      "checkLines"
     ],
     "aliases": [],
     "needs": [
       "nodes/scripts"
     ],
-    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
+    "base": "1ec5d658b6e9fb3731c19fd94a751bf330d423c6",
+    "changed": 1792500293805
   },
   {
     "id": "nodes/scripts",
     "title": "Voice node scripts",
-    "what": "Setting up, pushing, syncing, asking and speaking on the voice nodes, and the card arbiter's adapter, with the store, node and hub clients they share, in scripts/voice-node.ts and scripts/lib/.",
+    "what": "Setting up, pushing, syncing, asking and speaking on the voice nodes, and the card adapter, with the store, node, hub and tool clients they share, in scripts/voice-node.ts and scripts/lib/.",
     "files": [
       "scripts/voice-node.ts",
       "scripts/lib/voice-node.ts",
@@ -39,13 +42,17 @@
     ],
     "symbols": [
       "speakOnNode",
-      "takeVoiceNode"
+      "takeVoiceNode",
+      "voiceNodeHealth",
+      "speakThroughFreeNode"
     ],
     "aliases": [],
     "needs": [
+      "calls/node",
       "core/store",
       "synth/tool"
     ],
-    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
+    "base": "1ec5d658b6e9fb3731c19fd94a751bf330d423c6",
+    "changed": 1792500293802
   }
 ]

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "calls/arbiter",
+    "title": "bmo-arbiter HTTP API",
+    "what": "The bmo-arbiter units route a training step reads on its node, answering for the card the node holds and the claims on it, as the arbiter's own document states them.",
+    "files": [
+      "scripts/lib/voice-train.ts",
+      "docs/voice-plan.md"
+    ],
+    "symbols": [
+      "parseProbe"
+    ],
+    "aliases": [],
+    "needs": [],
+    "base": "1ec5d658b6e9fb3731c19fd94a751bf330d423c6",
+    "changed": 1792500293756,
+    "boundary": {
+      "side": "calls",
+      "repository": "bmo-arbiter",
+      "api": "api/http"
+    }
+  },
+  {
+    "id": "calls/node",
+    "title": "bmo-node API",
+    "what": "The bmo-node API the engine and the node scripts read: how a node is reached by name, its role, and the arguments of a batch SSH login, as the node service's published routes answer them.",
+    "files": [
+      "src/units/node.rs",
+      "scripts/lib/node.ts",
+      "docs/boundary-api.md"
+    ],
+    "symbols": [
+      "Node",
+      "Target",
+      "Reach",
+      "nodeTarget"
+    ],
+    "aliases": [],
+    "needs": [],
+    "base": "1ec5d658b6e9fb3731c19fd94a751bf330d423c6",
+    "changed": 1792500293751,
+    "boundary": {
+      "side": "calls",
+      "repository": "bmo-node",
+      "api": "api/http"
+    }
+  },
+  {
+    "id": "calls/turn-client",
+    "title": "bmo-arbiter turn client",
+    "what": "The turn client bmo-arbiter installs on every node, imported by the voice server and the training step to wait for the card, hold its lock and let go, as the arbiter's document states it.",
+    "files": [
+      "synth/voice-vox.py",
+      "scripts/voice-node.ts",
+      "scripts/lib/voice-train.ts",
+      "docs/voice-plan.md",
+      "docs/boundary-api.md"
+    ],
+    "symbols": [],
+    "aliases": [],
+    "needs": [],
+    "base": "1ec5d658b6e9fb3731c19fd94a751bf330d423c6",
+    "changed": 1792500293758,
+    "boundary": {
+      "side": "calls",
+      "repository": "bmo-arbiter",
+      "api": "api/turn-client"
+    }
+  },
+  {
+    "id": "calls/web",
+    "title": "bmo-web API",
+    "what": "The bmo-web sign-in route the script studio checks an account against: a name and a password signed in with, and the session the sign-in answered let go at once.",
+    "files": [
+      "src/units/web.rs",
+      "docs/boundary-api.md",
+      "docs/script-studio.md"
+    ],
+    "symbols": [
+      "Web"
+    ],
+    "aliases": [],
+    "needs": [],
+    "base": "1ec5d658b6e9fb3731c19fd94a751bf330d423c6",
+    "changed": 1792500293753,
+    "boundary": {
+      "side": "calls",
+      "repository": "bmo-web",
+      "api": "api/http"
+    }
+  }
+]

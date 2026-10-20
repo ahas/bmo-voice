@@ -9,7 +9,7 @@ How the repository is laid out, what each part is, and where it runs. Read this 
 | `data/` | Language material the code reads by language, `data/<language>/`: the reading tables a script is spoken from, the voice names' seed readings, and the Korean the script studio stores in its records. Every line of it is in `korean-ledger.json` |
 | `deploy/` | The units the testbed's deployment keeps on the operations machine, and the proxy locations of the script studio |
 | `docs/` | The documents, which come before the code |
-| `graph/` | The code dependency graph, one node per feature in its areas (`core`, `script`, `speech`, `synth`, `nodes`, `training`, `studio`), written only by `bmo graph` |
+| `.graph/` | The code dependency graph, one node per feature in its areas (`api`, `calls`, `core`, `nodes`, `script`, `speech`, `studio`, `synth`, `training`), written only by `bmo graph` |
 | `plugin/` | The harness plugin's skill, `plugin/skills/ahas-voice/`, telling a harness when and how to use the MCP server |
 | `policy/` | The engine's own policy values, `policy/voice.toml` |
 | `prompts/` | What the engine's own model runs are told: the training lines' writer. English only |

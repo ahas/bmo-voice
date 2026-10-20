@@ -1,0 +1,48 @@
+[
+  {
+    "id": "training/lines",
+    "title": "Training lines writer",
+    "what": "Korean lines to train a voice on, written through a model from prompts/voice-lines.md, the deployment's persona and data/ko/voice-lines.toml, and held to its checks, in scripts/voice-lines.ts.",
+    "files": [
+      "scripts/voice-lines.ts",
+      "scripts/lib/voice-lines.ts",
+      "prompts/voice-lines.md",
+      "data/ko/voice-lines.toml",
+      "docs/voice-lines.md"
+    ],
+    "symbols": [
+      "Keeper",
+      "LineRules",
+      "run"
+    ],
+    "aliases": [],
+    "needs": [
+      "nodes/scripts"
+    ],
+    "base": "1ec5d658b6e9fb3731c19fd94a751bf330d423c6",
+    "changed": 1792500293808
+  },
+  {
+    "id": "training/steps",
+    "title": "Training steps on a card",
+    "what": "One step of a training experiment placed on a free card as the node's card arbiter says, run inside its turn client and brought home into the record, in scripts/voice-train.ts.",
+    "files": [
+      "scripts/voice-train.ts",
+      "scripts/lib/voice-train.ts",
+      "docs/voice-plan.md"
+    ],
+    "symbols": [
+      "runStep",
+      "pickCard",
+      "withLockFile"
+    ],
+    "aliases": [],
+    "needs": [
+      "calls/arbiter",
+      "calls/turn-client",
+      "nodes/scripts"
+    ],
+    "base": "1ec5d658b6e9fb3731c19fd94a751bf330d423c6",
+    "changed": 1792500293810
+  }
+]

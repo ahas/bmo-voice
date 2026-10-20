@@ -14,11 +14,14 @@
     "symbols": [],
     "aliases": [],
     "needs": [
-      "api/service",
-      "studio/server",
-      "nodes/scripts"
+      "api/adapter",
+      "api/command",
+      "api/http",
+      "nodes/scripts",
+      "studio/server"
     ],
-    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
+    "base": "1ec5d658b6e9fb3731c19fd94a751bf330d423c6",
+    "changed": 1792500293772
   },
   {
     "id": "core/policy",
@@ -28,32 +31,39 @@
       "policy/voice.toml",
       "src/policy.rs"
     ],
-    "symbols": [],
+    "symbols": [
+      "POLICY",
+      "VoicePolicy"
+    ],
     "aliases": [],
     "needs": [],
-    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
+    "base": "1ec5d658b6e9fb3731c19fd94a751bf330d423c6",
+    "changed": 1792500293764
   },
   {
     "id": "core/settings",
     "title": "Voice settings and context",
-    "what": "The one settings file every binary and script reads (listen, database, data root, the node and account units, studio values) and the context of store and unit clients built from it, in src/settings.rs and src/context.rs.",
+    "what": "The one settings file every binary and script reads, with the listen address, token, database, data root and the node and web units, and the context of store and unit clients built from it, in src/settings.rs and src/context.rs.",
     "files": [
       "src/settings.rs",
       "src/context.rs",
       "src/lib.rs",
-      "docs/layout.md",
-      "CLAUDE.md",
-      "README.md"
+      "docs/layout.md"
     ],
-    "symbols": [],
+    "symbols": [
+      "Settings",
+      "Context",
+      "Unit"
+    ],
     "aliases": [],
     "needs": [],
-    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
+    "base": "1ec5d658b6e9fb3731c19fd94a751bf330d423c6",
+    "changed": 1792500293760
   },
   {
     "id": "core/store",
     "title": "Voice store",
-    "what": "The engine's own Postgres database: the voices, voice names, voice node list, syntheses, transcriptions, encodings and events, its migrations and the names table's seed, in src/store/.",
+    "what": "The engine's own Postgres database: voices, names, the voice node list, syntheses, transcriptions, encodings and events, its migrations, and where the voices' weights stand, in src/store/.",
     "files": [
       "src/store/mod.rs",
       "src/store/voices.rs",
@@ -67,46 +77,43 @@
       "src/store/migration/tables.sql",
       "src/store/migration/speech.sql",
       "data/ko/voice-names.toml",
+      "weights/checkpoints.toml",
       "docs/store.md"
     ],
-    "symbols": [],
+    "symbols": [
+      "StoreError",
+      "VoiceRow",
+      "seeds"
+    ],
     "aliases": [],
     "needs": [
       "core/settings"
     ],
-    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
-  },
-  {
-    "id": "core/events",
-    "title": "Voice event log",
-    "what": "The service's one event log: each event numbered and kept for a reader resuming, and the stream or page GET /events answers, in src/events.rs and src/store/events.rs.",
-    "files": [
-      "src/events.rs",
-      "src/store/events.rs"
-    ],
-    "symbols": [],
-    "aliases": [],
-    "needs": [
-      "core/store"
-    ],
-    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
+    "base": "1ec5d658b6e9fb3731c19fd94a751bf330d423c6",
+    "changed": 1792500293767
   },
   {
     "id": "core/units",
     "title": "Clients of other units",
-    "what": "One temporary client module per sibling the engine calls, the node service, the jake hub and the account service the studio signs in against, each holding only the engine's calls, in src/units/.",
+    "what": "One temporary client module per sibling the engine calls, the node service and the account service, with the hub's command channel shared by the node shell, each holding only the engine's calls, in src/units/.",
     "files": [
       "src/units/mod.rs",
-      "src/units/node.rs",
       "src/units/hub.rs",
+      "src/units/node.rs",
       "src/units/web.rs",
       "docs/boundary-api.md"
     ],
-    "symbols": [],
+    "symbols": [
+      "Units",
+      "UnitError",
+      "Caller"
+    ],
     "aliases": [],
     "needs": [
-      "core/settings"
+      "calls/node",
+      "calls/web"
     ],
-    "base": "575b81b8b8c88339e35d36e7e5d0d2c8d5a08a52"
+    "base": "1ec5d658b6e9fb3731c19fd94a751bf330d423c6",
+    "changed": 1792500293769
   }
 ]
