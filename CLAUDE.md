@@ -36,7 +36,9 @@ listeners are the briefing unit's, and call this engine.
   knowing, what it needs, and the APIs this repository exposes and calls. It is read before a change to find where
   the change belongs and what it reaches.
 - **It is written only by `bmo graph`,** in this checkout; nothing else edits `.graph/`. A change to a file a node
-  names, to an edge, or to a boundary goes in the same commit as the code.
+  names, to an edge, or to a boundary brings the node up to date in the checkout. Its area files are generated and
+  untracked, so a fresh checkout builds them again, while `settings.toml` is the repository's configuration and
+  stays tracked.
 - `bmo graph check` says nothing where the graph is whole.
 
 ## Boundaries

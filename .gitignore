@@ -13,3 +13,5 @@ dist/
 # Trained voices, base models and clips are runtime data under the data root (weights/); never committed.
 *.safetensors
 *.wav
+.graph/*
+!.graph/settings.toml
