@@ -2,6 +2,7 @@
 //! document, and the health the deployment waits on.
 
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use bmo_voice::client::VoiceClient;
@@ -30,6 +31,18 @@ enum Word {
   },
   /// Prints the OpenAPI document, as `docs/openapi.json` keeps it.
   Openapi,
+  /// Moves the old archive's voice tables from the item's export into the store (TODO #1923).
+  Import {
+    /// The export directory the item's export hand wrote.
+    #[arg(long)]
+    export: PathBuf,
+    /// The PostgreSQL address of the voice's own database.
+    #[arg(long)]
+    database: String,
+    /// Reads the export and reports what it would write, writing nothing.
+    #[arg(long)]
+    dry_run: bool,
+  },
 }
 
 // How long the health is waited for before it counts as no answer.
@@ -56,6 +69,25 @@ async fn main() -> ExitCode {
     let written = std::io::stdout().lock().write_all(bmo_voice::openapi::openapi_json().as_bytes());
 
     return if written.is_ok() { ExitCode::SUCCESS } else { ExitCode::FAILURE };
+  }
+
+  // The import reads its own arguments and never the deployment's settings.
+  if let Word::Import {
+    export,
+    database,
+    dry_run,
+  } = &command.word
+  {
+    return match bmo_voice::import::run(database, export, *dry_run).await {
+      Ok(report) => {
+        report.lines().iter().for_each(|line| println!("{line}"));
+        if report.sample.failures.is_empty() { ExitCode::SUCCESS } else { ExitCode::FAILURE }
+      }
+      Err(why) => {
+        eprintln!("bmo-voice: {why}");
+        ExitCode::FAILURE
+      }
+    };
   }
 
   let settings = match Settings::load() {
@@ -93,6 +125,7 @@ async fn main() -> ExitCode {
       }
     }
     Word::Openapi => Ok(()),
+    Word::Import { .. } => unreachable!("the import is answered before the settings are read"),
   };
 
   match done {
