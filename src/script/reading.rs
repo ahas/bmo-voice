@@ -5,7 +5,7 @@
 
 use std::sync::LazyLock;
 
-use bmo_markup::js::{self, is_space};
+use bmo_text::js::{self, is_space};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 

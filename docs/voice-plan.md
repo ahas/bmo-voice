@@ -90,7 +90,7 @@ the voice nodes. What a caller does with the sound is the caller's.
     words kept; a picture is its description.
   - A fenced code block is not spoken at all; inline code is kept as code.
 - **A web address is said to be attached,** never read out:
-  - an address is found by the web address rule of bmo-markup: it runs to the next space or Korean letter, and the
+  - an address is found by the web address rule of bmo-text: it runs to the next space or Korean letter, and the
     punctuation after it and a closing bracket it did not open are the sentence's;
   - a bare address, one in angle brackets and inline code holding only an address are taken out; a link's words
     are said and its address is not; an address in brackets goes with its brackets;

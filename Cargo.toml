@@ -61,7 +61,7 @@ base64 = "0.22.1"
 # A hub's token file, read as the dotenv file it is.
 dotenvy = "0.15.7"
 futures-util = "0.3.34"
-bmo-markup = { package = "bmo-text", version = "0.1.0-rev.5", path = "../../base/markup" }
+bmo-text = { version = "=0.1.0-rev.5", path = "../../base/text" }
 # The unit command's words, read by the maintained reader of command lines.
 clap = { version = "4.5.40", features = ["derive"] }
 # The tool host's control socket, HTTP/1.1 over a Unix socket.

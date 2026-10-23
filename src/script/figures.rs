@@ -8,7 +8,7 @@
 
 use std::sync::LazyLock;
 
-use bmo_markup::js::SPACE;
+use bmo_text::js::SPACE;
 use regex::Regex;
 
 use super::spoken::{HANGUL, fitted_particle, is_syllable, standing_particle};

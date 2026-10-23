@@ -16,8 +16,8 @@
 
 use std::sync::LazyLock;
 
-use bmo_markup::js::{self, DOT, SPACE, is_space};
-use bmo_markup::web_address::{bare_address_at, is_web_address, markdown_link_at};
+use bmo_text::js::{self, DOT, SPACE, is_space};
+use bmo_text::web_address::{bare_address_at, is_web_address, markdown_link_at};
 use regex::{Captures, Regex};
 
 use super::words::VOICE_SCRIPT;
