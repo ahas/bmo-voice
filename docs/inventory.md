@@ -329,7 +329,7 @@ receiver's and reaches the voice through `docs/boundary-api.md`.
 The 39 files marked deferred above are 35 tests and 4 test-data files (the script cases
 `bot/bmo-server/src/verbs/voice/script/cases/{figures,polish,reading,spoken}.json`). This phase moves the code
 only: no test is ported, written or run, and the only check is the build check. The tests are written and run on
-bmo-next once the minimal services are up there, from these files as the record of what the old behaviour was.
+bmo once the minimal services are up there, from these files as the record of what the old behaviour was.
 
 ## What siblings hold, outside the set
 
