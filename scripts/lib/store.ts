@@ -215,10 +215,33 @@ export class VoiceStore {
 
 let opened: VoiceStore | null = null;
 
+// The address the settings name, as Bun's SQL opens it. A libpq address of a Unix socket (`postgres:///db?host=/dir`)
+// is opened by the socket's path, since the URL form alone would be tried over TCP against the local host, where
+// the socket's peer authentication does not hold; any other address is handed over as it stands.
+export function sqlOptions(database: string): string | Bun.SQL.Options {
+  let url: URL;
+  try {
+    url = new URL(database);
+  } catch {
+    return database;
+  }
+  const host = url.searchParams.get("host");
+  if (!host || !host.startsWith("/")) return database;
+  const options: Bun.SQL.Options = {
+    adapter: "postgres",
+    path: `${host.replace(/\/$/, "")}/.s.PGSQL.${url.searchParams.get("port") ?? (url.port || "5432")}`,
+    database: decodeURIComponent(url.pathname.replace(/^\//, "")) || undefined,
+  };
+  if (url.username) options.username = decodeURIComponent(url.username);
+  if (url.password) options.password = decodeURIComponent(url.password);
+
+  return options;
+}
+
 // The store at the address the settings name, opened when first asked, so a command refused for its flags opens
 // no connection.
 export function store(): VoiceStore {
-  opened ??= new VoiceStore(new SQL(settings().database));
+  opened ??= new VoiceStore(new SQL(sqlOptions(settings().database) as string));
 
   return opened;
 }
