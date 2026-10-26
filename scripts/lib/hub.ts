@@ -65,14 +65,14 @@ async function readEvents(answer: Response, frame: (event: string, data: string)
 
 // One command on the node through its hub, its stdout's lines handed on as they arrive.
 export async function hubExec(target: HubTarget, request: { command: string; env: Record<string, string> }, onLine: (line: string) => void): Promise<ExecEnd> {
-  const token = hubToken(target.tokenFile);
+  const token = hubToken(target.hubTokenFile);
 
   if (!token.ok) return { kind: "error", detail: token.detail };
 
   let answer: Response;
 
   try {
-    answer = await fetch(`${target.hubUrl.replace(/\/+$/, "")}/exec?agent=${encodeURIComponent(target.agent)}`, {
+    answer = await fetch(`${target.hubAddress.replace(/\/+$/, "")}/exec?agent=${encodeURIComponent(target.agentName)}`, {
       method: "POST",
       headers: { authorization: `Bearer ${token.token}`, "content-type": "application/json" },
       body: JSON.stringify({ shell: "linux", command: request.command, env: request.env }),
@@ -81,7 +81,7 @@ export async function hubExec(target: HubTarget, request: { command: string; env
     return { kind: "error", detail: `the hub did not answer: ${error instanceof Error ? error.message : String(error)}` };
   }
 
-  const refusal = refused(answer, target.agent);
+  const refusal = refused(answer, target.agentName);
 
   if (refusal !== null) return { kind: "error", detail: refusal };
 
@@ -130,14 +130,14 @@ export type TransferEnd = { kind: "completed"; bytes: Uint8Array } | { kind: "er
 // A whole file carried either way. The hub reports `completed` only once the bytes the agent sent match the size
 // and checksum it declared, so what is gathered is whole whenever the end says so.
 async function transfer(target: HubTarget, way: "upload" | "download", path: string, body: Uint8Array | null): Promise<TransferEnd> {
-  const token = hubToken(target.tokenFile);
+  const token = hubToken(target.hubTokenFile);
 
   if (!token.ok) return { kind: "error", detail: token.detail };
 
   let answer: Response;
 
   try {
-    answer = await fetch(`${target.hubUrl.replace(/\/+$/, "")}/${way}?path=${encodeURIComponent(path)}&agent=${encodeURIComponent(target.agent)}`, {
+    answer = await fetch(`${target.hubAddress.replace(/\/+$/, "")}/${way}?path=${encodeURIComponent(path)}&agent=${encodeURIComponent(target.agentName)}`, {
       method: "POST",
       headers: { authorization: `Bearer ${token.token}`, "content-type": "application/octet-stream" },
       ...(body === null ? {} : { body: body.slice() }),
@@ -146,7 +146,7 @@ async function transfer(target: HubTarget, way: "upload" | "download", path: str
     return { kind: "error", detail: `the hub did not answer: ${error instanceof Error ? error.message : String(error)}` };
   }
 
-  const refusal = refused(answer, target.agent);
+  const refusal = refused(answer, target.agentName);
 
   if (refusal !== null) return { kind: "error", detail: refusal };
 

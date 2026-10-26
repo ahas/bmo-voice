@@ -144,7 +144,7 @@ class HubShell implements NodeShell {
     const end = await hubUpload(this.target, path, bytes);
 
     if (end.kind === "error") {
-      throw new NodeShellError(`${path} could not be written on ${this.target.agent}: ${end.detail}`);
+      throw new NodeShellError(`${path} could not be written on ${this.target.agentName}: ${end.detail}`);
     }
   }
 
@@ -152,7 +152,7 @@ class HubShell implements NodeShell {
     const end = await hubDownload(this.target, path);
 
     if (end.kind === "error") {
-      throw new NodeShellError(`${path} could not be read on ${this.target.agent}: ${end.detail}`);
+      throw new NodeShellError(`${path} could not be read on ${this.target.agentName}: ${end.detail}`);
     }
 
     return end.bytes;
@@ -183,7 +183,7 @@ class PowerShellNode implements NodeShell {
 // The shell of the node a name and its target name. An ssh node is reached over the batch login the node service
 // gives for it; one it gives none for is out of reach.
 export async function nodeShell(name: string, target: NodeTarget): Promise<NodeShell> {
-  if (target.kind === "jake") return new HubShell(target);
+  if (target.kind === "hub") return new HubShell(target);
   if (target.shell === "powershell") return new PowerShellNode(`${target.host}:${target.port}`);
 
   const login = await nodeLogin(name);

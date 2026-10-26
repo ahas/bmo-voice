@@ -8,10 +8,10 @@ import { settings, unitToken } from "./settings";
 // token file and the agent the node attaches as; with the services its role reserves it for, joined by `+`.
 export type NodeTarget = (
   | { kind: "ssh"; host: string; port: number; user: string; keyPath?: string | null; shell?: string | null }
-  | { kind: "jake"; hubUrl: string; tokenFile: string; agent: string }
+  | { kind: "hub"; hubAddress: string; hubTokenFile: string; agentName: string }
 ) & { role?: string | null };
 
-export type HubTarget = Extract<NodeTarget, { kind: "jake" }>;
+export type HubTarget = Extract<NodeTarget, { kind: "hub" }>;
 
 // The node service refused, or did not answer.
 export class NodeServiceError extends Error {

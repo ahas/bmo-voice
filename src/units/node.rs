@@ -35,11 +35,12 @@ pub enum Reach {
     key_path: Option<String>,
     shell: Option<String>,
   },
-  Jake {
-    #[serde(rename = "hubUrl")]
+  Hub {
+    #[serde(rename = "hubAddress")]
     hub_url: String,
-    #[serde(rename = "tokenFile")]
+    #[serde(rename = "hubTokenFile")]
     token_file: String,
+    #[serde(rename = "agentName")]
     agent: String,
   },
 }

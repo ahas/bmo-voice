@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.2.
+Fixed at 0.1.0-rev.3.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its command line
 and its settings. The engine is an upstream: a coding harness takes it as its first entry point through its
@@ -207,7 +207,7 @@ It asks no model, takes no card turn and keeps nothing. A language other than `k
 
 | Call | Route | Used for |
 |---|---|---|
-| a node's target | `GET /nodes/{name}/target` | how a voice node is reached: `kind`, then an ssh node's `host`, `port`, `user`, `keyPath?` and `shell?`, or a hub node's `hubUrl`, `tokenFile` and `agent` |
+| a node's target | `GET /nodes/{name}/target` | how a voice node is reached: `kind`, then an ssh node's `host`, `port`, `user`, `keyPath?` and `shell?`, or a hub node's `hubAddress`, `hubTokenFile` and `agentName` |
 | a node's login | `POST /nodes/login` with `node` | `ssh`, the arguments that open a batch SSH login to an ssh node, or null |
 
 A refusal of the node service is read as its own answer, `answered` false and a `refusal` carrying `code` and

@@ -55,7 +55,7 @@ const SSH_FAILED: i32 = 255;
 // How often a run standing in for a node looks again.
 const POLL_MS: u64 = 2_000;
 
-// How much of a file one command carries back from the node. A jake node's hub ends a command whose output passes
+// How much of a file one command carries back from the node. A hub node's hub ends a command whose output passes
 // 8 MiB, and base64 writes four bytes for every three, so a minute and a half of wav is past it in one piece.
 const SLICE_BYTES: u64 = 4 * 1024 * 1024;
 
@@ -306,7 +306,7 @@ pub async fn node_shell(units: &Units, name: String) -> Result<NodeShell, NodeEr
   }
 
   match target.reach {
-    Reach::Jake {
+    Reach::Hub {
       hub_url,
       token_file,
       agent,
