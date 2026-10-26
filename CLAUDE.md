@@ -15,8 +15,9 @@ only what it uses itself, since the same thing kept in several places is the wro
 This repository is `bmo-voice`: the voice engine, which keeps trained voices, speaks a text in one of them on the
 voice servers of the voice nodes, transcribes spoken files, encodes recordings and reads a text into a script for
 the ear; the scripts that install, push and train voices; the script studio where the lines a voice is trained on
-are recorded; and the harness plugin that offers the engine to a coding harness. Briefings, their rooms and their
-listeners are the briefing unit's, and call this engine.
+are recorded; the briefings, each a line spoken for a room and kept with its room and its line, and the events
+their listeners play them from; and the harness plugin that offers the engine to a coding harness. When a briefing
+is spoken, and what it says, is its caller's to decide.
 
 ## The documents come first
 

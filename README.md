@@ -15,11 +15,12 @@ The voice engine, as one service of its own:
   on a free card, a trained voice checked and installed;
 - **the script studio:** the screen and server where the lines a voice is trained on are recorded from the
   original material, with its Korean language pack in this repository;
+- **briefings:** a line spoken for a room and kept with its room, its line and its moment, told on the event
+  stream for its listeners to play; its caller decides when one is spoken and what it says;
 - **the harness plugin:** the `bmo-voice mcp` MCP server and the `bmo-voice` skill.
 
-Briefings, their rooms and their listeners are the briefing unit's; it calls this engine. Every other unit
-is reached through standard APIs alone (`docs/boundary-api.md`), and of other repositories only the base
-libraries `bmo-chat`, `bmo-chat-client`, `bmo-ui` and `bmo-text` may be depended on.
+Every other unit is reached through standard APIs alone (`docs/boundary-api.md`), and of other repositories
+only the base libraries `bmo-chat`, `bmo-chat-client`, `bmo-ui` and `bmo-text` may be depended on.
 
 ## Folders
 

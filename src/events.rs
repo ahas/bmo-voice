@@ -20,8 +20,23 @@ pub const TRANSCRIPTION_ENDED: &str = "transcription.ended";
 /// The kind an event of a voice whose row changed.
 pub const VOICE_CHANGED: &str = "voice.changed";
 
+/// The kind an event of a briefing taken in.
+pub const BRIEFING_CREATED: &str = "briefing.created";
+/// The kind an event of a briefing that ended, done or failed.
+pub const BRIEFING_ENDED: &str = "briefing.ended";
+/// The kind an event of a briefing whose line was named or let go.
+pub const BRIEFING_CHANGED: &str = "briefing.changed";
+
 /// Every kind the service publishes, in the order the document lists them.
-pub const KINDS: [&str; 4] = [SYNTHESIS_CREATED, SYNTHESIS_ENDED, TRANSCRIPTION_ENDED, VOICE_CHANGED];
+pub const KINDS: [&str; 7] = [
+  SYNTHESIS_CREATED,
+  SYNTHESIS_ENDED,
+  TRANSCRIPTION_ENDED,
+  VOICE_CHANGED,
+  BRIEFING_CREATED,
+  BRIEFING_ENDED,
+  BRIEFING_CHANGED,
+];
 
 // How many events a live reader may fall behind before it is let go, to resume from the window.
 const BACKLOG: usize = 256;

@@ -21,15 +21,19 @@ use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
 use crate::context::Context;
-use crate::events::{Events, SYNTHESIS_CREATED, SYNTHESIS_ENDED, TRANSCRIPTION_ENDED};
+use crate::events::{
+  BRIEFING_CHANGED, BRIEFING_CREATED, BRIEFING_ENDED, Events, SYNTHESIS_CREATED, SYNTHESIS_ENDED,
+  TRANSCRIPTION_ENDED,
+};
 use crate::policy::POLICY;
 use crate::script::reading::Language;
 use crate::script::spoken;
 use crate::speech::{node, synth};
 use crate::store::{self, StoreError, voices};
 use crate::wire::{
-  Encoding, Event, EventQuery, Health, NewEncoding, NewScriptReading, NewSynthesis, NewTranscription, Page,
-  PageQuery, ScriptReading, Synthesis, SynthesisState, Transcription, Voice, VoiceServer, WireError,
+  Briefing, BriefingKind, BriefingLine, BriefingQuery, Encoding, Event, EventQuery, Health, NewBriefing,
+  NewEncoding, NewScriptReading, NewSynthesis, NewTranscription, Page, PageQuery, ScriptReading, Synthesis,
+  SynthesisState, Transcription, Voice, VoiceServer, WireError,
 };
 
 /// How often an idle event stream says it is still there.
@@ -131,6 +135,10 @@ pub fn router(served: Served) -> Router {
     .route("/syntheses", post(create_synthesis))
     .route("/syntheses/{synthesisId}", get(read_synthesis))
     .route("/syntheses/{synthesisId}/sound", get(synthesis_sound))
+    .route("/briefings", post(create_briefing).get(list_briefings))
+    .route("/briefings/{briefingId}", get(read_briefing))
+    .route("/briefings/{briefingId}/line", post(name_line))
+    .route("/briefings/{briefingId}/sound", get(briefing_sound))
     .route("/transcriptions", post(create_transcription))
     .route("/transcriptions/{transcriptionId}", get(read_transcription))
     .route("/encodings", post(create_encoding))
@@ -317,15 +325,7 @@ async fn create_synthesis(
     .await?
     .ok_or_else(|| Refused::not_found(format!("there is no voice {}", asked.voice_name)))?;
 
-  if let Some(emotion) = &asked.emotion
-    && !POLICY.emotions.contains(emotion)
-  {
-    return Err(Refused::new(
-      StatusCode::UNPROCESSABLE_ENTITY,
-      "unknown-emotion",
-      format!("the emotions are {}", POLICY.emotions.join(", ")),
-    ));
-  }
+  known_emotion(asked.emotion.as_deref())?;
 
   let at = crate::now_ms();
   let id = store::syntheses::insert(
@@ -368,6 +368,18 @@ async fn create_synthesis(
   });
 
   Ok((StatusCode::CREATED, Json(synthesis)).into_response())
+}
+
+// An emotion outside the policy's is refused before anything is taken in.
+fn known_emotion(emotion: Option<&str>) -> Result<(), Refused> {
+  match emotion {
+    Some(emotion) if !POLICY.emotions.iter().any(|known| known == emotion) => Err(Refused::new(
+      StatusCode::UNPROCESSABLE_ENTITY,
+      "unknown-emotion",
+      format!("the emotions are {}", POLICY.emotions.join(", ")),
+    )),
+    _ => Ok(()),
+  }
 }
 
 // One synthesis spoken on a free voice node, its state and the event of its end told as it comes.
@@ -460,6 +472,187 @@ async fn synthesis_sound(
 
   if !kept.is_file() {
     return Err(Refused::not_found(format!("synthesis {id} has no sound")));
+  }
+
+  let mime = "audio/ogg".parse().expect("a mime type");
+  let answered = ServeFile::new_with_mime(&kept, &mime).oneshot(request).await.map_err(Refused::failed)?;
+
+  Ok(answered.into_response())
+}
+
+/// `POST /briefings`: a line spoken for a room, answered at once, its synthesis speaking apart and its end told
+/// as `briefing.ended`.
+async fn create_briefing(
+  State(served): State<Served>,
+  read: Result<Json<NewBriefing>, JsonRejection>,
+) -> Result<Response, Refused> {
+  let asked = body_of(read)?;
+
+  if asked.text.trim().is_empty() {
+    return Err(Refused::bad_request("a briefing speaks a text; this one is empty"));
+  }
+
+  if asked.kind == BriefingKind::Full && asked.message_id.is_none() {
+    return Err(Refused::bad_request("a full reading names the line it reads"));
+  }
+
+  let voice = voices::voice(&served.context.db, &asked.voice_name)
+    .await?
+    .ok_or_else(|| Refused::not_found(format!("there is no voice {}", asked.voice_name)))?;
+
+  known_emotion(asked.emotion.as_deref())?;
+
+  let db = &served.context.db;
+  let script = spoken::spoken_script(&asked.text);
+  let script = if script.trim().is_empty() { asked.text.trim().to_owned() } else { script };
+  let at = crate::now_ms();
+  let synthesis_id =
+    store::syntheses::insert(db, &asked.voice_name, &script, asked.emotion.as_deref(), at).await?;
+  let id = store::briefings::insert(
+    db,
+    &store::briefings::Taken {
+      chat_id: asked.chat_id,
+      message_id: asked.message_id,
+      kind: asked.kind,
+      title: asked.title.as_deref().map(str::trim).filter(|title| !title.is_empty()),
+      synthesis_id,
+      plays: asked.plays.unwrap_or(true),
+      at,
+    },
+  )
+  .await?;
+  let briefing = briefing_of(db, id).await?;
+
+  {
+    let writing = served.events.write().await;
+
+    if let Some(synthesis) = store::syntheses::get(db, synthesis_id).await? {
+      writing.record(SYNTHESIS_CREATED, &synthesis.synthesis()).await?;
+    }
+    writing.record(BRIEFING_CREATED, &briefing).await?;
+  }
+
+  let context = Arc::clone(&served.context);
+  let events = served.events.clone();
+
+  tokio::task::spawn_blocking(move || {
+    if let Ok(runtime) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
+      runtime.block_on(brief(context, events, id, synthesis_id, voice, script));
+    }
+  });
+
+  Ok((StatusCode::CREATED, Json(briefing)).into_response())
+}
+
+// One briefing spoken as its synthesis is, and its end kept and told.
+async fn brief(
+  context: Arc<Context>,
+  events: Events,
+  id: i64,
+  synthesis_id: i64,
+  voice: voices::VoiceRow,
+  script: String,
+) {
+  speak(Arc::clone(&context), events.clone(), synthesis_id, voice, script).await;
+
+  let db = &context.db;
+  let spoken = store::syntheses::get(db, synthesis_id).await.ok().flatten();
+  let sound = sound_path(&context, synthesis_id).to_string_lossy().into_owned();
+  let done = spoken
+    .as_ref()
+    .filter(|row| row.state == SynthesisState::Done)
+    .map(|row| (row.duration_ms.unwrap_or(0) as f64 / 1_000.0, sound.as_str()));
+
+  if let Err(why) = store::briefings::ended(db, id, crate::now_ms(), done).await {
+    eprintln!("voice: briefing {id}'s end was not written: {why}");
+  }
+
+  match store::briefings::get(db, id).await {
+    Ok(Some(row)) => {
+      if let Err(why) = events.write().await.record(BRIEFING_ENDED, &row.briefing).await {
+        eprintln!("voice: briefing {id}'s end was not published: {why}");
+      }
+    }
+    Ok(None) => {}
+    Err(why) => eprintln!("voice: briefing {id} was not read back: {why}"),
+  }
+}
+
+async fn briefing_of(db: &sea_orm::DatabaseConnection, id: i64) -> Result<Briefing, Refused> {
+  store::briefings::get(db, id)
+    .await?
+    .map(|row| row.briefing)
+    .ok_or_else(|| Refused::not_found(format!("there is no briefing {id}")))
+}
+
+/// `GET /briefings`.
+async fn list_briefings(
+  State(served): State<Served>,
+  read: Result<Query<BriefingQuery>, QueryRejection>,
+) -> Result<Json<Page<Briefing>>, Refused> {
+  let query = query_of(read)?;
+  let limit = page_size(query.limit)?;
+  let mut items: Vec<Briefing> = store::briefings::page(&served.context.db, &query, limit + 1)
+    .await?
+    .into_iter()
+    .map(|row| row.briefing)
+    .collect();
+  let more = items.len() > limit;
+
+  items.truncate(limit);
+
+  Ok(Json(Page { items, more }))
+}
+
+/// `GET /briefings/{briefingId}`.
+async fn read_briefing(
+  State(served): State<Served>,
+  Path(id): Path<i64>,
+) -> Result<Json<Briefing>, Refused> {
+  Ok(Json(briefing_of(&served.context.db, id).await?))
+}
+
+/// `POST /briefings/{briefingId}/line`: the line a summary speaks named, or the summary let go without one.
+async fn name_line(
+  State(served): State<Served>,
+  Path(id): Path<i64>,
+  read: Result<Json<BriefingLine>, JsonRejection>,
+) -> Result<Json<Briefing>, Refused> {
+  let asked = body_of(read)?;
+  let db = &served.context.db;
+  let standing = briefing_of(db, id).await?;
+
+  if standing.kind == BriefingKind::Full {
+    return Err(Refused::new(
+      StatusCode::CONFLICT,
+      "conflict",
+      format!("briefing {id} is a full reading, whose line is never moved"),
+    ));
+  }
+
+  store::briefings::set_line(db, id, asked.message_id).await?;
+
+  let briefing = briefing_of(db, id).await?;
+
+  served.events.write().await.record(BRIEFING_CHANGED, &briefing).await?;
+
+  Ok(Json(briefing))
+}
+
+/// `GET /briefings/{briefingId}/sound`.
+async fn briefing_sound(
+  State(served): State<Served>,
+  Path(id): Path<i64>,
+  request: Request,
+) -> Result<Response, Refused> {
+  let briefing = briefing_of(&served.context.db, id).await?;
+  let Some(synthesis_id) = briefing.synthesis_id.filter(|_| briefing.state == SynthesisState::Done) else {
+    return Err(Refused::not_found(format!("briefing {id} has no sound the engine keeps")));
+  };
+  let kept = sound_path(&served.context, synthesis_id);
+
+  if !kept.is_file() {
+    return Err(Refused::not_found(format!("briefing {id} has no sound")));
   }
 
   let mime = "audio/ogg".parse().expect("a mime type");

@@ -267,7 +267,7 @@ dependencies = [
 
 [[package]]
 name = "bmo-voice"
-version = "0.1.0-rev.1"
+version = "0.1.0-rev.2"
 dependencies = [
  "async-trait",
  "axum",

@@ -1,6 +1,7 @@
 //! The voice's store (`docs/store.md`): its four tables in a database of its own, the migrations that make them,
 //! the connection every reader opens, and the reads and writes the voice makes of them.
 
+pub mod briefings;
 pub mod encodings;
 pub mod events;
 pub mod migration;

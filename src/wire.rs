@@ -37,7 +37,8 @@ pub struct Page<T> {
 pub struct Event {
   /// The event number, which only grows.
   pub id: i64,
-  /// `synthesis.created`, `synthesis.ended`, `transcription.ended` or `voice.changed`.
+  /// `synthesis.created`, `synthesis.ended`, `transcription.ended`, `voice.changed`, `briefing.created`,
+  /// `briefing.ended` or `briefing.changed`.
   pub kind: String,
   /// When it happened, in epoch milliseconds.
   pub at: i64,
@@ -224,4 +225,119 @@ pub struct VoiceServer {
   pub state: String,
   /// The voices whose checkpoints the server holds loaded, in name order.
   pub voice_names: Vec<String>,
+}
+
+/// What a briefing is: a line's gist heard live, or a whole line read out on that line.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum BriefingKind {
+  /// A line or two of a line's gist, written to be heard, which a listener plays by itself.
+  Summary,
+  /// A whole line read out, kept on that line, played only when somebody asks for it.
+  Full,
+}
+
+impl BriefingKind {
+  /// The kind as the wire and the store write it.
+  pub fn as_str(self) -> &'static str {
+    match self {
+      Self::Summary => "summary",
+      Self::Full => "full",
+    }
+  }
+
+  /// The kind a word names, or none.
+  pub fn parse(word: &str) -> Option<Self> {
+    match word {
+      "summary" => Some(Self::Summary),
+      "full" => Some(Self::Full),
+      _ => None,
+    }
+  }
+}
+
+/// One briefing: a line spoken for a room, kept with the room and the line it speaks.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Briefing {
+  pub id: i64,
+  /// The room it was spoken for, as its caller numbers it.
+  pub chat_id: i64,
+  /// The line it speaks; null while it awaits one.
+  pub message_id: Option<i64>,
+  pub kind: BriefingKind,
+  /// What a listener shows in place of the words; null where none was given.
+  pub title: Option<String>,
+  /// The voice it is spoken in; null on a briefing the engine did not speak.
+  pub voice_name: Option<String>,
+  /// What was spoken; null on a briefing the engine did not speak.
+  pub text: Option<String>,
+  pub emotion: Option<String>,
+  /// The synthesis that speaks it; null on a briefing the engine did not speak.
+  pub synthesis_id: Option<i64>,
+  pub state: SynthesisState,
+  /// How long its sound runs; null until it is done.
+  pub duration_ms: Option<i64>,
+  /// Whether a listener plays it by itself.
+  pub plays: bool,
+  /// Whether it is a summary still awaiting its line.
+  pub awaits_line: bool,
+  /// The voice message a briefing from before the engine spoke briefings went out as; null on every other.
+  pub voice_message_id: Option<i64>,
+  /// Epoch milliseconds.
+  pub started_at: Option<i64>,
+  /// Epoch milliseconds; null until it ends.
+  pub finished_at: Option<i64>,
+}
+
+/// A line to speak for a room.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NewBriefing {
+  pub voice_name: String,
+  pub text: String,
+  pub chat_id: i64,
+  /// The line it speaks; a summary may leave it out and await its line, a full reading names it.
+  #[serde(default)]
+  pub message_id: Option<i64>,
+  pub kind: BriefingKind,
+  #[serde(default)]
+  pub title: Option<String>,
+  /// One of the policy's emotions; none where absent.
+  #[serde(default)]
+  pub emotion: Option<String>,
+  /// Whether a listener plays it by itself; true where absent.
+  #[serde(default)]
+  pub plays: Option<bool>,
+}
+
+/// A page of briefings, narrowed.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BriefingQuery {
+  /// The room the briefings were spoken for.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub chat_id: Option<i64>,
+  /// The line they speak.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub message_id: Option<i64>,
+  /// `summary` or `full`.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub kind: Option<BriefingKind>,
+  /// Only the summaries still awaiting their line, or only the others.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub awaits_line: Option<bool>,
+  /// The id of the last briefing read; the page starts below it.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub after: Option<i64>,
+  /// 1 to 1,000; 100 where absent.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub limit: Option<u32>,
+}
+
+/// The line a briefing speaks, or none to let it go without one.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BriefingLine {
+  pub message_id: Option<i64>,
 }

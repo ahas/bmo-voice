@@ -1,11 +1,13 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.1.
+Fixed at 0.1.0-rev.2.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its command line
 and its settings. The engine is an upstream: a coding harness takes it as its first entry point through its
-MCP server, with no console and no other unit running. Speaking to listeners on a schedule is a caller's
-work, which calls this engine; briefings, their rooms and their listeners belong to the briefing unit.
+MCP server, with no console and no other unit running. The engine keeps briefings, each a line spoken for a
+room and kept with that room, its line and its moment, and tells its listeners when one is spoken; when a
+briefing is spoken, and what it says, is its caller's decision, and speaking to listeners on a schedule is a
+caller's work too.
 
 `docs/openapi.json` is the contract: an OpenAPI 3.1 document written from the service's own types, stating
 every route with its parameters, its body, its answers and the codes it can answer, the bodies' schemas, the
@@ -29,8 +31,9 @@ The common wire format and the API design rules are bmo-chat's `docs/conventions
   last item. A list takes `after`, the cursor its route states, and `limit`, 1 to 1,000 and 100 where
   absent.
 - **A byte answer** is a member's `sound`, carries OGG/Opus, and honours `Range`.
-- **Nothing in the API names an agent, a room, an owner or a worker.** Who a caller speaks for is its own
-  business.
+- **Nothing in the API names an agent, an owner or a worker.** Who a caller speaks for is its own business. A
+  briefing carries the room and the line its caller names, as the numbers the caller gives, which the engine
+  keeps and matches on and never reads into.
 
 ## Health
 
@@ -48,6 +51,9 @@ asking `Accept: application/json`.
 | `synthesis.ended` | the synthesis, state `done` or `failed` |
 | `transcription.ended` | the transcription, state `done` or `failed` |
 | `voice.changed` | a voice as `GET /voices/{voiceName}` answers it |
+| `briefing.created` | the briefing as `GET /briefings/{briefingId}` answers it, state `waiting` |
+| `briefing.ended` | the briefing, state `done` or `failed` |
+| `briefing.changed` | the briefing, after its line was named or let go |
 
 - **A frame's `event` is the kind,** its `id` the event number, a signed 64-bit integer that only grows,
   and its `data` is `{"id", "kind", "at", "data"}`, the inner `data` being the member.
@@ -92,6 +98,43 @@ asking `Accept: application/json`.
   none, 404 `not-found`. A sound is kept under the data root, never in the database.
 - **One synthesis speaks one text.** There is no list route: a caller that wants to know a synthesis it
   started reads its member or listens to the stream.
+
+## Briefings
+
+| Route | Body or query | Answer |
+|---|---|---|
+| `POST /briefings` | `voiceName`, `text`, `chatId`, `messageId?`, `kind`, `title?`, `emotion?`, `plays?` | 201, the briefing |
+| `GET /briefings` | `chatId?`, `messageId?`, `kind?`, `awaitsLine?`, `after`, `limit` | a page of briefings, newest first |
+| `GET /briefings/{briefingId}` | | one briefing |
+| `POST /briefings/{briefingId}/line` | `messageId`, a number or null | the briefing |
+| `GET /briefings/{briefingId}/sound` | | the sound, OGG/Opus, with `Range` |
+
+- **A briefing is a line spoken for a room in a voice,** kept with the room and the line it speaks: `id`,
+  `chatId`, `messageId` (the line, null while it awaits one), `kind`, `title` (null where none was given),
+  `voiceName`, `text` (what was spoken), `emotion`, `synthesisId`, `state`, `durationMs` (null until done),
+  `plays`, `awaitsLine`, `voiceMessageId`, `startedAt` and `finishedAt` (null until it ends).
+- **Two kinds.** A `summary` is what a listener hears live: a line or two of a line's gist, written to be heard,
+  with a one-line title a listener shows in place of the words. A `full` reading is a whole line read out, kept on
+  that line, which a listener plays only when asked; it names its line, and one that names none is answered 400
+  `bad-request`.
+- **It is spoken as a synthesis is.** `POST /briefings` answers at once, state `waiting`; the engine reads the
+  words into a script by its own reading rules (「Script readings」) and speaks the script in the named voice on a
+  free voice server, and `text` is the script spoken. Its `state` and `durationMs` are its synthesis's, and
+  `synthesisId` names it. `text` must hold something to say; a voice no list holds is 404 `not-found`, and an
+  emotion outside the policy's is 422 `unknown-emotion`.
+- **Whether it plays by itself is the caller's to say** in `plays`, true where absent, and the engine keeps what
+  it was told. A listener plays by itself only a `summary` whose `plays` holds, once `briefing.ended` says it is
+  `done`; it plays a `full` reading only when somebody asks for it, and shows a briefing it learns of more than
+  two minutes after it ended rather than playing it.
+- **A summary may be spoken before its line stands.** One taken in with no `messageId` awaits its line, and
+  `POST /briefings/{briefingId}/line` names it, or lets it go with null; either way it no longer awaits one, and
+  `briefing.changed` says so. A full reading's line is never moved; asking is 409 `conflict`.
+- **The page** is read newest first; the cursor is the last briefing's `id`, as a number, and the page starts
+  below it. `chatId`, `messageId`, `kind` and `awaitsLine` narrow it.
+- **A briefing the engine did not speak,** a row kept from before it spoke briefings, names no synthesis and no
+  voice, reads `done`, and serves no sound; `voiceMessageId` names the voice message the room heard it as.
+- **The sound** is answered only once the state is `done` and the engine spoke it; before that, 404
+  `not-found`. It is the synthesis's own sound, kept under the data root.
 
 ## Transcriptions
 
@@ -140,6 +183,7 @@ It asks no model, takes no card turn and keeps nothing. A language other than `k
 | `unauthorized` | 401 | the token is missing or wrong |
 | `no-route` | 404 | no route answers the method and path |
 | `not-found` | 404 | nothing stands at the key the path names |
+| `conflict` | 409 | the change asked for does not fit the member as it stands |
 | `gone` | 410 | the events since the number asked for are no longer kept |
 | `unknown-emotion` | 422 | the emotion is not one of the engine's policy values |
 | `unreadable-source` | 422 | an encoding's wav is not a file the engine can read |

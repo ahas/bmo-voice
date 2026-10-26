@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "bmo-voice",
-    "version": "0.1.0-rev.1",
-    "description": "The voice engine: trained voices, speech synthesis on the voice servers of the nodes, transcription, speaker encodings and scripts for the ear. A synthesis is answered at once and the sound follows. Bodies are JSON with camelCase keys, times are integers of epoch milliseconds and spans of milliseconds end in Ms. A list is a page, `after` being the last member's name. Every failure is a non-2xx answer whose body is `code` and `error`. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`. Speaking to listeners on a schedule is a caller's work and calls this engine; the briefings that did so are another service's."
+    "version": "0.1.0-rev.2",
+    "description": "The voice engine: trained voices, speech synthesis on the voice servers of the nodes, transcription, speaker encodings and scripts for the ear. A synthesis is answered at once and the sound follows. Bodies are JSON with camelCase keys, times are integers of epoch milliseconds and spans of milliseconds end in Ms. A list is a page, `after` being the last member's name. Every failure is a non-2xx answer whose body is `code` and `error`. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`. A briefing is a line spoken for a room, kept with the room and the line its caller names and told on the event stream for its listeners to play; when one is spoken, and what it says, is its caller's decision."
   },
   "servers": [
     {
@@ -38,6 +38,9 @@
     },
     {
       "name": "syntheses"
+    },
+    {
+      "name": "briefings"
     },
     {
       "name": "transcriptions"
@@ -367,6 +370,294 @@
         ]
       }
     },
+    "/briefings": {
+      "post": {
+        "operationId": "createBriefing",
+        "tags": [
+          "briefings"
+        ],
+        "summary": "Speak a line for a room, kept with the room and its line; the briefing is answered at once and its sound follows.",
+        "responses": {
+          "201": {
+            "description": "Speak a line for a room, kept with the room and its line; the briefing is answered at once and its sound follows.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Briefing"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request",
+          "not-found",
+          "unknown-emotion"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewBriefing"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listBriefings",
+        "tags": [
+          "briefings"
+        ],
+        "summary": "The briefings, newest first, narrowed by room, line, kind and whether they await their line.",
+        "responses": {
+          "200": {
+            "description": "The briefings, newest first, narrowed by room, line, kind and whether they await their line.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefingPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request"
+        ],
+        "parameters": [
+          {
+            "name": "chatId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64",
+              "description": "The room the briefings were spoken for."
+            },
+            "description": "The room the briefings were spoken for."
+          },
+          {
+            "name": "messageId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64",
+              "description": "The line they speak."
+            },
+            "description": "The line they speak."
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/BriefingKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`summary` or `full`."
+            },
+            "description": "`summary` or `full`."
+          },
+          {
+            "name": "awaitsLine",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "Only the summaries still awaiting their line, or only the others."
+            },
+            "description": "Only the summaries still awaiting their line, or only the others."
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64",
+              "description": "The id of the last briefing read; the page starts below it."
+            },
+            "description": "The id of the last briefing read; the page starts below it."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0,
+              "description": "1 to 1,000; 100 where absent."
+            },
+            "description": "1 to 1,000; 100 where absent."
+          }
+        ]
+      }
+    },
+    "/briefings/{briefingId}": {
+      "get": {
+        "operationId": "readBriefing",
+        "tags": [
+          "briefings"
+        ],
+        "summary": "One briefing and its state.",
+        "responses": {
+          "200": {
+            "description": "One briefing and its state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Briefing"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "not-found"
+        ],
+        "parameters": [
+          {
+            "name": "briefingId",
+            "in": "path",
+            "required": true,
+            "description": "The briefing's id.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ]
+      }
+    },
+    "/briefings/{briefingId}/line": {
+      "post": {
+        "operationId": "nameBriefingLine",
+        "tags": [
+          "briefings"
+        ],
+        "summary": "Name the line a summary speaks, or let it go without one.",
+        "responses": {
+          "200": {
+            "description": "Name the line a summary speaks, or let it go without one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Briefing"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request",
+          "not-found",
+          "conflict"
+        ],
+        "parameters": [
+          {
+            "name": "briefingId",
+            "in": "path",
+            "required": true,
+            "description": "The briefing's id.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BriefingLine"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/briefings/{briefingId}/sound": {
+      "get": {
+        "operationId": "readBriefingSound",
+        "tags": [
+          "briefings"
+        ],
+        "summary": "A briefing's sound, OGG/Opus, with Range.",
+        "responses": {
+          "200": {
+            "description": "A briefing's sound, OGG/Opus, with Range.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "contentEncoding": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "not-found"
+        ],
+        "parameters": [
+          {
+            "name": "briefingId",
+            "in": "path",
+            "required": true,
+            "description": "The briefing's id.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ]
+      }
+    },
     "/transcriptions": {
       "post": {
         "operationId": "createTranscription",
@@ -575,7 +866,10 @@
     "synthesis.created",
     "synthesis.ended",
     "transcription.ended",
-    "voice.changed"
+    "voice.changed",
+    "briefing.created",
+    "briefing.ended",
+    "briefing.changed"
   ],
   "x-tools": [
     {
@@ -737,49 +1031,14 @@
   ],
   "x-moved-out": [
     {
-      "route": "GET /events",
-      "to": "briefing",
-      "why": "The old stream was the listeners' briefing stream; the engine's own stream is new."
-    },
-    {
-      "route": "GET /briefings",
-      "to": "briefing",
-      "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine."
-    },
-    {
-      "route": "POST /briefings",
-      "to": "briefing",
-      "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine."
-    },
-    {
-      "route": "GET /briefings/{briefingId}",
-      "to": "briefing",
-      "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine."
-    },
-    {
-      "route": "PATCH /briefings/{briefingId}",
-      "to": "briefing",
-      "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine."
-    },
-    {
-      "route": "POST /briefings/{briefingId}/lines",
-      "to": "briefing",
-      "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine."
-    },
-    {
-      "route": "GET /briefings/{briefingId}/sound",
-      "to": "briefing",
-      "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine."
-    },
-    {
       "route": "GET /settings",
-      "to": "briefing",
-      "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine."
+      "to": "receiver",
+      "why": "The briefing's switches are the receiver's, which decides when a briefing is spoken."
     },
     {
       "route": "PATCH /settings",
-      "to": "briefing",
-      "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine."
+      "to": "receiver",
+      "why": "The briefing's switches are the receiver's, which decides when a briefing is spoken."
     }
   ],
   "components": {
@@ -852,7 +1111,7 @@
           },
           "kind": {
             "type": "string",
-            "description": "`synthesis.created`, `synthesis.ended`, `transcription.ended` or `voice.changed`."
+            "description": "`synthesis.created`, `synthesis.ended`, `transcription.ended`, `voice.changed`, `briefing.created`,\n`briefing.ended` or `briefing.changed`."
           },
           "at": {
             "type": "integer",
@@ -1037,6 +1296,224 @@
           }
         ],
         "description": "Where a synthesis stands in its life."
+      },
+      "NewBriefing": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "voiceName": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "chatId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "messageId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The line it speaks; a summary may leave it out and await its line, a full reading names it.",
+            "default": null
+          },
+          "kind": {
+            "$ref": "#/components/schemas/BriefingKind"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "emotion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "One of the policy's emotions; none where absent.",
+            "default": null
+          },
+          "plays": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether a listener plays it by itself; true where absent.",
+            "default": null
+          }
+        },
+        "required": [
+          "voiceName",
+          "text",
+          "chatId",
+          "kind"
+        ],
+        "description": "A line to speak for a room."
+      },
+      "BriefingKind": {
+        "oneOf": [
+          {
+            "type": "string",
+            "const": "summary",
+            "description": "A line or two of a line's gist, written to be heard, which a listener plays by itself."
+          },
+          {
+            "type": "string",
+            "const": "full",
+            "description": "A whole line read out, kept on that line, played only when somebody asks for it."
+          }
+        ],
+        "description": "What a briefing is: a line's gist heard live, or a whole line read out on that line."
+      },
+      "Briefing": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "chatId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The room it was spoken for, as its caller numbers it."
+          },
+          "messageId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The line it speaks; null while it awaits one."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/BriefingKind"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "What a listener shows in place of the words; null where none was given."
+          },
+          "voiceName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The voice it is spoken in; null on a briefing the engine did not speak."
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "What was spoken; null on a briefing the engine did not speak."
+          },
+          "emotion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "synthesisId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The synthesis that speaks it; null on a briefing the engine did not speak."
+          },
+          "state": {
+            "$ref": "#/components/schemas/SynthesisState"
+          },
+          "durationMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "How long its sound runs; null until it is done."
+          },
+          "plays": {
+            "type": "boolean",
+            "description": "Whether a listener plays it by itself."
+          },
+          "awaitsLine": {
+            "type": "boolean",
+            "description": "Whether it is a summary still awaiting its line."
+          },
+          "voiceMessageId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The voice message a briefing from before the engine spoke briefings went out as; null on every other."
+          },
+          "startedAt": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Epoch milliseconds."
+          },
+          "finishedAt": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Epoch milliseconds; null until it ends."
+          }
+        },
+        "required": [
+          "id",
+          "chatId",
+          "kind",
+          "state",
+          "plays",
+          "awaitsLine"
+        ],
+        "description": "One briefing: a line spoken for a room, kept with the room and the line it speaks."
+      },
+      "BriefingPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Briefing"
+            }
+          },
+          "more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "more"
+        ],
+        "description": "One page of a list: its items, and whether anything stands past the last of them."
+      },
+      "BriefingLine": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "messageId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        },
+        "description": "The line a briefing speaks, or none to let it go without one."
       },
       "NewTranscription": {
         "type": "object",

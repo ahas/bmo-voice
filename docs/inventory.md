@@ -338,7 +338,7 @@ duplicates them.
 
 | Files | Owner | Why |
 |---|---|---|
-| `bot/bmo-server/src/control/voice.rs`, `bot/bmo-server/src/chat/voice.rs`, `bot/bmo-server/src/queue/voiced.rs`, `bot/bmo-server/tests/integration/receiver/voice.rs` (4) | bmo-receiver | The voice briefing's switch, the briefings a round launches and lets go, and voiced notices are the receiver's; it carries them and calls this repository on `POST /briefings`, `GET /briefings` and `POST /briefings/{run}/line` |
+| `bot/bmo-server/src/control/voice.rs`, `bot/bmo-server/src/chat/voice.rs`, `bot/bmo-server/src/queue/voiced.rs`, `bot/bmo-server/tests/integration/receiver/voice.rs` (4) | bmo-receiver | The voice briefing's switch, the briefings a round launches and lets go, and voiced notices are the receiver's; it carries them and calls this repository on `POST /briefings`, `GET /briefings` and `POST /briefings/{briefingId}/line`; the engine keeps the briefings in `voice_briefings` |
 | `prompts/agents/voice-polish/instructions.md`, `prompts/agents/voice-reading/instructions.md` (2, inside the set above) | bmo-gate | The reading and polishing gates are the gate's stages; their instructions stand in the gate's `prompts/`, and this repository runs them through `POST /stages/{stage}/runs` |
 | `bot/bmo-server/src/verbs/benches/gate_eval/gates/{voice_polish,voice_reading}.{rs,toml}` (4) | bmo-gate | The gate's evaluation members; this repository serves them a line's script reading (`docs/boundary-api.md`) |
 | `client/server/api/voice-briefing.get.ts`, `voice-briefing.post.ts`, `voice-briefing.post.test.ts` (3) | bmo-web | The switch on the console's agents screen, read and moved through the receiver |

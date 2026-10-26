@@ -11,8 +11,9 @@ use serde_json::{Map, Value, json};
 use crate::events::KINDS;
 use crate::mcp::{ENTRY, MCP, PLUGIN, generator, tools};
 use crate::wire::{
-  Encoding, Event, EventQuery, Health, NewEncoding, NewScriptReading, NewSynthesis, NewTranscription, Page,
-  ScriptReading, Synthesis, Transcription, Voice, VoiceServer, WireError,
+  Briefing, BriefingLine, BriefingQuery, Encoding, Event, EventQuery, Health, NewBriefing, NewEncoding,
+  NewScriptReading, NewSynthesis, NewTranscription, Page, ScriptReading, Synthesis, Transcription, Voice,
+  VoiceServer, WireError,
 };
 
 /// Where the schemas the routes refer to stand in the document.
@@ -23,8 +24,8 @@ const DESCRIPTION: &str = "The voice engine: trained voices, speech synthesis on
   Bodies are JSON with camelCase keys, times are integers of epoch milliseconds and spans of milliseconds end in \
   Ms. A list is a page, `after` being the last member's name. Every failure is a non-2xx answer whose body is \
   `code` and `error`. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`. \
-  Speaking to listeners on a schedule is a caller's work and calls this engine; the briefings that did so are \
-  another service's.";
+  A briefing is a line spoken for a room, kept with the room and the line its caller names and told on the event \
+  stream for its listeners to play; when one is spoken, and what it says, is its caller's decision.";
 
 /// The path's voice.
 fn voice_key() -> Value {
@@ -44,6 +45,17 @@ fn synthesis_key() -> Value {
     "in": "path",
     "required": true,
     "description": "The synthesis's id.",
+    "schema": { "type": "integer", "format": "int64" },
+  })
+}
+
+/// The path's briefing.
+fn briefing_key() -> Value {
+  json!({
+    "name": "briefingId",
+    "in": "path",
+    "required": true,
+    "description": "The briefing's id.",
     "schema": { "type": "integer", "format": "int64" },
   })
 }
@@ -276,6 +288,90 @@ pub fn openapi() -> Value {
     ),
   );
   path(
+    "/briefings",
+    "post",
+    operation(
+      "createBriefing",
+      "briefings",
+      "Speak a line for a room, kept with the room and its line; the briefing is answered at once and its sound follows.",
+      Asked {
+        parameters: Vec::new(),
+        body: Some(generator.subschema_for::<NewBriefing>().to_value()),
+      },
+      201,
+      json_answer::<Briefing>(&mut generator),
+      &["unauthorized", "bad-request", "not-found", "unknown-emotion"],
+    ),
+  );
+  path(
+    "/briefings",
+    "get",
+    operation(
+      "listBriefings",
+      "briefings",
+      "The briefings, newest first, narrowed by room, line, kind and whether they await their line.",
+      Asked {
+        parameters: query::<BriefingQuery>(&mut generator),
+        body: None,
+      },
+      200,
+      json_answer::<Page<Briefing>>(&mut generator),
+      &["unauthorized", "bad-request"],
+    ),
+  );
+  path(
+    "/briefings/{briefingId}",
+    "get",
+    operation(
+      "readBriefing",
+      "briefings",
+      "One briefing and its state.",
+      Asked {
+        parameters: vec![briefing_key()],
+        body: None,
+      },
+      200,
+      json_answer::<Briefing>(&mut generator),
+      &["unauthorized", "not-found"],
+    ),
+  );
+  path(
+    "/briefings/{briefingId}/line",
+    "post",
+    operation(
+      "nameBriefingLine",
+      "briefings",
+      "Name the line a summary speaks, or let it go without one.",
+      Asked {
+        parameters: vec![briefing_key()],
+        body: Some(generator.subschema_for::<BriefingLine>().to_value()),
+      },
+      200,
+      json_answer::<Briefing>(&mut generator),
+      &["unauthorized", "bad-request", "not-found", "conflict"],
+    ),
+  );
+  path(
+    "/briefings/{briefingId}/sound",
+    "get",
+    operation(
+      "readBriefingSound",
+      "briefings",
+      "A briefing's sound, OGG/Opus, with Range.",
+      Asked {
+        parameters: vec![briefing_key()],
+        body: None,
+      },
+      200,
+      json!({
+        "application/octet-stream": {
+          "schema": { "type": "string", "contentEncoding": "binary" },
+        },
+      }),
+      &["unauthorized", "not-found"],
+    ),
+  );
+  path(
     "/transcriptions",
     "post",
     operation(
@@ -393,6 +489,7 @@ pub fn openapi() -> Value {
       { "name": "events" },
       { "name": "voices" },
       { "name": "syntheses" },
+      { "name": "briefings" },
       { "name": "transcriptions" },
       { "name": "encodings" },
       { "name": "script-readings" },
@@ -402,15 +499,8 @@ pub fn openapi() -> Value {
     "x-events": KINDS,
     "x-tools": x_tools,
     "x-moved-out": [
-      { "route": "GET /events", "to": "briefing", "why": "The old stream was the listeners' briefing stream; the engine's own stream is new." },
-      { "route": "GET /briefings", "to": "briefing", "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine." },
-      { "route": "POST /briefings", "to": "briefing", "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine." },
-      { "route": "GET /briefings/{briefingId}", "to": "briefing", "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine." },
-      { "route": "PATCH /briefings/{briefingId}", "to": "briefing", "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine." },
-      { "route": "POST /briefings/{briefingId}/lines", "to": "briefing", "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine." },
-      { "route": "GET /briefings/{briefingId}/sound", "to": "briefing", "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine." },
-      { "route": "GET /settings", "to": "briefing", "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine." },
-      { "route": "PATCH /settings", "to": "briefing", "why": "Briefings, their rooms, listeners and switches are BMO's; the briefing service calls this engine." },
+      { "route": "GET /settings", "to": "receiver", "why": "The briefing's switches are the receiver's, which decides when a briefing is spoken." },
+      { "route": "PATCH /settings", "to": "receiver", "why": "The briefing's switches are the receiver's, which decides when a briefing is spoken." },
     ],
     "components": {
       "schemas": generator.take_definitions(true),
