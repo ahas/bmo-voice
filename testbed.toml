@@ -54,6 +54,18 @@ units = ["deploy/*.service"]
 # screen with HTML.
 health = '''cd ~/.local/share/bmo-voice/deploy && bin/bmo-voice health && test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3214/bmo-script/api/assets)" = 401 && curl -sf http://127.0.0.1:3214/bmo-script/ | grep -qi '<html' '''
 
+# The unit command, linked into the folder holding `bmo`, the first folder `bmo` looks for unit commands in. The
+# link names this repository's deploy tree, whose own link stands across releases; a link made to the release
+# being deployed would dangle once a later deployment prunes that release.
+[[deploy.step]]
+id = "link-unit-command"
+phase = "before-flip"
+command = '''
+set -eu
+bmo_dir="$(dirname "$(command -v bmo)")"
+ln -sfn "$HOME/.local/share/bmo-voice/deploy/bin/bmo-voice" "$bmo_dir/bmo-voice"
+'''
+
 # The script studio's screen, generated into the release where its server serves it from.
 [[deploy.step]]
 id = "studio-screen"
