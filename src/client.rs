@@ -10,8 +10,9 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::wire::{
-  Encoding, Event, EventQuery, Health, NewEncoding, NewScriptReading, NewSynthesis, NewTranscription, Page,
-  PageQuery, ScriptReading, Synthesis, Transcription, Voice, VoiceServer, WireError,
+  Briefing, Encoding, Event, EventQuery, Health, NewBriefing, NewEncoding, NewScriptReading, NewSynthesis,
+  NewTranscription, Page, PageQuery, ScriptReading, Synthesis, Transcription, Voice, VoiceServer,
+  WireError,
 };
 
 /// The query of a route that takes none.
@@ -182,6 +183,16 @@ impl VoiceClient {
   /// `GET /transcriptions/{transcriptionId}`.
   pub async fn transcription(&self, transcription_id: i64) -> Called<Transcription> {
     self.get(&["transcriptions", &transcription_id.to_string()], &NO_QUERY).await
+  }
+
+  /// `POST /briefings`.
+  pub async fn create_briefing(&self, asked: &NewBriefing) -> Called<Briefing> {
+    self.send(Method::POST, &["briefings"], asked).await
+  }
+
+  /// `GET /briefings/{briefingId}`.
+  pub async fn briefing(&self, briefing_id: i64) -> Called<Briefing> {
+    self.get(&["briefings", &briefing_id.to_string()], &NO_QUERY).await
   }
 
   /// `POST /encodings`.

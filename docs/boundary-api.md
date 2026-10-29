@@ -238,10 +238,15 @@ A refusal of the node service is read as its own answer, `answered` false and a 
 
 ## The command line
 
-`bmo-voice` serves the harness plugin and the document; it speaks nothing by itself.
+`bmo-voice` serves the harness plugin, the document and the ear and mouth groups' first-class verbs: it
+declares the nouns `listen` and `brief` when asked `nouns`, so the platform hands `bmo listen` and
+`bmo brief` straight to it.
 
 | Word | What it does |
 |---|---|
+| `nouns` | answers `listen` and `brief`, one a line |
+| `listen <file>…` | asks `POST /transcriptions` for the files in `--language` and waits, up to `--wait` seconds, for it to end; prints what was heard, or the transcription as JSON with `--json` |
+| `brief` | asks `POST /briefings` for a line spoken in `--voice` for the room `--chat`, of kind `--kind` (`summary` or `full`), with `--text`, and optional `--title`, `--emotion`, `--message` and `--plays`; waits, up to `--wait` seconds, for the engine to speak it, then prints its id, or the briefing as JSON with `--json` |
 | `health` | asks the service the settings name for `GET /health`, with its token, and exits 0 where it answers ready, 1 otherwise |
 | `mcp` | runs the harness plugin's MCP server; `--address` and `--token` name the engine |
 | `openapi` | prints `docs/openapi.json` as the repository keeps it |
