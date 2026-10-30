@@ -37,6 +37,8 @@ the voice nodes. What a caller does with the sound is the caller's.
   - no voice node listed: the synthesis fails. The engine keeps no fallback onto the operations machine's card.
 - **A voice the table does not hold, a node out of reach and a voice server that does not answer** leave the
   synthesis `failed`; nothing is spoken and the failure is the member's state.
+- **A session kept off the engine's port, the chat agent among them,** reads which nodes are listed and whether
+  their servers answer through the hosted tool `voice/servers` (`docs/boundary-api.md`, 「The hosted tool」).
 - **`synth/voice-vox.py`** is the trained voice's mouth, both on the operations machine's card and as the voice
   server.
 - **`synth/voice-encode.py`** is the encoder: it loads no model, takes a wav a mouth spoke and writes it as

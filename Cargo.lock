@@ -267,7 +267,7 @@ dependencies = [
 
 [[package]]
 name = "bmo-voice"
-version = "0.1.0-rev.4"
+version = "0.1.0-rev.5"
 dependencies = [
  "async-trait",
  "axum",
@@ -3213,6 +3213,17 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "voice-servers-tool"
+version = "0.1.0-rev.5"
+dependencies = [
+ "bmo-voice",
+ "serde",
+ "serde_json",
+ "tokio",
+ "toml",
+]
 
 [[package]]
 name = "want"

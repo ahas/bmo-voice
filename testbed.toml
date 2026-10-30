@@ -26,12 +26,12 @@ base_libraries = ["bmo-chat", "bmo-chat-client", "bmo-ui", "bmo-text"]
 
 [[check.step]]
 id = "check"
-command = "cargo check --all-targets"
+command = "cargo check --workspace --all-targets"
 lane = "wide"
 
 [[check.step]]
 id = "clippy"
-command = "cargo clippy --all-targets -- -D warnings"
+command = "cargo clippy --workspace --all-targets -- -D warnings"
 lane = "wide"
 
 [[check.step]]
@@ -39,8 +39,8 @@ id = "fmt"
 command = "cargo fmt --all --check"
 
 [build]
-# The service, the unit command and the script studio's server, into the release's bin/.
-binaries = ["voice-server", "bmo-voice", "script-studio"]
+# The service, the unit command, the script studio's server and the hosted tool, into the release's bin/.
+binaries = ["voice-server", "bmo-voice", "script-studio", "voice-servers-tool"]
 
 # The voice's own deploy tree and the shared data root its settings and everything it keeps stand under
 # (docs/deploy.md).
@@ -64,6 +64,20 @@ command = '''
 set -eu
 bmo_dir="$(dirname "$(command -v bmo)")"
 ln -sfn "$HOME/.local/share/bmo-voice/deploy/bin/bmo-voice" "$bmo_dir/bmo-voice"
+'''
+
+# The hosted tool is placed in its folder's .placed/, the folder the tool host reads (docs/deploy.md, 「The hosted
+# tool」): the executable the release's bin/ holds, its manifest and its input schema, put into the tool host's
+# registry for this service with the capability its entry asks for allowed.
+[[deploy.step]]
+id = "place-servers-tool"
+phase = "before-flip"
+command = '''
+set -eu
+rm -rf tools/servers/.placed
+mkdir -p tools/servers/.placed
+cp bin/voice-servers-tool tools/servers/tool.toml tools/servers/servers.json tools/servers/.placed/
+bmo-pocket put tools/servers/.placed --placed --service voice --allow room.tools
 '''
 
 # The script studio's screen, generated into the release where its server serves it from.

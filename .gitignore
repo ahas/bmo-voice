@@ -10,6 +10,8 @@ __pycache__/
 dist/
 # The typecheck's build record, wherever a project of its writes one.
 *.tsbuildinfo
+# A hosted tool's placed folder, which the deployment writes in the release.
+/tools/*/.placed/
 # Trained voices, base models and clips are runtime data under the data root (weights/); never committed.
 *.safetensors
 *.wav

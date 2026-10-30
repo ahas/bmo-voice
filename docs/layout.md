@@ -17,7 +17,8 @@ How the repository is laid out, what each part is, and where it runs. Read this 
 | `src/` | The crate: the settings, the store, the event log, the service's client, the MCP server, the OpenAPI document, the script rules, synthesis and the voice nodes, the routes, the script studio's server, and the `voice-server`, `bmo-voice` and `script-studio` binaries |
 | `studio/` | The script studio's screen (`studio/client/`, a Nuxt project) and its media tools (`studio/lib/` and `studio/scripts/`, Bun and Python), with their records' shared fixtures |
 | `synth/` | What speaks: the VoxCPM2 mouth and voice server, the encoder, the transcriber, the intelligibility measure, the tool entries and their schemas, and the frozen package list of the voice environment |
-| `tests/` | Every test of the repository, whatever its language |
+| `tests/` | Every test of the repository's crate, whatever its language |
+| `tools/` | The voice's hosted tools, each a folder of its own with a crate, its manifest, its input schema and its tests: `tools/servers/`, the `voice/servers` entry |
 | `weights/` | The declarations of the voice's weights: the voice server's card declaration and where the voices and the base model stand; never the weights themselves |
 
 A folder stands only once something is in it. The README's folder table names every top-level folder that
@@ -25,11 +26,14 @@ stands, and no other.
 
 ## The rules the layout keeps
 
-- **One manifest at the root,** `Cargo.toml`, for the one crate. A Bun or Python project keeps its own manifest
+- **One manifest at the root,** `Cargo.toml`, for the crate and the workspace it heads, whose other members are
+  the hosted tools' crates, each listed one line by its folder. A Bun or Python project keeps its own manifest
   and lockfile in its own folder, and is a project of its own to the testbed.
-- **One crate,** split into modules. A part gets a crate of its own only where it truly has to stand apart.
+- **One crate,** split into modules. A part gets a crate of its own only where it truly has to stand apart: a
+  hosted tool, an executable the tool host runs from a placed folder of its own, is one, and builds on the crate.
 - **No folder is named after its parent.** A folder's name says what it holds.
-- **Tests live in `tests/`,** never beside the code they test.
+- **Tests live in `tests/`,** never beside the code they test; a hosted tool's stand in its own folder's
+  `tests/`.
 - **A client of another service is one module named for that service:** `src/units/<service>.rs` in the crate,
   `scripts/lib/<service>.ts` in the scripts. The engine's own client, which it publishes, is `src/client.rs`:
   one method for each route of its API. Every client of another unit is temporary, standing until that unit
@@ -45,10 +49,17 @@ stands, and no other.
   starts `bmo-voice mcp` as its stdio MCP server.
 - **`script-studio`:** the script studio's server (`docs/script-studio.md`).
 
+## The hosted tool
+
+- **`voice-servers-tool`** answers the tool host's calls of `voice/servers` (`docs/boundary-api.md`, 「The hosted
+  tool」). The release builds it into its `bin/`, and the deployment places it with its manifest and schema from
+  `tools/servers/.placed/`.
+
 ## Settings
 
 - **One TOML file,** `settings.toml` at the top of the release the running binary stands in, or the file
-  `BMO_VOICE_SETTINGS` names. The deployment links it from the data root's `env/voice.toml`.
+  `BMO_VOICE_SETTINGS` names. The deployment links it from the data root's `env/voice.toml`. The hosted tool,
+  standing in no release, reads it through the deploy tree's link.
 - **What it holds** is `docs/boundary-api.md`, 「Settings」: where the service listens and is reached, its token
   file, the database, the data root, the folder of its Python side, and the address and token file of each
   unit it calls: the node service and the account service the studio signs in against.
@@ -75,5 +86,6 @@ stands, and no other.
 
 ## Tests
 
-Tests live in `tests/`, never beside the code they test. The repository-wide personal-data check is
-`personal_data.rs` there (`PERSONAL-DATA.md`); `docs/inventory.md` records the behaviour the tests are to keep.
+Tests live in `tests/`, never beside the code they test, and a hosted tool's in its own folder's `tests/`. The
+repository-wide personal-data check is `personal_data.rs` there (`PERSONAL-DATA.md`); `docs/inventory.md` records
+the behaviour the tests are to keep.

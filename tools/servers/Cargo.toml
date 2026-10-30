@@ -1,0 +1,23 @@
+[package]
+name = "voice-servers-tool"
+description = "The voice's hosted tool: which voice nodes stand in the voice node list, whether their servers answer and the voices they hold loaded, read through the tool host for a session kept off the engine's port."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "voice-servers-tool"
+path = "src/main.rs"
+test = false
+
+[dependencies]
+# The engine's own client, wire bodies and settings, and the harness plugin's failure shape.
+bmo-voice = { path = "../.." }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+tokio = { version = "1.47.0", features = ["macros", "rt"] }
+
+[dev-dependencies]
+# The manifest and the deployment's declaration read in the tests.
+toml = { version = "0.8.23", default-features = false, features = ["parse"] }

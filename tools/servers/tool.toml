@@ -1,0 +1,22 @@
+# The voice's hosted tool: a session the shell guard keeps off every unit's loopback port reads the voice servers
+# through the tool host, which runs this executable outside every harness (docs/boundary-api.md, 「The hosted
+# tool」).
+[tool]
+name = "servers"
+protocol = 1
+language = "rust"
+build = 'cargo build --release -p voice-servers-tool && cp "$BMO_CARGO_TARGET/release/voice-servers-tool" "$BMO_TOOL_OUT/"'
+check = 'bmo-testbed cargo test -p voice-servers-tool'
+run = ["voice-servers-tool"]
+timeout = 60
+
+[[entry]]
+namespace = "voice"
+name = "servers"
+title = "Voice servers"
+description = "Say which voice nodes stand in the voice node list, in its order: each node's name, whether its voice server answers (running) or not (absent), and the voices it holds loaded; then where a line is spoken now. Takes no arguments."
+input = "servers.json"
+capabilities = ["room.tools"]
+
+[entry.hints]
+read_only = true

@@ -1,12 +1,26 @@
 # One crate: the voice service, its unit command and the script studio's server, split into modules, with a
-# binary each under `src/bin/` (docs/layout.md).
-[package]
-name = "bmo-voice"
-description = "The voice engine: trained voices, speech synthesis on the voice nodes, transcription, speaker encodings, script readings and the script studio."
-version = "0.1.0-rev.4"
+# binary each under `src/bin/` (docs/layout.md). It heads the workspace whose other members are the hosted tools'
+# crates, one line each by its folder.
+[workspace]
+resolver = "3"
+members = [
+  "tools/servers",
+]
+
+# One version for the whole repository (docs/boundary-api.md, 「Versions」).
+[workspace.package]
+version = "0.1.0-rev.5"
 edition = "2024"
 license = "MIT"
 publish = false
+
+[package]
+name = "bmo-voice"
+description = "The voice engine: trained voices, speech synthesis on the voice nodes, transcription, speaker encodings, script readings and the script studio."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
 
 [lib]
 name = "bmo_voice"

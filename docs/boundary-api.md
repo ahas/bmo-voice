@@ -1,13 +1,13 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.4.
+Fixed at 0.1.0-rev.5.
 
-Every route this engine answers, its event stream, the calls it makes, its harness plugin, its command line
-and its settings. The engine is an upstream: a coding harness takes it as its first entry point through its
-MCP server, with no console and no other unit running. The engine keeps briefings, each a line spoken for a
-room and kept with that room, its line and its moment, and tells its listeners when one is spoken; when a
-briefing is spoken, and what it says, is its caller's decision, and speaking to listeners on a schedule is a
-caller's work too.
+Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
+its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
+point through its MCP server, with no console and no other unit running. The engine keeps briefings, each a
+line spoken for a room and kept with that room, its line and its moment, and tells its listeners when one is
+spoken; when a briefing is spoken, and what it says, is its caller's decision, and speaking to listeners on a
+schedule is a caller's work too.
 
 `docs/openapi.json` is the contract: an OpenAPI 3.1 document written from the service's own types, stating
 every route with its parameters, its body, its answers and the codes it can answer, the bodies' schemas, the
@@ -236,6 +236,30 @@ A refusal of the node service is read as its own answer, `answered` false and a 
 - **The `bmo-voice` skill** tells a harness when and how to use them. A tool's failure carries the status,
   code and sentence of the refusal, or the sentence saying why nothing answered.
 
+## The hosted tool
+
+- **`voice/servers` is a tool of the tool host** (bmo-pocket's `docs/mcp-host.md`, 「Placed tools」): a session
+  the shell guard keeps off every unit's loopback port, the chat agent among them, reads through it which voice
+  nodes stand in the voice node list and whether their servers answer, since the tool host runs it outside every
+  harness. It is the folder `tools/servers/`, the crate `voice-servers-tool`, built into the release and placed
+  before the flip for this service, with the capability its entry asks for allowed (`docs/deploy.md`).
+- **Its one entry** is `voice/servers`, asking for `room.tools`, read-only and taking no arguments. The executable
+  speaks the tool host's call protocol 1 itself: one request on standard input, one tool result of text on
+  standard output.
+- **What it answers:** every page of `GET /voice-servers`, called through the engine's own client, as one line a
+  voice server in the node list's order, with its node's name, its `state` and the voices it holds loaded; then a
+  line saying where a line is spoken now (`docs/voice-plan.md`, 「Which road speaks a line」): on the voice server
+  of one free listed node where any is listed, and, where none is, nowhere, since a synthesis fails and nothing
+  speaks on the operations machine's card.
+- **Its settings** are the file `BMO_VOICE_SETTINGS` names, else `settings.toml` under the link of the voice's
+  deploy tree, `~/.local/share/bmo-voice/deploy`: the tool host runs the registry's copy of the placed folder,
+  which stands in no release. It calls the settings' address with the settings' token.
+- **What it refuses,** each as an answer marked as an error: settings or a token that do not read, with the
+  sentence saying why; an engine that does not answer, or one that refuses, carrying the status, code and sentence
+  of the refusal, or the sentence saying why nothing answered, as the harness plugin's failures do; and a call of
+  another entry, naming its own. It serves no resources, and a kind of request it does not answer ends the call
+  unclean.
+
 ## The command line
 
 `bmo-voice` serves the harness plugin, the document and the ear and mouth groups' first-class verbs: it
@@ -260,7 +284,8 @@ the voices list them, and a synthesis outside them is refused.
 ## Settings
 
 The service and the command read one TOML file, `settings.toml` at the top of the release or the file
-`BMO_VOICE_SETTINGS` names.
+`BMO_VOICE_SETTINGS` names; the hosted tool reads the same file through the deploy tree's link (「The hosted
+tool」).
 
 | Key | Meaning |
 |---|---|
@@ -285,8 +310,8 @@ and its server calls the engine's synthesis and reading rules through the crate 
 
 ## Versions
 
-- **The repository has one version,** in `VERSION` and the crate's manifest, shared by the engine, its
-  client, its plugin and its OpenAPI document.
+- **The repository has one version,** in `VERSION` and the root manifest's workspace, shared by the engine, its
+  client, its plugin, its hosted tool and its OpenAPI document.
 - **Before its first release it is `0.1.0` and counts revisions:** the first `0.1.0` is the base, and every
   later bump is one revision, written `0.1.0-rev.<n>` with `n` counting from 1. Major, minor and patch never
   move before the first release, a breaking change included.
