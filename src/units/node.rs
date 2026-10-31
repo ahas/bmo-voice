@@ -1,10 +1,10 @@
 //! bmo-node, as its `docs/api.md` states it (「Agency's calls」, 「Registry routes」): how a node is reached by its
-//! name, and the arguments of a batch SSH login to it. Bodies are camelCase, and a refusal is an answer of its own.
+//! name, the arguments of a batch SSH login to it among it. Bodies are camelCase, and a refusal is an answer of its own.
 
 use reqwest::Method;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use super::{Caller, UnitError};
 
@@ -34,6 +34,9 @@ pub enum Reach {
     #[serde(rename = "keyPath")]
     key_path: Option<String>,
     shell: Option<String>,
+    /// The same login laid out as `ssh` arguments ahead of the command.
+    #[serde(rename = "sshArgs", default)]
+    ssh_args: Vec<String>,
   },
   Hub {
     #[serde(rename = "hubAddress")]
@@ -49,11 +52,6 @@ pub enum Reach {
 struct Refusal {
   code: String,
   message: String,
-}
-
-#[derive(Deserialize)]
-struct Login {
-  ssh: Option<Vec<String>>,
 }
 
 impl Node {
@@ -92,12 +90,12 @@ impl Node {
     self.answer(self.caller.request(Method::GET, &["nodes", &name, "target"])).await
   }
 
-  /// The arguments that open a batch SSH login to a node, ahead of the command; none where it has no SSH route.
+  /// The arguments that open a batch SSH login to a node, ahead of the command, as the node's target lays them
+  /// out; none where it has no SSH route (a hub node).
   pub async fn login(&self, name: String) -> Result<Option<Vec<String>>, UnitError> {
-    let login: Login = self
-      .answer(self.caller.request(Method::POST, &["nodes", "login"]).json(&json!({ "node": name })))
-      .await?;
-
-    Ok(login.ssh)
+    Ok(match self.target(name).await?.reach {
+      Reach::Ssh { ssh_args, .. } if !ssh_args.is_empty() => Some(ssh_args),
+      _ => None,
+    })
   }
 }

@@ -26,9 +26,20 @@ fn a_hub_node_and_an_ssh_node_read_as_the_node_service_answers_them() {
 
   let ssh: Target = serde_json::from_value(json!({
     "nodeName": "node-c", "kind": "ssh", "host": "node-c.invalid", "port": 22, "user": "someone",
-    "keyPath": null, "shell": "posix", "sshOptions": [], "sshArgs": []
+    "keyPath": null, "shell": "posix", "sshOptions": ["BatchMode=yes"],
+    "sshArgs": ["-o", "BatchMode=yes", "-p", "22", "someone@node-c.invalid"]
   }))
   .expect("an ssh node reads");
 
   assert!(matches!(ssh.reach, Reach::Ssh { port: 22, .. }));
+
+  let Reach::Ssh { ssh_args, .. } = ssh.reach else {
+    panic!("an ssh node");
+  };
+
+  assert_eq!(
+    ssh_args,
+    ["-o", "BatchMode=yes", "-p", "22", "someone@node-c.invalid"],
+    "the login the engine opens is the target's own arguments"
+  );
 }
