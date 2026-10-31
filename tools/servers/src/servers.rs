@@ -82,7 +82,8 @@ pub fn servers_text(servers: &[VoiceServer]) -> String {
      the operations machine's card."
       .to_owned()
   } else {
-    "Where a line is spoken now: on the voice server of one free listed node.".to_owned()
+    "Where a line is spoken now: on the voice server of the listed node the arbiter's master grants a card of voice."
+      .to_owned()
   });
 
   lines.join("\n")

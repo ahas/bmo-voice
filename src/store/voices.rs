@@ -156,7 +156,7 @@ pub async fn seed_names(
   Ok(true)
 }
 
-/// The voice node list, in the order a free node is taken; empty where the voice is spoken on this machine.
+/// The voice node list, the voice's own placement in the order the card arbiter placed it.
 pub async fn node_names(db: &DatabaseConnection) -> Result<Vec<String>, StoreError> {
   all(db, r#"SELECT "name" FROM "voice_nodes" ORDER BY "position", "name""#, vec![])
     .await?

@@ -1,6 +1,6 @@
 # The voice's own policy values (docs/boundary-api.md, 「The voice's policy」).
 
-# How long one synthesis may take, in milliseconds, from its being taken in to its sound.
+# How long one line may take to speak, in milliseconds, from the grant of its card to its sound.
 run_cap_ms = 600000
 
 # The emotions a voice may be asked to speak with, one for each face a listener draws. A synthesis naming

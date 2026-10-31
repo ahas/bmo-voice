@@ -9,7 +9,7 @@ const SOURCE: &str = include_str!("../policy/voice.toml");
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct VoicePolicy {
-  /// How long one synthesis may take, in milliseconds, from its being taken in to its sound.
+  /// How long one line may take to speak, in milliseconds, from the grant of its card to its sound.
   pub run_cap_ms: i64,
   /// The emotions a voice may be asked to speak with.
   pub emotions: Vec<String>,

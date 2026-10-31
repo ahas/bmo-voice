@@ -35,18 +35,18 @@ fn each_server_is_a_line_in_the_lists_order() {
       "n2: running; voices loaded: alpha, beta",
       "n5: running; voices loaded: none",
       "n3: absent; voices loaded: none",
-      "Where a line is spoken now: on the voice server of one free listed node.",
+      "Where a line is spoken now: on the voice server of the listed node the arbiter's master grants a card of voice.",
     ]
   );
 }
 
-// "a list of absent servers alone still says a line is spoken on a free listed node"
+// "a list of absent servers alone still says a line is spoken on the listed node the master grants"
 #[test]
 fn absent_servers_alone_still_name_the_listed_road() {
   let text = servers_text(&[server("n4", "absent", &[])]);
 
   assert!(text.starts_with("n4: absent; voices loaded: none\n"), "{text}");
-  assert!(text.ends_with("on the voice server of one free listed node."), "{text}");
+  assert!(text.ends_with("the arbiter's master grants a card of voice."), "{text}");
 }
 
 // "an empty list says a synthesis fails and nothing speaks on the operations machine's card"

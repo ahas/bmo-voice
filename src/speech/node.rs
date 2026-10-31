@@ -4,9 +4,9 @@
 //! started apart on the node, its answer asked after until it is there, the wav carried back and every file of
 //! the call removed. The OGG/Opus encode stays on this machine.
 //!
-//! Which nodes there are is the voice node list, read at every call; how each is reached is the node service's
-//! answer for it. A line is spoken on one free node of the list, held on this machine while it speaks there, and a
-//! node out of reach is never quietly replaced by this machine's card.
+//! Which node speaks a line is the card the arbiter's master grants it ([`super::card`]); how that node is reached is
+//! the node service's answer for it. The card is held for the whole of the line, and a node out of reach is never
+//! quietly replaced by this machine's card.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -14,24 +14,24 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use tokio::io::AsyncWriteExt;
 
-use super::{shell_word, synth};
+use super::{card, shell_word, synth};
 use crate::now_ms;
 use crate::settings::Settings;
-use crate::store::voices::{self, VoiceRow};
+use crate::store::voices::VoiceRow;
 use crate::units::Units;
+use crate::units::arbiter::Ask;
 use crate::units::hub::{ExecEnd, HubTarget, hub_exec};
 use crate::units::node::Reach;
 
-/// The voice's own name, the one a node's row may reserve the node for.
+/// The voice's own name: the service the arbiter's master grants its cards of, and the one a node's row may reserve
+/// the node for.
 pub const SERVICE: &str = "voice";
 
 // Where everything lands on the node, relative to its home, the port the server listens on there, and the token
@@ -52,9 +52,6 @@ const GRACE_MS: i64 = 5_000;
 // ssh reports its own failure to connect, log in or keep the channel as this; every other code is the command's.
 const SSH_FAILED: i32 = 255;
 
-// How often a run standing in for a node looks again.
-const POLL_MS: u64 = 2_000;
-
 // How much of a file one command carries back from the node. A hub node's hub ends a command whose output passes
 // 8 MiB, and base64 writes four bytes for every three, so a minute and a half of wav is past it in one piece.
 const SLICE_BYTES: u64 = 4 * 1024 * 1024;
@@ -72,7 +69,7 @@ pub enum Failure {
   Failed,
   /// An answer that is not a wav.
   BadAnswer,
-  /// Every node of the list stayed taken for the whole of the wait, or the card of the one taken stayed held.
+  /// The node's card stayed held by other work for the whole of the server's own wait for its turn.
   Taken,
   /// The voice's files stand outside the voices root, the only layout a node mirrors.
   Elsewhere,
@@ -127,12 +124,11 @@ impl fmt::Display for NodeError {
   }
 }
 
-/// Why a line was not spoken on a node: the node's own failure, the line taken back while it waited, or a failure
-/// of this machine's own encode step.
+/// Why a line was not spoken on a node: the node's own failure, or a failure here: the master's refusal of its card
+/// or this machine's own encode step.
 #[derive(Debug)]
 pub enum NotSpoken {
   Node(NodeError),
-  Withdrawn,
   Here(String),
 }
 
@@ -140,7 +136,6 @@ impl fmt::Display for NotSpoken {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       Self::Node(error) => error.fmt(f),
-      Self::Withdrawn => f.write_str("the line was taken back before a node spoke it"),
       Self::Here(why) => f.write_str(why),
     }
   }
@@ -662,215 +657,90 @@ pub async fn health(shell: &NodeShell) -> Result<Health, NodeError> {
   }
 }
 
-/// The lock file on this machine a run holds a node through while it speaks there.
-pub fn lock_path(settings: &Settings, name: &str) -> PathBuf {
-  settings.locks_folder().join(format!("voice-node-{name}.lock"))
-}
-
-/// The node's lock taken without waiting: the open file that holds it, which lets go as it is dropped or as the
-/// run dies, or none where another run holds it.
-fn hold(path: &Path) -> Option<std::fs::File> {
-  if let Some(parent) = path.parent() {
-    std::fs::create_dir_all(parent).ok()?;
-  }
-
-  let file = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(path).ok()?;
-
-  file.try_lock().is_ok().then_some(file)
-}
-
-/// One node of the list held for this run.
-pub struct Taken {
-  pub name: String,
-  pub shell: NodeShell,
-  pub waited_ms: i64,
-  pub card_held: bool,
-  _held: std::fs::File,
-}
-
-/// One node of the list held for this run until it lets go (docs/voice-plan.md, 「Which node speaks a line」). A
-/// free one is not held by another run here, answers its health without speaking and has room on its card;
-/// among the free, a warm one goes first and the list's order decides the rest. With none free, a node lacking
-/// room only because other work holds its card's lock is taken the same way. Every node out of reach fails at
-/// once; every node taken or busy is asked again until the wait runs out or the line is taken back.
-pub async fn take(
-  db: &DatabaseConnection,
-  units: &Units,
-  settings: &Settings,
-  checkpoint: &str,
-  wait_ms: i64,
-  still_wanted: impl Fn() -> bool,
-) -> Result<Taken, NotSpoken> {
-  let started = now_ms();
-  let warm = checkpoint.rsplit('/').find(|part| !part.is_empty()).unwrap_or_default();
-
-  loop {
-    if !still_wanted() {
-      return Err(NotSpoken::Withdrawn);
-    }
-
-    let names = voices::node_names(db).await.map_err(|why| NotSpoken::Here(why.to_string()))?;
-    let mut taken_here = false;
-    let mut asked = vec![];
-
-    for name in names {
-      let Some(held) = hold(&lock_path(settings, &name)) else {
-        taken_here = true;
-        continue;
-      };
-
-      match node_shell(units, name.clone()).await {
-        Ok(shell) => {
-          let state = health(&shell).await;
-
-          asked.push((name, held, Some(shell), state));
-        }
-        Err(why) => asked.push((name, held, None, Err(why))),
-      }
-    }
-
-    let answering = |state: &Result<Health, NodeError>| state.as_ref().is_ok_and(|health| !health.busy);
-    let free: Vec<usize> = (0..asked.len())
-      .filter(|at| {
-        answering(&asked[*at].3) && asked[*at].3.as_ref().is_ok_and(|health| health.room != Some(false))
-      })
-      .collect();
-    let card_held: Vec<usize> = (0..asked.len())
-      .filter(|at| {
-        answering(&asked[*at].3)
-          && asked[*at]
-            .3
-            .as_ref()
-            .is_ok_and(|health| health.room == Some(false) && health.card_taken == Some(true))
-      })
-      .collect();
-    let among = if free.is_empty() { &card_held } else { &free };
-    let chosen = among
-      .iter()
-      .copied()
-      .find(|at| asked[*at].3.as_ref().is_ok_and(|health| health.loaded.as_deref() == Some(warm)))
-      .or_else(|| among.first().copied());
-
-    if let Some(at) = chosen {
-      let (name, held, shell, _) = asked.swap_remove(at);
-
-      if let Some(shell) = shell {
-        return Ok(Taken {
-          name,
-          shell,
-          waited_ms: now_ms() - started,
-          card_held: free.is_empty(),
-          _held: held,
-        });
-      }
-    }
-
-    if !taken_here && asked.iter().all(|one| one.3.is_err()) {
-      let faults: Vec<String> = asked
-        .iter()
-        .map(|(name, _, _, state)| {
-          format!("{name}: {}", state.as_ref().err().map_or_else(|| "?".to_owned(), ToString::to_string))
-        })
-        .collect();
-
-      return Err(NotSpoken::Node(unreachable(if faults.is_empty() {
-        "the voice node list is empty".to_owned()
-      } else {
-        faults.join("; ")
-      })));
-    }
-
-    // The rest are let go before asking again, so the next round does not find its own locks held.
-    drop(asked);
-
-    if now_ms() - started >= wait_ms {
-      return Err(NotSpoken::Node(NodeError::new(
-        Failure::Taken,
-        None,
-        Some(format!("every voice node stayed taken for {}s", (wait_ms + 500) / 1000)),
-      )));
-    }
-
-    tokio::time::sleep(Duration::from_millis(POLL_MS)).await;
-  }
-}
-
-/// One line to speak through the node list: the voice, the words, where the sound goes, the whole of what it may
-/// take with the wait for a node included, the most of it the wait may have, and how long the node's own asker
-/// may wait.
+/// One line to speak on the card the master grants: the voice, the words, where the sound goes, how long the
+/// speaking may take once the card is granted, and the demand asked for the card.
 pub struct Speech<'a> {
-  pub db: &'a DatabaseConnection,
   pub units: &'a Units,
   pub settings: &'a Settings,
   pub voice: &'a VoiceRow,
   pub text: &'a str,
   pub out: &'a Path,
   pub cap_ms: i64,
-  pub wait_ms: i64,
-  pub node_wait_ms: Option<i64>,
+  pub ask: &'a Ask,
 }
 
-/// Which node spoke a line, how long the run waited for it, whether it waited its turn on a card other work held,
-/// and the node's own account of the line.
+/// Where a line stands on its way to a node, as it changes: waiting for its card, with what it waits on, or
+/// speaking on the card granted.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Stage<'a> {
+  Waiting(&'a str),
+  Speaking,
+}
+
+/// Which node spoke a line, how long the run waited for its card, and the node's own account of the line.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Heard {
   pub node: String,
   pub waited_ms: i64,
-  pub card_held: bool,
   pub spoken: Spoken,
 }
 
-/// The line spoken on one node of the list and encoded here into `out`, with nothing laid over the voice. A node
-/// whose card stayed taken past the server's own wait is let go and a node asked for again within the wait; the
-/// node is let go however the call ends, and a line taken back once a node is held is never spoken.
-pub async fn speak_through_free_node(
+/// The line spoken on the node of the card the master grants and encoded here into `out`, with nothing laid over
+/// the voice (docs/voice-plan.md, 「Which node speaks a line」). The card is waited for however long its grant takes,
+/// each stage told as it changes; where the node's card stayed held by other work past the server's own wait, the
+/// demand is read again until its card is granted again and the line is asked once more. The demand is given back
+/// however the line ends.
+pub async fn speak_on_card(
   speech: Speech<'_>,
-  still_wanted: impl Fn() -> bool,
+  told: &mut (dyn FnMut(Stage<'_>) + Send),
 ) -> Result<Heard, NotSpoken> {
   let started = now_ms();
-  let mut card_held = false;
   let root = speech.settings.voices_folder();
   let request = request(speech.voice, speech.text, &root)?;
-  let checkpoint = request["checkpoint"].as_str().unwrap_or_default().to_owned();
+  let arbiter = &speech.units.arbiter;
+  let ledger = speech.settings.demands_folder();
+  let mut held = card::hold(arbiter, &ledger, speech.ask, &mut |why| told(Stage::Waiting(why)))
+    .await
+    .map_err(NotSpoken::Here)?;
 
-  loop {
-    let taken = take(
-      speech.db,
-      speech.units,
-      speech.settings,
-      &checkpoint,
-      (speech.wait_ms - (now_ms() - started)).max(0),
-      &still_wanted,
-    )
-    .await?;
+  let ended = loop {
     let waited_ms = now_ms() - started;
 
-    card_held |= taken.card_held;
-
-    if !still_wanted() {
-      return Err(NotSpoken::Withdrawn);
-    }
+    told(Stage::Speaking);
 
     let call = Call {
-      timeout_ms: (speech.cap_ms - waited_ms).max(1_000),
-      node_wait_ms: speech.node_wait_ms.map(|wait| (wait - waited_ms).max(1_000)),
+      timeout_ms: speech.cap_ms,
+      node_wait_ms: None,
+    };
+    let spoken = match node_shell(speech.units, held.node.clone()).await {
+      Ok(shell) => speak_on_node(&shell, &request, call).await,
+      Err(error) => Err(error),
     };
 
-    match speak_on_node(&taken.shell, &request, call).await {
+    match spoken {
       Ok((wav, spoken)) => {
-        encode(&wav, speech.out, speech.settings).await.map_err(NotSpoken::Here)?;
-
-        return Ok(Heard {
-          node: taken.name,
-          waited_ms,
-          card_held,
-          spoken,
-        });
+        break encode(&wav, speech.out, speech.settings)
+          .await
+          .map_err(NotSpoken::Here)
+          .map(|()| Heard {
+            node: held.node.clone(),
+            waited_ms,
+            spoken,
+          });
       }
-      Err(error) if error.kind == Failure::Taken && now_ms() - started < speech.wait_ms => {}
-      Err(error) => return Err(NotSpoken::Node(error)),
+      Err(error) if error.kind == Failure::Taken => {
+        match card::again(arbiter, &ledger, &held, speech.ask, &mut |why| told(Stage::Waiting(why))).await {
+          Ok(now) => held = now,
+          Err(why) => break Err(NotSpoken::Here(why)),
+        }
+      }
+      Err(error) => break Err(NotSpoken::Node(error)),
     }
-  }
+  };
+
+  card::give_back(arbiter, &ledger, held.demand).await;
+
+  ended
 }
 
 // The wav the node spoke written out as OGG/Opus by the voice's encoder entry, the wav taken off the disk however

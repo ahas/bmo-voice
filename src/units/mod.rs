@@ -1,6 +1,7 @@
 //! The other units the voice calls, each a client of only the routes that unit's own document states
 //! (`docs/boundary-api.md`, 「What the voice calls」).
 
+pub mod arbiter;
 pub mod hub;
 pub mod node;
 pub mod web;
@@ -14,6 +15,8 @@ use crate::settings::{Settings, Unit};
 pub struct Units {
   /// The node service: how each voice node is reached.
   pub node: node::Node,
+  /// The arbiter's master: which node's card a synthesis is spoken on.
+  pub arbiter: arbiter::Arbiter,
   /// The account service the script studio signs a person in against.
   pub web: web::Web,
 }
@@ -27,6 +30,7 @@ impl Units {
 
     Ok(Self {
       node: node::Node::new(caller("node", &units.node)?),
+      arbiter: arbiter::Arbiter::new(caller("arbiter", &units.arbiter)?),
       web: web::Web::new(caller("web", &units.web)?),
     })
   }

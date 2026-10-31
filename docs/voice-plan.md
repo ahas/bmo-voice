@@ -31,10 +31,11 @@ the voice nodes. What a caller does with the sound is the caller's.
 ## Which road speaks a line
 
 - **Every line is spoken in a trained voice,** one row of the voices table, named by the synthesis itself. Where
-  it is spoken is settled by the voice node list:
-  - a voice node listed: spoken on the voice server of one free voice node, and encoded on the operations machine
-    by the `voice/encoder` entry;
-  - no voice node listed: the synthesis fails. The engine keeps no fallback onto the operations machine's card.
+  it is spoken is the arbiter's master's to say (「Which node speaks a line」):
+  - `voice` placed on a voice node: spoken on the voice server of the node the master grants the synthesis a card
+    of `voice` on, and encoded on the operations machine by the `voice/encoder` entry;
+  - `voice` placed on no node: the synthesis fails. The engine keeps no fallback onto the operations machine's
+    card.
 - **A voice the table does not hold, a node out of reach and a voice server that does not answer** leave the
   synthesis `failed`; nothing is spoken and the failure is the member's state.
 - **A session kept off the engine's port, the chat agent among them,** reads which nodes are listed and whether
@@ -225,7 +226,7 @@ the voice nodes. What a caller does with the sound is the caller's.
   account, so the unit starts with the machine.
 - **The list is the card arbiter's to change,** through the voice's adapter: `card-master place voice --to <node>`
   and `card-master remove voice --from <node>`. A node taken off keeps its server; putting it back is all it takes to
-  speak there again. An empty list is the trained voice spoken on the operations machine's card.
+  speak there again. An empty list places `voice` nowhere, and a synthesis fails.
 - **A node reserved for another service is never a voice node:** the arbiter refuses it, and named on the list all
   the same it is out of reach.
 - **Port 7432 on each node's loopback, and nowhere else.** Every call reaches it through the node's own shell, `ssh`
@@ -235,20 +236,21 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 ### Which node speaks a line
 
-- **A synthesis is spoken on one free node,** held for the whole of its line, so syntheses set off together are
-  spoken side by side on different nodes.
-- **Free means both:** no other run here holds the node (a lock file of its own under `voice/locks/`, taken without
-  waiting), and the node's server answers its health, is not speaking and says its card has room.
-- **A warm node goes first:** a server that already holds the voice's checkpoint in host memory. Otherwise the list's
-  order decides.
-- **No node free, but one whose card lock other work holds:** the line is asked of that node and waits its turn in
-  the node's own queue, the warm one first.
-- **Every node taken or busy:** the run asks again every two seconds for five minutes; past it the synthesis has
-  no turn and ends `failed`. The speaking itself is held to what is left of the synthesis's cap.
+- **The arbiter's master says which node speaks a line** (`docs/boundary-api.md`, 「The voice servers and the
+  card」): every synthesis asks it for one card of `voice`, naming no node, and is spoken on the node of the card
+  granted. The master grants a card where `voice` stands with no demand on it and holds one demand on a card at a
+  time, so syntheses set off together are spoken side by side where `voice` stands on several nodes, and one after
+  another where it stands on one.
+- **The card is held for the whole of the line** and given back as the line ends, spoken or failed.
+- **Waiting for a card has no end but its grant:** in the line behind the demands asked before it, while every card
+  of `voice` is in use or held by a claim or a lower tier, or while the master is not reached. The synthesis stays
+  `waiting`, and its `waitingOn` says why.
+- **The speaking itself** is held to the synthesis's cap, counted from the grant.
 - **On the node** the server waits up to a minute for its turn, in the card arbiter's hold queue through the turn
-  client; past it, or where the card has no room once the turn came, it answers 503 and the run chooses again.
+  client; past it, or where the card has no room once the turn came, it answers 503, and the run reads its demand
+  again until the card is granted again and asks the line of that card's node once more.
 - **A caller that gives up its call** ends the speaking the call had started; the synthesis ends `failed`.
-- **Every node out of reach fails the run at once,** naming each node and what it met. It is not spoken on the
+- **A granted node out of reach fails the run at once,** naming the node and what it met. It is not spoken on the
   operations machine's card instead: a line quietly spoken elsewhere would hide the fault.
 
 ### Building and updating them

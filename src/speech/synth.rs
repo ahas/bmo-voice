@@ -22,10 +22,6 @@ const TRANSCRIBER_TIMEOUT: Duration = Duration::from_secs(600);
 /// The voice's tool entry in the synth folder, which runs the mouth and the encoder.
 const TOOL_ENTRY: &str = "voice-tool.py";
 
-/// How long a run stands in the line before it gives up its turn: three ordinary lines fit inside it, and a wait
-/// longer than it means the card is wedged rather than busy.
-pub const QUEUE_WAIT_MS: i64 = 5 * 60_000;
-
 /// How the mouth's refusal begins when the wait ran out and the line was never spoken.
 const NO_TURN: &str = "no turn:";
 

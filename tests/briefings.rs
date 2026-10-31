@@ -1,6 +1,7 @@
 //! The briefings (`docs/boundary-api.md`, 「Briefings」): a line spoken for a room is taken in at once and kept with
 //! its room and its line, its end is told on the event stream, a summary's line is named after it, a full reading
-//! names its line and keeps it, and the page narrows by room, line and kind.
+//! names its line and keeps it, and the page narrows by room, line and kind; and the synthesis a line is spoken as
+//! waits for its card, saying why, and gives it back as it ends.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -80,8 +81,10 @@ impl Drop for Scratch {
   }
 }
 
-/// The engine's routes on the scratch store, with one voice and no voice node, so every line fails to be spoken.
-async fn engine(scratch: &Scratch) -> axum::Router {
+/// The engine's routes on the scratch store, with one voice whose files stand nowhere a node holds, so every line
+/// in it fails to be spoken, and one, `voice-b`, under the voices root, whose lines ask the master `master` names.
+async fn engine(scratch: &Scratch, master: Option<std::net::SocketAddr>) -> axum::Router {
+  let master = master.map_or_else(|| "127.0.0.1:9".to_owned(), |at| at.to_string());
   let settings_path = scratch.root.join("env").join("voice.toml");
   let settings = format!(
     r#"listen = "127.0.0.1:0"
@@ -92,6 +95,9 @@ data_root = "{}"
 
 [units.node]
 address = "http://127.0.0.1:9"
+
+[units.arbiter]
+address = "http://{master}"
 
 [units.web]
 address = "http://127.0.0.1:9"
@@ -113,11 +119,23 @@ address = "http://127.0.0.1:9"
   .await
   .expect("the voice is written");
 
+  let voices = settings.voices_folder();
+
+  db.execute_unprepared(&format!(
+    r#"INSERT INTO "voices" ("name", "checkpoint", "reference", "cfg", "steps", "set_at")
+       VALUES ('voice-b', '{}', '{}', 2.0, 10, 0)"#,
+    voices.join("voice-b").display(),
+    voices.join("reference/voice-b.wav").display()
+  ))
+  .await
+  .expect("the voice under the root is written");
+
   let units = Units::new(&settings).expect("the units are named");
   let context = Context {
     settings,
     db: db.clone(),
     units,
+    waits: Default::default(),
   };
 
   router(Served {
@@ -162,7 +180,7 @@ async fn ended(engine: &axum::Router, id: i64) -> Value {
 #[tokio::test]
 async fn a_summary_is_taken_in_at_once_its_end_is_told_and_its_line_is_named_after_it() {
   let scratch = Scratch::new().await;
-  let engine = engine(&scratch).await;
+  let engine = engine(&scratch, None).await;
   let (status, briefing) = call(
     &engine,
     "POST",
@@ -214,7 +232,7 @@ async fn a_summary_is_taken_in_at_once_its_end_is_told_and_its_line_is_named_aft
 #[tokio::test]
 async fn a_full_reading_names_its_line_keeps_it_and_the_page_narrows_to_it() {
   let scratch = Scratch::new().await;
-  let engine = engine(&scratch).await;
+  let engine = engine(&scratch, None).await;
   let asked = |message: Value| {
     json!({ "voiceName": "voice-a", "text": "The whole line, read out.", "chatId": ROOM, "messageId": message,
       "kind": "full" })
@@ -278,4 +296,105 @@ async fn a_full_reading_names_its_line_keeps_it_and_the_page_narrows_to_it() {
   .await;
 
   assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+/// A stand-in master: a demand waits, its reads saying why, until the test lets it be granted on a node nothing
+/// reaches; every demand given back is kept.
+#[derive(Default)]
+struct Line {
+  open: std::sync::atomic::AtomicBool,
+  given: std::sync::Mutex<Vec<i64>>,
+}
+
+const IN_USE: &str = "Every card of voice is in use: song.";
+
+fn line_demand(line: &Line) -> Value {
+  if line.open.load(Ordering::SeqCst) {
+    json!({ "id": 9, "state": "granted", "taken": null, "reason": null,
+      "cards": [{ "nodeName": "node-a" }] })
+  } else {
+    json!({ "id": 9, "state": "waiting", "taken": null, "cards": [],
+      "reason": { "code": "in-use", "text": IN_USE } })
+  }
+}
+
+async fn line_master(line: Arc<Line>) -> std::net::SocketAddr {
+  use axum::extract::{Path, State};
+  use axum::routing::{get, post};
+
+  let router = axum::Router::new()
+    .route(
+      "/demands",
+      post(|State(line): State<Arc<Line>>| async move {
+        (StatusCode::ACCEPTED, axum::Json(line_demand(&line)))
+      }),
+    )
+    .route(
+      "/demands/{id}",
+      get(|State(line): State<Arc<Line>>| async move {
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        axum::Json(line_demand(&line))
+      })
+      .delete(|State(line): State<Arc<Line>>, Path(id): Path<i64>| async move {
+        line.given.lock().unwrap().push(id);
+
+        StatusCode::NO_CONTENT
+      }),
+    )
+    .with_state(line);
+  let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("a port");
+  let at = listener.local_addr().expect("its address");
+
+  tokio::spawn(async move { axum::serve(listener, router).await });
+
+  at
+}
+
+#[tokio::test]
+async fn a_synthesis_waits_for_its_card_says_why_and_gives_it_back_as_it_ends() {
+  let scratch = Scratch::new().await;
+  let line = Arc::new(Line::default());
+  let engine = engine(&scratch, Some(line_master(Arc::clone(&line)).await)).await;
+  let (status, made) = call(
+    &engine,
+    "POST",
+    "/syntheses",
+    Some(json!({ "voiceName": "voice-b", "text": "A short line." })),
+  )
+  .await;
+
+  assert_eq!(status, StatusCode::CREATED, "{made}");
+
+  let id = made["id"].as_i64().expect("an id");
+  let mut read = Value::Null;
+
+  for _ in 0..400 {
+    (_, read) = call(&engine, "GET", &format!("/syntheses/{id}"), None).await;
+
+    if read["waitingOn"].is_string() {
+      break;
+    }
+
+    tokio::time::sleep(Duration::from_millis(25)).await;
+  }
+
+  assert_eq!(read["state"], "waiting", "{read}");
+  assert_eq!(read["waitingOn"], IN_USE, "{read}");
+
+  line.open.store(true, Ordering::SeqCst);
+
+  for _ in 0..400 {
+    (_, read) = call(&engine, "GET", &format!("/syntheses/{id}"), None).await;
+
+    if read["state"] == "failed" {
+      break;
+    }
+
+    tokio::time::sleep(Duration::from_millis(25)).await;
+  }
+
+  assert_eq!(read["state"], "failed", "the node granted is out of reach: {read}");
+  assert_eq!(read["waitingOn"], Value::Null);
+  assert_eq!(*line.given.lock().unwrap(), [9], "the card is given back as the line ends");
 }

@@ -30,6 +30,7 @@ use crate::script::reading::Language;
 use crate::script::spoken;
 use crate::speech::{node, synth};
 use crate::store::{self, StoreError, voices};
+use crate::units::arbiter::Ask;
 use crate::wire::{
   Briefing, BriefingKind, BriefingLine, BriefingQuery, Encoding, Event, EventQuery, Health, NewBriefing,
   NewEncoding, NewScriptReading, NewSynthesis, NewTranscription, Page, PageQuery, ScriptReading, Synthesis,
@@ -342,6 +343,7 @@ async fn create_synthesis(
     text: asked.text.clone(),
     emotion: asked.emotion.clone(),
     state: SynthesisState::Waiting,
+    waiting_on: None,
     duration_ms: None,
     created_at: at,
   };
@@ -382,27 +384,61 @@ fn known_emotion(emotion: Option<&str>) -> Result<(), Refused> {
   }
 }
 
-// One synthesis spoken on a free voice node, its state and the event of its end told as it comes.
+// One synthesis spoken on the card the arbiter's master grants it, its state, what it waits on and the event of its
+// end told as they come.
 async fn speak(context: Arc<Context>, events: Events, id: i64, voice: voices::VoiceRow, text: String) {
-  let _ = store::syntheses::set_state(&context.db, id, SynthesisState::Speaking, None).await;
-
   let out = sound_path(&context, id);
   if let Some(folder) = out.parent().map(std::path::Path::to_path_buf) {
     let _ = tokio::fs::create_dir_all(folder).await;
   }
 
+  let ask = Ask {
+    service_name: node::SERVICE.to_owned(),
+    count: 1,
+    work_key: Some(format!("voice:synthesis:{id}")),
+    reference: Some(format!("voice synthesis {id} in {}", voice.name)),
+  };
   let speech = node::Speech {
-    db: &context.db,
     units: &context.units,
     settings: &context.settings,
     voice: &voice,
     text: &text,
     out: &out,
     cap_ms: POLICY.run_cap_ms,
-    wait_ms: synth::QUEUE_WAIT_MS,
-    node_wait_ms: None,
+    ask: &ask,
   };
-  let duration_ms = match node::speak_through_free_node(speech, || true).await {
+  // Each stage is handed over as it changes and written here, since the speaking cannot wait on the store.
+  let (said, mut heard) = tokio::sync::mpsc::unbounded_channel::<Option<String>>();
+  let mut told = move |stage: node::Stage<'_>| {
+    let _ = said.send(match stage {
+      node::Stage::Waiting(why) => Some(why.to_owned()),
+      node::Stage::Speaking => None,
+    });
+  };
+  let speaking = node::speak_on_card(speech, &mut told);
+  let mut state = SynthesisState::Waiting;
+
+  tokio::pin!(speaking);
+
+  let ended = loop {
+    tokio::select! {
+      ended = &mut speaking => break ended,
+      Some(waiting_on) = heard.recv() => {
+        let now = if waiting_on.is_some() { SynthesisState::Waiting } else { SynthesisState::Speaking };
+
+        context.waits.set(id, waiting_on.as_deref());
+
+        if now != state {
+          let _ = store::syntheses::set_state(&context.db, id, now, None).await;
+          state = now;
+        }
+      }
+    }
+  };
+
+  context.waits.set(id, None);
+
+  let duration_ms = match ended {
     Ok(heard) => {
       let seconds = tokio::fs::read(&out)
         .await
@@ -450,8 +486,11 @@ async fn read_synthesis(
   let row = store::syntheses::get(&served.context.db, id)
     .await?
     .ok_or_else(|| Refused::not_found(format!("there is no synthesis {id}")))?;
+  let mut synthesis = row.synthesis();
 
-  Ok(Json(row.synthesis()))
+  synthesis.waiting_on = served.context.waits.of(id);
+
+  Ok(Json(synthesis))
 }
 
 /// `GET /syntheses/{synthesisId}/sound`.

@@ -23,6 +23,8 @@ pub struct Unit {
 pub struct Units {
   /// How each voice node is reached, and its login.
   pub node: Unit,
+  /// The arbiter's master, which grants every synthesis the card it is spoken on.
+  pub arbiter: Unit,
   /// The account service the script studio signs a person in against.
   pub web: Unit,
 }
@@ -145,6 +147,11 @@ impl Settings {
   /// The locks the voice takes: the synthesis on this machine's card, and one per voice node.
   pub fn locks_folder(&self) -> PathBuf {
     self.voice_folder().join("locks")
+  }
+
+  /// The ledger of the demands of the arbiter's master the service holds, one file each.
+  pub fn demands_folder(&self) -> PathBuf {
+    self.voice_folder().join("demands")
   }
 
   /// The token the voice servers on the voice nodes check.

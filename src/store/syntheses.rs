@@ -26,6 +26,7 @@ impl Row {
       text: self.text.clone(),
       emotion: self.emotion.clone(),
       state: self.state,
+      waiting_on: None,
       duration_ms: self.duration_ms,
       created_at: self.created_at,
     }

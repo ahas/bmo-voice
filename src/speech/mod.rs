@@ -1,6 +1,8 @@
-//! Where a line becomes sound (`docs/voice-plan.md`): this machine's card behind its one line, the voice servers
-//! on the voice nodes reached through each node's own shell, and the clock a speaking run is held to.
+//! Where a line becomes sound (`docs/voice-plan.md`): this machine's card behind its one line, the card of a voice
+//! node the arbiter's master grants a line, the voice servers on the voice nodes reached through each node's own
+//! shell, and the clock a speaking run is held to.
 
+pub mod card;
 pub mod node;
 pub mod synth;
 

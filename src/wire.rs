@@ -92,7 +92,7 @@ pub struct Voice {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum SynthesisState {
-  /// Taken in, not yet speaking.
+  /// Taken in, its card not yet granted.
   Waiting,
   /// One voice server is speaking it.
   Speaking,
@@ -134,6 +134,9 @@ pub struct Synthesis {
   pub text: String,
   pub emotion: Option<String>,
   pub state: SynthesisState,
+  /// What a waiting synthesis waits on for its card, an English sentence; null once its card is granted.
+  #[serde(default)]
+  pub waiting_on: Option<String>,
   /// How long its sound runs; null until it is done.
   pub duration_ms: Option<i64>,
   /// Epoch milliseconds.

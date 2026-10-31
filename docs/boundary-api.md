@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.5.
+Fixed at 0.1.0-rev.6.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -85,12 +85,16 @@ asking `Accept: application/json`.
 | `GET /syntheses/{synthesisId}` | | one synthesis |
 | `GET /syntheses/{synthesisId}/sound` | | the sound, OGG/Opus, with `Range` |
 
-- **A synthesis:** `id`, `voiceName`, `text`, `emotion`, `state`, `durationMs` (null until done) and
-  `createdAt`. Its `state` is `waiting` (taken in), `speaking` (a voice server is speaking it), `done` (its
-  sound stands) or `failed`.
-- **A synthesis is answered at once;** the speaking runs apart on one free voice server of the voice nodes,
-  and the caller reads the member again until its state is `done` or `failed`. `done` carries
-  `durationMs`, the sound's length read from its Ogg pages.
+- **A synthesis:** `id`, `voiceName`, `text`, `emotion`, `state`, `waitingOn`, `durationMs` (null until
+  done) and `createdAt`. Its `state` is `waiting` (taken in, its card not yet granted), `speaking` (a voice
+  server is speaking it), `done` (its sound stands) or `failed`.
+- **A synthesis is answered at once;** the speaking runs apart on the voice server of the card the arbiter's
+  master grants it (「The voice servers and the card」), and the caller reads the member again until its
+  state is `done` or `failed`. `done` carries `durationMs`, the sound's length read from its Ogg pages.
+- **A synthesis waits for its card however long the grant takes:** nothing ends the wait and nothing refuses
+  it as busy. While it waits, `waitingOn` is an English sentence saying what on: the master's reason for its
+  card (every card in use, a card held by a claim or a lower tier, the service starting), its place in the
+  line, or the master not reached. It is null once the card is granted, and on a synthesis that ended.
 - **`text` must hold something to say.** A voice no list holds is answered 404 `not-found`; an `emotion`
   outside the voice's is answered 422 `unknown-emotion`. `style` and `seed` are laid over the voice's row
   for this one synthesis.
@@ -118,9 +122,10 @@ asking `Accept: application/json`.
   that line, which a listener plays only when asked; it names its line, and one that names none is answered 400
   `bad-request`.
 - **It is spoken as a synthesis is.** `POST /briefings` answers at once, state `waiting`; the engine reads the
-  words into a script by its own reading rules (「Script readings」) and speaks the script in the named voice on a
-  free voice server, and `text` is the script spoken. Its `state` and `durationMs` are its synthesis's, and
-  `synthesisId` names it. `text` must hold something to say; a voice no list holds is 404 `not-found`, and an
+  words into a script by its own reading rules (「Script readings」) and speaks the script in the named voice as a
+  synthesis, on the voice server of the card granted it, and `text` is the script spoken. Its `state` and
+  `durationMs` are its synthesis's, and `synthesisId` names it, whose `waitingOn` says what a waiting one waits
+  on. `text` must hold something to say; a voice no list holds is 404 `not-found`, and an
   emotion outside the policy's is 422 `unknown-emotion`.
 - **Whether it plays by itself is the caller's to say** in `plays`, true where absent, and the engine keeps what
   it was told. A listener plays by itself only a `summary` whose `plays` holds, once `briefing.ended` says it is
@@ -195,11 +200,23 @@ It asks no model, takes no card turn and keeps nothing. A language other than `k
   `bmo-voice.service`, listening on the node's loopback and taking a line on the node's own shell
   (`docs/voice-plan.md`, 「The voice nodes」).
 - **A voice server takes its turn on the node's card through the card arbiter's own turn client,** installed
-  on the node by the arbiter, and holds the card lock while it speaks. The engine reaches no arbiter route
-  itself; the card turn is the node's.
-- **Which node speaks a line is read at every synthesis** from the voice node list, and how each node is
-  reached is the node service's answer for it. A node out of reach is never quietly replaced by this
-  machine's card.
+  on the node by the arbiter, and holds the card lock while it speaks.
+- **Which node speaks a line is the arbiter's master's to say.** Every synthesis asks the master a demand for
+  one card of the service `voice`, naming no node, with the work key `voice:synthesis:<synthesisId>` and a
+  reference naming the synthesis and its voice. The line is spoken on the node of the card granted, reached as
+  the node service's answer for that node says, and the demand is given back once the line ends, spoken or
+  failed.
+- **The wait has no end but the grant.** While the master holds the demand in line, or cannot be reached, the
+  synthesis stays `waiting`, its `waitingOn` saying why. A master that no longer holds the demand, one
+  restarted, is asked a new one. `voice` placed on no node (`no-place`) and any other refusal of the master's
+  fail the synthesis at once.
+- **A card held from under the line:** where the node's server answers that other work held its card past its
+  own wait (503), the demand is read again until its card is granted again, and the line is asked of that
+  card's node once more; nothing bounds that either.
+- **Every demand the engine holds stands in its ledger** (`docs/store.md`, 「The folder」) from its asking until
+  it is given back, and each one a process left there is given back as the next process starts.
+- **A node out of reach is never quietly replaced by this machine's card:** the synthesis fails, naming the node
+  and what it met.
 
 ## What the engine calls
 
@@ -212,6 +229,21 @@ It asks no model, takes no card turn and keeps nothing. A language other than `k
 
 A refusal of the node service is read as its own answer, `answered` false and a `refusal` carrying `code` and
 `message`, and carried as the engine's failure.
+
+### bmo-arbiter
+
+The arbiter's master (its `docs/api.md`, 「Demands」).
+
+| Call | Route | Used for |
+|---|---|---|
+| a demand | `POST /demands` with `serviceName` `voice`, `count` 1, `workKey` and `ref` | a card of `voice` for one synthesis: `201` granted, `202` waiting, `422` `no-place` where `voice` is placed on no node |
+| the demand read | `GET /demands/{demandId}` with `waitMs` 30,000 | the demand as it stands, the answer held open while it waits; `404` where the master holds it no more |
+| the demand given back | `DELETE /demands/{demandId}` | `204`, or `404` where it is given back already |
+
+- **A granted card** is the first of `cards` on a demand `granted` with nothing `taken`; its `nodeName` is the
+  node that speaks the line.
+- **The master not reached,** an answer of 502 or 503 and an answer that does not arrive are all asked again a
+  second later, however often.
 
 ### bmo-web
 
@@ -249,8 +281,8 @@ A refusal of the node service is read as its own answer, `answered` false and a 
 - **What it answers:** every page of `GET /voice-servers`, called through the engine's own client, as one line a
   voice server in the node list's order, with its node's name, its `state` and the voices it holds loaded; then a
   line saying where a line is spoken now (`docs/voice-plan.md`, 「Which road speaks a line」): on the voice server
-  of one free listed node where any is listed, and, where none is, nowhere, since a synthesis fails and nothing
-  speaks on the operations machine's card.
+  of the listed node the arbiter's master grants a card of `voice`, where any is listed, and, where none is,
+  nowhere, since a synthesis fails and nothing speaks on the operations machine's card.
 - **Its settings** are the file `BMO_VOICE_SETTINGS` names, else `settings.toml` under the link of the voice's
   deploy tree, `~/.local/share/bmo-voice/deploy`: the tool host runs the registry's copy of the placed folder,
   which stands in no release. It calls the settings' address with the settings' token.
@@ -278,7 +310,7 @@ declares the nouns `listen` and `brief` when asked `nouns`, so the platform hand
 ## The policy
 
 `policy/voice.toml` holds the engine's own policy values, read once at start: `run_cap_ms`, how long one
-synthesis may take, and `emotions`, the emotions a voice may be asked to speak with. No route serves them;
+line may take to speak once its card is granted, and `emotions`, the emotions a voice may be asked to speak with. No route serves them;
 the voices list them, and a synthesis outside them is refused.
 
 ## Settings
@@ -296,6 +328,7 @@ tool」).
 | `data_root` | the runtime data root; everything the engine keeps stands under its `voice/` folder |
 | `synth` | optional, the folder of the engine's Python side, `synth/` where it is not in the release |
 | `[units.node]` | `address` and `token_file?` of the node service |
+| `[units.arbiter]` | `address` and `token_file?` of the arbiter's master, which grants every synthesis its card |
 | `[units.web]` | `address` and `token_file?` of the account service the script studio signs in against |
 | `[studio]` | optional, the script studio's deployment values (`docs/script-studio.md`, 「Access and service」) |
 

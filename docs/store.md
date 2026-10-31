@@ -147,7 +147,8 @@ Under the data root's `voice/`:
 | `voices/` | the installed voices, a folder per checkpoint, and `reference/` (`weights/checkpoints.toml`) |
 | `syntheses/` | a synthesis's sound, one `<id>.ogg` each, OGG/Opus |
 | `encodings/` | an encoding's sound, one `<id>.ogg` each, OGG/Opus |
-| `locks/` | `voice-node-<node>.lock`, one per voice node, taken by the run that speaks through it |
+| `locks/` | `voice-node-<node>.lock`, one per voice node, taken by a node script that speaks through it |
+| `demands/` | the ledger of the demands of the arbiter's master the service holds, one empty file each, named by the demand's id: written as it is asked, removed as it is given back, and every one left given back as the service starts |
 | `voice.token` | the bearer token every voice server checks, `0600` |
 | `studio/` | the script studio's data root where the settings name no other (`docs/script-studio.md`) |
 | `voice-lines/` | the training lines' files (`docs/voice-lines.md`) |

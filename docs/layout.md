@@ -62,7 +62,7 @@ stands, and no other.
   standing in no release, reads it through the deploy tree's link.
 - **What it holds** is `docs/boundary-api.md`, 「Settings」: where the service listens and is reached, its token
   file, the database, the data root, the folder of its Python side, and the address and token file of each
-  unit it calls: the node service and the account service the studio signs in against.
+  unit it calls: the node service, the arbiter's master and the account service the studio signs in against.
 - **Every token** stands in its own file under the data root's `env/`, never in the settings, a log, a command
   line or an environment variable.
 - **The node and training scripts** read the same file, and the Python under `synth/` is handed what it needs on
