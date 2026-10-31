@@ -227,8 +227,7 @@ It asks no model, takes no card turn and keeps nothing. A language other than `k
 
 | Call | Route | Used for |
 |---|---|---|
-| a node's target | `GET /nodes/{name}/target` | how a voice node is reached: `kind`, then an ssh node's `host`, `port`, `user`, `keyPath?` and `shell?`, or a hub node's `hubAddress`, `hubTokenFile` and `agentName` |
-| a node's login | `POST /nodes/login` with `node` | `ssh`, the arguments that open a batch SSH login to an ssh node, or null |
+| a node's target | `GET /nodes/{name}/target` | how a voice node is reached: `kind`, then an ssh node's `host`, `port`, `user`, `keyPath?`, `shell?` and `sshArgs`, the arguments that open a batch SSH login ahead of the command, or a hub node's `hubAddress`, `hubTokenFile` and `agentName` |
 
 A refusal of the node service is read as its own answer, `answered` false and a `refusal` carrying `code` and
 `message`, and carried as the engine's failure.

@@ -7,7 +7,7 @@ import { settings, unitToken } from "./settings";
 // An ssh node by its host, port, account, key and shell, or a hub node through its hub by the hub's address, its
 // token file and the agent the node attaches as; with the services its role reserves it for, joined by `+`.
 export type NodeTarget = (
-  | { kind: "ssh"; host: string; port: number; user: string; keyPath?: string | null; shell?: string | null }
+  | { kind: "ssh"; host: string; port: number; user: string; keyPath?: string | null; shell?: string | null; sshArgs?: string[] | null }
   | { kind: "hub"; hubAddress: string; hubTokenFile: string; agentName: string }
 ) & { role?: string | null };
 
@@ -62,9 +62,12 @@ export async function nodeTarget(name: string): Promise<NodeTarget> {
   return await ask<NodeTarget>("GET", `/nodes/${encodeURIComponent(name)}/target`);
 }
 
-// The arguments that open a batch SSH login to a node, ahead of the command; null where it has no SSH route.
+// The arguments that open a batch SSH login to a node, ahead of the command, as the node's target lays them out;
+// null where the node has no SSH route (a hub node).
 export async function nodeLogin(name: string): Promise<string[] | null> {
-  return (await ask<{ ssh?: string[] | null }>("POST", "/nodes/login", { node: name })).ssh ?? null;
+  const target = await nodeTarget(name);
+
+  return target.kind === "ssh" ? (target.sshArgs ?? null) : null;
 }
 
 // Why a node's role keeps a service off it, or null where the node carries it: a node with no role carries every
