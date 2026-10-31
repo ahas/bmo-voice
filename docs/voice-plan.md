@@ -221,11 +221,15 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 ### Where they run
 
-- **On every node of the voice node list,** `voice_nodes` (`docs/store.md`), as the user unit `bmo-voice.service`
-  with the same voices directory, so any of them speaks a line exactly as another would. Lingering is on for the
-  account, so the unit starts with the machine.
-- **The list is the card arbiter's to change,** through the voice's adapter: `card-master place voice --to <node>`
-  and `card-master remove voice --from <node>`. A node taken off keeps its server; putting it back is all it takes to
+- **On every node of the voice node list,** `voice_nodes` (`docs/store.md`), as the user unit
+  `bmo-voice-server.service` with the same voices directory, so any of them speaks a line exactly as another would.
+  Lingering is on for the account, so the unit starts with the machine. The unit is named apart from the service's
+  own `bmo-voice.service`, so the operations machine may be a voice node as well.
+- **`voice` stands on as many nodes as its placement names:** its declaration, `weights/voice.card.toml`, spreads it
+  over several (`spread` `many`), each node reserved for it and for whatever stands alone at its priority. The nodes
+  themselves are named only in the arbiter's placement, never here.
+- **The list is the card arbiter's to change,** through the voice's adapter: `bmo-arbiter place voice --to <node>`
+  and `bmo-arbiter remove voice --from <node>`. A node taken off keeps its server; putting it back is all it takes to
   speak there again. An empty list places `voice` nowhere, and a synthesis fails.
 - **A node reserved for another service is never a voice node:** the arbiter refuses it, and named on the list all
   the same it is out of reach.

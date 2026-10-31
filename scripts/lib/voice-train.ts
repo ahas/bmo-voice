@@ -16,7 +16,7 @@ import type { NodeShell } from "./node-shell";
 // Where the experiments stand under the account's home on every node.
 export const TRAIN_PLACE = "bmo-voice-train";
 // The voice server's unit; every other active `bmo-voice-*` unit on a node is a step of training.
-const SERVER_UNIT = "bmo-voice.service";
+const SERVER_UNIT = "bmo-voice-server.service";
 // The card arbiter's installation under the account's home, its turn client and its environment file, and the port
 // its hold answers on where that file names none.
 const ARBITER_PLACE = "bmo-card";

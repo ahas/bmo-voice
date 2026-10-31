@@ -59,7 +59,7 @@ const serverFile = join(releaseRoot, "synth/voice-vox.py");
 const requirementsFile = join(releaseRoot, "synth/voice-node-requirements.txt");
 const usage = "usage: bun scripts/voice-node.ts nodes | adapter <verb> --node <name> --placed <name,...> | setup|push|sync|health|speak [--node <name>]";
 
-const unit = "bmo-voice.service";
+const unit = "bmo-voice-server.service";
 // How long a freshly restarted server may take to answer. It loads no model until it is asked to speak, so this is
 // the interpreter starting and nothing more.
 const upWaitMs = 30_000;

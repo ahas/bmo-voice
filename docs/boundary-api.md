@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.6.
+Fixed at 0.1.0-rev.7.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -197,10 +197,13 @@ It asks no model, takes no card turn and keeps nothing. A language other than `k
 ## The voice servers and the card
 
 - **Each voice node runs `synth/voice-vox.py` on the voice environment** as the user unit
-  `bmo-voice.service`, listening on the node's loopback and taking a line on the node's own shell
+  `bmo-voice-server.service`, listening on the node's loopback and taking a line on the node's own shell
   (`docs/voice-plan.md`, 「The voice nodes」).
 - **A voice server takes its turn on the node's card through the card arbiter's own turn client,** installed
   on the node by the arbiter, and holds the card lock while it speaks.
+- **The card declaration** is `weights/voice.card.toml`: the service `voice`, standing on every node its placement
+  names (`spread` `many`), yielding the card by its turn, its adapter the node scripts' own. The master reads it from
+  this repository's deploy tree (`docs/deploy.md`); no node is named in it.
 - **Which node speaks a line is the arbiter's master's to say.** Every synthesis asks the master a demand for
   one card of the service `voice`, naming no node, with the work key `voice:synthesis:<synthesisId>` and a
   reference naming the synthesis and its voice. The line is spoken on the node of the card granted, reached as

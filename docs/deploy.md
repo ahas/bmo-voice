@@ -22,6 +22,10 @@ How a commit of this repository goes live. The testbed deploys it from the repos
   line」) and the studio's API answers 401 without a session and its screen HTML.
 - **After health:** `scripts/voice-node.ts sync` brings every voice node up to date, pushing only where a node's stamp
   differs (`docs/voice-plan.md`, 「Building and updating them」); a failure is a warning, never a rollback.
+- **The card declaration:** the deploy tree is one of the arbiter's master's declaration roots, so the master
+  reads `weights/voice.card.toml` from the release the tree's link names now and runs its adapter, the node scripts'
+  own, from the release's `weights/`, on the release's settings. The deployment's arbiter settings name the tree
+  among the roots; nothing here writes them.
 - **A deployment's own voice and names** are set once by hand, never carried by the repository: the first trained
   voice with `scripts/voice-install.ts --add` (`docs/voice-plan.md`, 「The voices」), and the readings of the names
   the deployment's agents and owner go by with `scripts/voice-names.ts --set`, beside the generic seed names a new

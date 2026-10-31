@@ -80,7 +80,7 @@ stands, and no other.
 - **The operations machine** runs the service, the command, the script studio's server and the node and
   training scripts, from the testbed's deploy tree (`docs/deploy.md`).
 - **Each voice node** runs a voice server, `synth/voice-vox.py` on the voice environment, as the user unit
-  `bmo-voice.service` the node scripts write there (`docs/voice-plan.md`, 「The voice nodes」).
+  `bmo-voice-server.service` the node scripts write there (`docs/voice-plan.md`, 「The voice nodes」).
 - **A training node** runs a training stage as a transient user unit the training scripts start there
   (`docs/voice-plan.md`, 「Where the voice is trained」).
 

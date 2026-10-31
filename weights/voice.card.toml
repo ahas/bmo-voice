@@ -1,9 +1,10 @@
-# The voice server as the card master places it: one node, reserved for it and for whatever stands alone at its
-# priority (the arbiter's docs/placement.md, 「A service declares itself」; docs/voice-plan.md, 「The voice
-# nodes」). The adapter runs from this folder and is the node scripts' own (docs/layout.md).
+# The voice server as the card master places it: on every node its placement names, each reserved for it and for
+# whatever stands alone at its priority (the arbiter's docs/placement.md, 「A service declares itself」;
+# docs/voice-plan.md, 「The voice nodes」). The adapter runs from this folder and is the node scripts' own
+# (docs/layout.md).
 service = "voice"
 card_mib = 9000
 priority = 70
-spread = "one"
+spread = "many"
 alone = true
 adapter = ["bun", "../scripts/voice-node.ts", "adapter"]
