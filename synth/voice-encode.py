@@ -2,11 +2,11 @@
 """Writes a spoken wav as OGG/Opus, the form a Telegram voice message takes.
 
 Every spoken sound ends here, whichever machine spoke it: the trained voice's mouth
-(synth/voice-vox.py) speaks a wav, on this machine's card or on a voice node's, and this file
+(synth/voice-fish.py) speaks a wav, on this machine's card or on a voice node's, and this file
 encodes it. It loads no model.
 
 It runs on the voice environment's interpreter, a virtualenv outside the repository
-(docs/voice-plan.md, 「One voice environment」), never the machine's own python.
+(docs/voice-plan.md, 「The environments」), never the machine's own python.
 
 libsndfile writes OGG/Opus on its own, so soundfile does the encoding here and the voice needs no
 ffmpeg or sox wherever it is spoken.

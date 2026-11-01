@@ -6,25 +6,37 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 ## The synthesiser
 
-- **VoxCPM2 is the one synthesiser.** Every line is spoken in a trained voice, a LoRA fine-tune of VoxCPM2 on an
-  agent's own recorded lines (「The voices」), at 48 kHz, with its delivery instructed in bracketed natural language.
+- **Fish Audio S2-Pro is the one synthesiser.** Every line is spoken in a trained voice, a LoRA fine-tune of
+  S2-Pro's slow autoregressive model on an agent's own recorded lines (「The voices」), at 48 kHz, with no
+  reference clip: the voice is carried by the adapter alone.
 - **Where no trained voice can speak a line, nothing is said.** There is no other synthesiser to fall back on.
-- **What it costs:** the model needs about 7 GiB of a card, so it speaks on a voice node's card where the voice
-  node list holds any (「The voice nodes」), and one line at a time on the operations machine's card where it holds
-  none.
+- **VoxCPM2 is retired.** Its voices stay under the voices folder as data, known as its by holding no `voice.toml`
+  (「The voices」), and none of them is served: a synthesis or a briefing naming one is refused 422 `retired-voice`
+  (`docs/boundary-api.md`, 「Errors」). The engine a voice must name to be spoken is the policy's `engine`
+  (`policy/voice.toml`).
+- **What it costs:** the server's process peaks at 11,295 MiB while it speaks, about 10.3 GiB of it resident once
+  the model is loaded, so a voice node lends a 12 GB card whole for as long as the model is up; a smaller card
+  does not take it. It speaks slower than real time, about 0.55 seconds of sound for every second of speaking.
+- **What fits it in 12 GB** is the mouth's own way of loading the model (「How the model is loaded」).
+- **The licence:** S2-Pro's weights, and every adapter trained on them, are under the Fish Audio Research
+  License: research and non-commercial use only. A voice spoken for a paying service needs Fish Audio's own
+  agreement first.
 
-## One voice environment
+## The environments
 
-- **One interpreter, outside the repository:** the virtual environment `bmo-voice/.venv` under the account's home,
-  on the operations machine and on each voice node. Everything the voice runs runs on it: VoxCPM2, for the voice
-  server, for a line spoken on the operations machine's card and for training; the OGG/Opus encoder every road
-  ends in; and Whisper, for measuring a voice and checking a prompt before it is installed.
-- **The package list** is `synth/voice-node-requirements.txt`, a full freeze of that environment and the one file
-  read when rebuilding it. It is installed as it stands, without resolving dependencies: a freeze names every
-  package, and the CUDA build of torch comes from its own index.
-- **`BMO_VOICE_PYTHON`, `BMO_VOX_PYTHON` and `BMO_ASR_PYTHON`** name the encoder's, the mouth's and the
-  recogniser's interpreter for a process that runs the tool entry itself, a run by hand or a test; a call through
-  the tool host carries none of its caller's variables, and each runs on the voice environment under the call's
+- **Two interpreters, outside the repository,** each under `bmo-voice/` in the account's home:
+  - **the voice environment,** `bmo-voice/.venv` on the operations machine: the OGG/Opus encoder every road ends
+    in, and Whisper, for the transcriber and for measuring a voice. Its package list is
+    `synth/voice-node-requirements.txt`, a full freeze, installed there as it stands without resolving dependencies,
+    the CUDA build of torch from its own index;
+  - **the engine environment,** `bmo-voice/fish-speech/` on each voice node: a checkout of Fish Audio's
+    `fish-speech` at the commit `synth/engine.toml` pins, and its virtual environment `.venv` inside it, built by
+    uv from the checkout's own lockfile with the CUDA 12.9 extra, the microphone package left out since nothing
+    here records, and the machine's certificate store trusted for the downloads. The checkout is used as it
+    stands: what the voice needs of the model beyond it is the mouth's own code (「How the model is loaded」).
+- **`BMO_VOICE_PYTHON` and `BMO_ASR_PYTHON`** name the encoder's and the recogniser's interpreter, and
+  **`BMO_VOX_PYTHON`** the mouth's, for a process that runs the tool entry itself, a run by hand or a test; a call
+  through the tool host carries none of its caller's variables, and each runs on its environment under the call's
   home.
 - **No interpreter at all** is a failure.
 
@@ -40,7 +52,7 @@ the voice nodes. What a caller does with the sound is the caller's.
   synthesis `failed`; nothing is spoken and the failure is the member's state.
 - **A session kept off the engine's port, the chat agent among them,** reads which nodes are listed and whether
   their servers answer through the hosted tool `voice/servers` (`docs/boundary-api.md`, 「The hosted tool」).
-- **`synth/voice-vox.py`** is the trained voice's mouth, both on the operations machine's card and as the voice
+- **`synth/voice-fish.py`** is the trained voice's mouth, both on a card of the machine it runs on and as the voice
   server.
 - **`synth/voice-encode.py`** is the encoder: it loads no model, takes a wav a mouth spoke and writes it as
   OGG/Opus, with nothing laid over the voice.
@@ -62,9 +74,9 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 - **`synth/tool.toml` declares the voice's entries,** four of the `voice` namespace, each for the system alone:
   never shown to a session, called through the tool host's control socket.
-  - **`voice/mouth`** speaks one line on this machine's card: the words or a file holding them, where the sound
-    goes and where its wav is kept where asked, and the voice row's checkpoint, reference, guidance, steps, seed,
-    delivery, sentence switch and continuation prompts. It stands in the card's line itself, waiting five minutes
+  - **`voice/mouth`** speaks one line on this machine's card, where the engine environment stands: the words or a
+    file holding them, where the sound goes and where its wav is kept where asked, and the voice row's checkpoint,
+    seed, delivery and sentence switch. It stands in the card's line itself, waiting five minutes
     for the lock; a wait that runs out is answered as a turn not had, apart from a synthesiser that failed.
   - **`voice/encoder`** writes a wav as OGG/Opus, in no line, since the card is not touched.
   - **`voice/transcriber`** takes spoken files down in one language, each answered with what was heard, in the
@@ -110,7 +122,8 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 ### Which sentences are English
 
-- **One rule, read by the mouth:** it decides by it which prompt and which language a piece is spoken in.
+- **One rule, read where the script is made:** it decides which stretches a line's names and figures are said in
+  the Korean way. The mouth speaks a line whole, whatever languages it holds; S2-Pro reads both.
 - **A sentence** ends at a full stop, a question or exclamation mark or an ellipsis before a space, and at every
   line break.
 - **Its language:** Korean where it holds a Hangul syllable; English where it holds none and has at least two words
@@ -151,47 +164,66 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 ## The voices
 
-- **A trained voice is a LoRA fine-tune of VoxCPM2** on an agent's recorded lines, spoken with a reference clip, a
-  guidance and step count, a seed, a delivery instruction or none, and a continuation prompt for each language it
-  speaks.
+- **A trained voice is a LoRA fine-tune of S2-Pro** on an agent's recorded lines: an adapter on each attention and
+  feed-forward linear of the slow autoregressive model, the fast one and the codec left as they are. Its folder
+  under the voices folder holds two files:
+  - **`voice.toml`,** which says what the voice is: its engine, the run and step its adapter was trained at, that it
+    speaks with no reference clip, and the temperature and top-p every line of it is sampled with;
+  - **`lora.pt`,** the adapter: its two matrices for each linear it names, and the scale they are added at.
+- **A voice speaks with no reference clip.** Its lines are asked of the model as a bare conversation, the text and
+  nothing more, and the adapter carries the voice; a voice trained that way says so in its `voice.toml`, and the
+  row holds no reference.
 - **The voices table says which one speaks** (`docs/store.md`): one row per voice, at most one current. The current
   voice is the chat agent's where its registration names none.
-- **The instruction is the row's to change:** `scripts/voice-install.ts --style <name> '<words>'`. The mouth knows
-  how VoxCPM2 reads it: in brackets before the first words the model is given, which on from a continuation prompt
-  are the prompt's own words, so an instruction never stands between the prompt and the piece.
-- **The seed is the row's too:** `--seed <name> <n>`. A seed names one delivery of one line; the same line, seed and
-  settings give back the same samples every time. It does not carry a tone from one line to the next.
+- **The instruction is the row's to change:** `scripts/voice-install.ts --style <name> '<words>'`. The mouth puts it
+  in brackets before the words, where S2-Pro reads a tag it is given; it is never spoken aloud.
+- **The seed is the row's too:** `--seed <name> <n>`. A seed names one delivery of one line; every piece of the line
+  is spoken on it, so the same line, seed and settings give back the same samples every time.
 - **Whether a line is spoken a sentence at a time is the row's too:** `--sentences <name> on|off`. On, the line is
-  cut at its sentences, each spoken on the row's seed and prompt with 0.3 seconds of silence between two.
-- **A freshly loaded model speaks one throwaway line first,** since its first line does not follow its seed.
-- **How a piece ends and meets the next.** A piece is what one call to the model speaks. Nothing is trimmed off it;
-  the model's stop is held for one step past its vote, and both edges are faded over 10 ms on a raised-cosine curve.
-- **A continuation prompt** is a clip of the voice speaking and the words it says, per language, in the row; the clip
-  stands in the voice's own directory under a name made of its content, `prompt-<digest>.wav` or
-  `prompt-en-<digest>.wav`, the digest the first twelve hex digits of its SHA-256, so a node's copy can never pair
-  new words with an old clip. A line is spoken as its stretches, each on from its own language's prompt where the
-  voice has one; a clip without its words, words without their clip or a clip that finds no file is refused before
-  any model loads.
-- **Installing a prompt checks it first** (「How a prompt is checked」): `--prompt <name> <clip.wav> '<words>'` and
-  `--prompt-en`, `none` in place of the clip to empty one, `--dry-run` to check and write nothing.
-- **A trained checkpoint joins by name:** `--add <name> --checkpoint <dir> --reference <clip.wav>` copies its two
-  weight files and the clip it is conditioned on and adds a row, the current one where the table held none and not
-  current otherwise. Listed with no flag, the script shows every voice and marks the current one. **Switching is
-  one command:** `--use <name>` makes that row the one current.
+  cut at its sentences, each spoken on the row's seed with 0.3 seconds of silence between two; off, in passes of
+  whole sentences (「What a long line takes of the card」).
+- **How a piece ends and meets the next.** A piece is what one call to the model speaks. It ends where the model
+  closes its turn; both edges are faded over 10 ms on a raised-cosine curve.
+- **No served voice takes a continuation prompt.** `--prompt` and `--prompt-en` are refused; the prompt columns
+  stand only on the retired VoxCPM2 rows.
+- **A trained adapter joins by name:** `--add <name> --checkpoint <dir>` copies its folder's `voice.toml` and
+  `lora.pt` under the voices folder and adds a row, the current one where the table held none and not current
+  otherwise. A folder whose `voice.toml` names another engine than the policy's is refused. Listed with no flag,
+  the script shows every voice, marks the current one and says which are retired. **Switching is one command:**
+  `--use <name>` makes that row the one current, and a retired row is refused.
+
+### How the model is loaded
+
+- **On the first line,** not at start, from the base weights on the node (「Where the weights live」), in bf16.
+- **The adapter is folded into the weights on the host,** before anything goes on the card: each linear it names
+  gets its two matrices' product at the adapter's scale added to its weight, in fp32, written back in bf16. A line
+  in another voice loads the base again.
+- **The context is 3,072 tokens:** 2,048 of them are what one piece may generate, about 95 seconds of sound, and
+  the 1,024 left take its prompt, which with no reference clip is the text and a few markers.
+- **The codec's attention masks are made at each of its transformers' own block length,** not the 32,768 its code
+  builds them at, which would take 4 GiB of the card for lengths no piece reaches.
+- **The codec is cast to bf16 on the host and put on the card once,** so the card never holds a float32 copy beside
+  it.
+- **Nothing is compiled.**
 
 ## Where the weights live
 
-- **Under the data root's `voice/voices/`** (`weights/checkpoints.toml`), never in an experiment's directory, which
-  another job may prune; the data root is outside every checkout and carried by the deployment's backup.
-- **Only what speaking needs is copied:** `lora_config.json` and `lora_weights.safetensors` per checkpoint, the clip
-  of each continuation prompt, and the reference clips under `reference/`. Optimiser state stays where it was made.
-- **The base model** is the Hugging Face snapshot each checkpoint's config names, in the account's own Hugging Face
-  cache on whichever machine speaks; a node whose home differs finds the same repository and revision in its own.
+- **The voices stand under the data root's `voice/voices/`** (`weights/checkpoints.toml`), never in an experiment's
+  directory, which another job may prune; the data root is outside every checkout and carried by the deployment's
+  backup. Only what speaking needs is copied: a voice's `voice.toml` and `lora.pt`. The retired VoxCPM2 voices keep
+  what they were installed with.
+- **The base weights** are `fishaudio/s2-pro` at the revision `synth/engine.toml` pins, each of its files there with
+  its size and SHA-256: the model's two shards and their index, the codec, the configuration and the tokenizer's
+  files. The operations machine holds them in its Hugging Face cache, as that revision's snapshot; the repository is
+  gated, so the snapshot is fetched there once with the owner's own Hugging Face sign-in, or copied from a machine
+  that holds it.
+- **On a voice node** they stand under `bmo-voice/s2-pro/` in the account's home, on the disk the home is on and
+  never another; `setup` carries each file only where the node's copy is missing or its digest differs, and checks
+  every copy it made by its digest.
 
 ## Where the voice is trained
 
-- **On the nodes an experiment's pipeline names,** once `scripts/voice-node.ts setup --node <name>` has built the
-  voice environment there and fetched the base model. An experiment stands on its home, the node named with `--home`,
+- **On the nodes an experiment's pipeline names,** in the environment the experiment brings with it. An experiment stands on its home, the node named with `--home`,
   under `bmo-voice-train/` in the account's home: the training code a run imports and `experiments/<run>/`.
 - **The copy under the script studio's data root is the record,** `experiments/<run>/` there, and the one place an
   experiment's scripts are written; what a run executes is carried out to the node it runs on.
@@ -221,8 +253,6 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **The step runs apart,** as the transient user unit `bmo-voice-train-<experiment>-<step>`, its output in
   `steps/<step>.log` and its exit in `steps/<step>.code`; what `--bring` names comes back once it ends, and every step
   leaves a line in the record's `steps.log`.
-- **A run is not compiled,** and checkpointed decoder layers are left off on a card of its own: compiling cost
-  quality, and checkpointing is only for fitting beside a loaded voice server.
 
 ## The voice nodes
 
@@ -242,8 +272,10 @@ the voice nodes. What a caller does with the sound is the caller's.
   the same it is out of reach.
 - **Port 7432 on each node's loopback, and nowhere else.** Every call reaches it through the node's own shell, `ssh`
   for an ssh node and the hub's exec and file transfer for a hub node, as the node service's target gives it.
-- **What lands on each node,** under `bmo-voice/` in the account's home: the server file, the virtual environment, a copy of the voices directory, and `spoken/` (`0700`), where a call's
-  request and answer stand while it is under way. The token is `.config/bmo-voice/token`, `0600`.
+- **What a node takes:** a card of 12 GB or more (「The synthesiser」); a smaller card cannot be a voice node.
+- **What lands on each node,** under `bmo-voice/` in the account's home: the server file, the engine environment
+  (`fish-speech/`), the base weights (`s2-pro/`), a copy of the voices directory, and `spoken/` (`0700`), where a
+  call's request and answer stand while it is under way. The token is `.config/bmo-voice/token`, `0600`.
 
 ### Which node speaks a line
 
@@ -268,9 +300,10 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 - **Each verb of `scripts/voice-node.ts` acts on every voice node, or the one `--node` names,** side by side, each
   output line opening with the node's name.
-- **`setup`** builds the virtual environment from the frozen package list and downloads the base model the
-  checkpoints name; it installs uv where missing, refuses a node whose driver runs no CUDA 13, and runs apart on the
-  node, its output in `bmo-voice/setup.log`.
+- **`setup`** builds the engine environment and places the base weights (「The environments」, 「Where the weights
+  live」): it installs uv where missing, refuses a node whose driver runs no CUDA 12.9 or whose card holds less than
+  12 GB, checks out `fish-speech` at its pinned commit and builds its environment apart on the node, its output in
+  `bmo-voice/setup.log`, and carries the weights the node lacks.
 - **`push`** copies the server file, the voices directory and the token, writes the unit, restarts
   it, waits for it to answer, and leaves a stamp of what it brought, `bmo-voice/pushed`.
 - **`sync`** is push where it is due: only where a node's stamp differs from what a push would bring now. Every
@@ -286,13 +319,11 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **The unit** declares the server to the node's card arbiter as `BMO_CARD_SERVICE=voice`, and names the arbiter's
   own installation, `~/bmo-card`, on the server's import path: the server waits its turn for the card through the
   turn client the arbiter installs there, and takes the card lock as it comes on a node without it.
-- **`setup` downloads the base model the current voice's `lora_config.json` names,** so a voice is installed
-  (「The voices」) before the first node is set up.
 
 ### How a line crosses
 
 - **The request goes in on the node's standard input,** never on a command line. The node writes it into `spoken/`
-  and starts the asker apart, `voice-vox.py --ask`, which posts it to the server on loopback with the token and writes
+  and starts the asker apart, `voice-fish.py --ask`, which posts it to the server on loopback with the token and writes
   the answer's wav beside it with one line of JSON: the status, the reason, the headers.
 - **The operations machine hears of that line** by waiting on the asker's lock on the node, each wait bounded inside
   what a hub node lets a command run, then fetches the wav a slice at a time, four MiB to a command, every byte
@@ -305,42 +336,47 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 - **Every call carries the bearer token,** `voice/voice.token` under the data root, made by the first `push` and
   copied to every node; it never goes into a database, a log, a command line or an environment variable.
-- **`POST /speak`:** a line and the voice as names under the voices root, with cfg, steps, seed, `style`, `prompts`
-  and `sentences`. The answer is the spoken line as a 48 kHz 16-bit wav, peak-matched, with its length, load time,
-  speaking time and checkpoint in its headers. A path leaving the voices root, a voice the node does not hold, a
-  prompt missing its clip or words, nothing to say, or a `style` carrying a bracket or longer than 300 characters is
+- **`POST /speak`:** a line and the voice as a name under the voices root, with `seed`, `style` and `sentences`. The
+  answer is the spoken line as a 48 kHz 16-bit wav, peak-matched, with its length, load time, speaking time and
+  checkpoint in its headers. A path leaving the voices root, a voice the node does not hold, a voice whose
+  `voice.toml` names another engine, nothing to say, or a `style` carrying a bracket or longer than 300 characters is
   refused before any model loads.
 - **`GET /health`:** the checkpoint loaded, whether a line is being spoken, whether the model is on the card, the
   device, VRAM and host memory held, the card's free memory (asked of `nvidia-smi`, opening no CUDA context), whether
   other work holds the card lock (read from the kernel's lock table, never by taking it), whether the server holds
-  the card between lines, and whether it has room: 6.8 GiB free to put a loaded model up, 7.2 GiB for a first load.
+  the card between lines, and whether it has room: 10.7 GiB free to put a loaded model up, 11.0 GiB for a first
+  load.
 - **`503`:** the card lock stayed held by other work for the whole of the line's wait; nothing was loaded or spoken.
 - **A line's words are never logged** on the node.
 
 ### How it holds the card
 
 - **The model stays on the card between lines** until another occupant asks for the card; off it, it stands in
-  pinned host memory and goes back up from there in about half a second.
+  pinned host memory, about 9 GiB of it, and goes back up from there over the bus rather than from the disk.
 - **After each line** the server asks the arbiter whether the next line waiting still stands first; while it does,
   that line is spoken with the model still up. **With no line waiting the turn rests,** the model and the lock kept.
 - **It gives way the moment another occupant asks** or a claim begins: the model goes down into its host copies and
   the lock is let go, and the server asks to rest on the card again.
 - **The card lock is `~/.gpu.lock`,** held under `flock` by every service that puts work on the card; it goes with
   the process, so a server that falls over never leaves the card locked.
-- **The model loads on the first line,** not at start, and another checkpoint on the same base swaps only the LoRA
-  weights. A line comes back the same whichever way the model stood.
+- **The model loads on the first line,** not at start (「How the model is loaded」), and a line in another voice loads
+  it again. A line comes back the same whichever way the model stood.
 - **A line that fails takes the model down,** and a load that failed half way is let go whole.
 
 ### What a long line takes of the card
 
-- **The audio decoder's share grows with a piece's length,** so a stretch longer than the mouth's pass limit is
-  spoken in passes of whole sentences, 0.3 seconds apart; a sentence longer than the limit is one pass all the same.
+- **Every piece is a conversation of its own,** so what one takes of the context is its own text and the sound it
+  speaks: a row that speaks a sentence at a time speaks each sentence as one piece, and any other row speaks a line
+  in passes of whole sentences of up to 240 characters, 0.3 seconds apart; a sentence longer than the limit is one
+  pass all the same. A pass stays far inside the 2,048 tokens a piece may generate.
 - **A piece the card runs out of memory for is spoken once more,** as its sentences one by one on an emptied cache;
   only a second shortfall fails the line.
 
 ## What the sound carries
 
-- **Nothing is laid over the voice:** no band filter, resampling, bit reduction, noise or imitation, on any road.
+- **Nothing is laid over the voice:** no band filter, bit reduction, noise or imitation, on any road. The one change
+  is the rate: the codec speaks at 44.1 kHz and OGG/Opus is written at 48 kHz, so the mouth resamples the line once,
+  band-limited, before it leaves.
 - **The mouth matches its output's peak to 0.95,** and **the encoder only ever lowers:** a sound over the ceiling is
   scaled down whole rather than clipped, one under it written exactly as it arrived. Length is untouched.
 
@@ -349,12 +385,3 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **Intelligibility:** `synth/voice-cer.py` draws a voice's clips from a voice node's server, through
   `scripts/voice-node.ts speak`, of the sentences in `synth/voice-cer-sentences.json`, transcribes them with Whisper
   and compares them with the originals character by character, both sides first matched to their spoken spelling.
-
-### How a prompt is checked
-
-- **Whole lines are spoken on the clip before any row names it:** the lines of
-  `data/<language>/voice-prompt-check-lines.json`, spoken the way a synthesis speaks them, each on a free voice
-  node, and taken down by the `voice/transcriber` entry.
-- **A line fails** on a character error rate above 0.12 over its bare letters, one unit of one to four letters
-  repeated five times or more where the line has no such run, or a pace outside 3 to 10 syllables a second in Korean
-  or 2 to 8 in English. One failed line refuses the clip.

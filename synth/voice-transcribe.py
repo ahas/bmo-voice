@@ -6,7 +6,7 @@ checked before it is installed」): the lines spoken on from the clip are taken 
 judging is the caller's. Each file is written out as one line of JSON on standing output, in the
 order given, as `{"file": <path>, "heard": <text>}`, so a caller reads the answers as they come.
 
-It runs on the voice environment's interpreter (docs/voice-plan.md, 「One voice environment」).
+It runs on the voice environment's interpreter (docs/voice-plan.md, 「The environments」).
 
 usage: <venv>/bin/python synth/voice-transcribe.py <ko|en> <file>...
 """

@@ -69,8 +69,9 @@ is spoken, and what it says, is its caller's to decide.
 
 ## Weights
 
-- Trained voices, the VoxCPM2 base model, reference clips and prompt clips are runtime data and are never
-  committed. `weights/checkpoints.toml` declares where they stand and `weights/voice.card.toml` declares the voice
+- Trained voices, the Fish S2-Pro base weights and the retired VoxCPM2 voices' clips are runtime data and are never
+  committed. `weights/checkpoints.toml` declares where they stand, `synth/engine.toml` pins the engine's code and
+  base weights, and `weights/voice.card.toml` declares the voice
   server to the card arbiter.
 
 ## Checking a change

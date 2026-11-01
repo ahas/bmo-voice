@@ -47,6 +47,30 @@ pub struct VoiceRow {
   pub by_sentence: bool,
 }
 
+/// The engine of a voice folder that holds no `voice.toml`: VoxCPM2's folders carry none.
+pub const UNDECLARED_ENGINE: &str = "voxcpm2";
+
+#[derive(Deserialize)]
+struct Declared {
+  engine: String,
+}
+
+impl VoiceRow {
+  /// The engine its folder's `voice.toml` names (`docs/voice-plan.md`, 「The voices」): `voxcpm2` where the folder
+  /// holds none, and the reason where the file stands but does not read.
+  pub fn engine(&self) -> Result<String, String> {
+    let file = std::path::Path::new(&self.checkpoint).join("voice.toml");
+
+    match std::fs::read_to_string(&file) {
+      Ok(text) => toml::from_str::<Declared>(&text)
+        .map(|declared| declared.engine)
+        .map_err(|why| format!("{} does not read: {why}", file.display())),
+      Err(why) if why.kind() == std::io::ErrorKind::NotFound => Ok(UNDECLARED_ENGINE.to_owned()),
+      Err(why) => Err(format!("{} cannot be read: {why}", file.display())),
+    }
+  }
+}
+
 // The prompt columns of each language, in the order a voice is handed them.
 const PROMPT_COLUMNS: [(&str, &str, &str); 2] =
   [("ko", "prompt_clip", "prompt_words"), ("en", "prompt_en_clip", "prompt_en_words")];

@@ -275,6 +275,7 @@
           "unauthorized",
           "bad-request",
           "not-found",
+          "retired-voice",
           "unknown-emotion",
           "unconverted-run"
         ],
@@ -397,6 +398,7 @@
           "unauthorized",
           "bad-request",
           "not-found",
+          "retired-voice",
           "unknown-emotion",
           "unconverted-run"
         ],
@@ -1183,6 +1185,14 @@
             "type": "string",
             "description": "The checkpoint its weights stand at."
           },
+          "engine": {
+            "type": "string",
+            "description": "The engine its folder's `voice.toml` names; `voxcpm2` for a folder that names none."
+          },
+          "served": {
+            "type": "boolean",
+            "description": "Whether it is spoken: true where its engine is the one the voice speaks."
+          },
           "emotions": {
             "type": "array",
             "items": {
@@ -1200,6 +1210,8 @@
           "name",
           "language",
           "checkpoint",
+          "engine",
+          "served",
           "emotions",
           "changedAt"
         ],

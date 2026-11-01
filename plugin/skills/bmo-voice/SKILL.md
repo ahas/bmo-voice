@@ -23,8 +23,8 @@ It calls the engine at the address in the voice settings, with the engine's toke
 
 ## Speaking a line
 
-1. `voice_voices` lists the trained voices: each one's `name`, `language`, `checkpoint` and `emotions`.
-   Choose a voice by its name.
+1. `voice_voices` lists the trained voices: each one's `name`, `language`, `checkpoint`, `engine`, `served` and
+   `emotions`. Choose a voice by its name, among those `served`; one that is not is refused `retired-voice`.
 2. `voice_synthesize` with `{ "voiceName": "<name>", "text": "<the words>", "emotion": "<one of its emotions>" }`.
    `text` is the written words, what people read of the line. `spoken`, optional, is the words the voice says:
    the same words as a reader of the voice's language says them aloud, every foreign name, acronym, product and

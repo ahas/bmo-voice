@@ -1,10 +1,9 @@
-# The voice environment, frozen from the operations machine's own virtualenv: the voice server, the trained
-# voice on that machine's card, the OGG/Opus encoder and the recogniser all run on it.
+# The voice environment, frozen from the operations machine's own virtualenv: the OGG/Opus encoder and the
+# recogniser run on it (docs/voice-plan.md, 「The environments」).
 #
-# `bun scripts/voice-node.ts setup` builds it on a node from this file: torch and torchaudio come from
-# PyTorch's CUDA 13.0 index, everything else from PyPI (docs/voice-plan.md, 「One voice environment」
-# and 「The voice servers on the voice nodes」). It is installed as it stands, without resolving
-# dependencies: a freeze already names every package.
+# It is installed into `bmo-voice/.venv` on the operations machine as it stands, without resolving dependencies:
+# torch and torchaudio come from PyTorch's CUDA 13.0 index, everything else from PyPI, and a freeze already names
+# every package. The voice servers speak on the engine environment instead (`synth/engine.toml`).
 --extra-index-url https://download.pytorch.org/whl/cu130
 addict==2.4.0
 aiohappyeyeballs==2.7.1
@@ -163,7 +162,6 @@ typing-inspection==0.4.4
 umap-learn==0.5.12
 urllib3==2.8.0
 uvicorn==0.53.0
-voxcpm==2.0.3
 websockets==17.1
 wetext==0.1.8
 xxhash==4.0.1

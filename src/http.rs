@@ -271,10 +271,14 @@ async fn events(
 }
 
 fn voice_of(row: &voices::VoiceRow) -> Voice {
+  let engine = row.engine().unwrap_or_default();
+
   Voice {
     name: row.name.clone(),
     language: row.language.clone(),
     checkpoint: row.checkpoint.clone(),
+    served: engine == POLICY.engine,
+    engine,
     emotions: POLICY.emotions.clone(),
     changed_at: row.set_at.saturating_mul(1_000),
   }
@@ -326,6 +330,7 @@ async fn create_synthesis(
     .await?
     .ok_or_else(|| Refused::not_found(format!("there is no voice {}", asked.voice_name)))?;
 
+  served_voice(&row)?;
   known_emotion(asked.emotion.as_deref())?;
 
   let language = line_language(asked.language.as_deref(), &row)?;
@@ -423,6 +428,25 @@ struct Words {
   text: String,
   spoken: Option<String>,
   language: Language,
+}
+
+// A voice of an engine the voice does not speak is kept and never spoken, so it is refused before anything is taken
+// in, naming the engine its folder says and the one served.
+fn served_voice(row: &voices::VoiceRow) -> Result<(), Refused> {
+  let engine = row.engine().map_err(Refused::failed)?;
+
+  if engine == POLICY.engine {
+    return Ok(());
+  }
+
+  Err(Refused::new(
+    StatusCode::UNPROCESSABLE_ENTITY,
+    "retired-voice",
+    format!(
+      "{} is a {engine} voice, an engine the voice no longer speaks; it is kept and never spoken, and the voices of {} are",
+      row.name, POLICY.engine
+    ),
+  ))
 }
 
 // An emotion outside the policy's is refused before anything is taken in.
@@ -611,6 +635,7 @@ async fn create_briefing(
     .await?
     .ok_or_else(|| Refused::not_found(format!("there is no voice {}", asked.voice_name)))?;
 
+  served_voice(&voice)?;
   known_emotion(asked.emotion.as_deref())?;
 
   let db = &served.context.db;

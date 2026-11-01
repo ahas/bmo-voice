@@ -19,16 +19,16 @@ One row per trained voice.
 |---|---|
 | `name` | the voice's name, the key |
 | `language` | the language its lines are spoken in, as the language data names it |
-| `checkpoint` | its checkpoint directory, as a name under the voices folder |
-| `reference` | its reference clip, as a name under the voices folder (`reference/<key>.wav`) |
-| `cfg` | how hard the model holds to its conditioning |
-| `steps` | diffusion steps per patch |
+| `checkpoint` | its folder, as a name under the voices folder; its `voice.toml` says its engine (`docs/voice-plan.md`, 「The voices」) |
+| `reference` | a retired VoxCPM2 voice's reference clip, as a name under the voices folder (`reference/<key>.wav`); empty for a voice that speaks with none, as every served voice does |
+| `cfg` | a retired VoxCPM2 voice's guidance; not read for a served voice |
+| `steps` | a retired VoxCPM2 voice's diffusion steps per patch; not read for a served voice |
 | `current` | 1 for the one current voice, 0 for every other; at most one row is current |
 | `set_at` | when the row was last written, in epoch seconds |
 | `style` | its delivery instruction, plain words without brackets, empty for none |
 | `seed` | the seed every line is spoken on, from 0 up |
 | `by_sentence` | 1 where a line is spoken a sentence at a time |
-| `prompt_clip`, `prompt_words` | its Korean continuation prompt: a clip in its own directory and the words it says, both empty for none |
+| `prompt_clip`, `prompt_words` | a retired VoxCPM2 voice's Korean continuation prompt: a clip in its own directory and the words it says, both empty for none |
 | `prompt_en_clip`, `prompt_en_words` | its English continuation prompt, the same way |
 
 ### `voice_names`

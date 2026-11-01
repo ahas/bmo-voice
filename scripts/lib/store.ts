@@ -25,15 +25,14 @@ export type VoicePrompts = Partial<Record<VoiceLanguage, VoicePrompt>>;
 // carries it.
 export interface VoiceRow {
   name: string;
-  // The checkpoint directory. What is read from it is `lora_config.json` and `lora_weights.safetensors`; the base
-  // model is named inside the first of those.
+  // The voice's folder: its `voice.toml` says its engine, and a served voice's adapter is its `lora.pt`.
   checkpoint: string;
-  // The clip the voice is conditioned on, as a path to a wav.
+  // A retired VoxCPM2 voice's reference clip, its guidance and its steps; empty and naught on a served voice, which
+  // speaks with no reference.
   reference: string;
   cfg: number;
   steps: number;
-  // The delivery instruction the voice is spoken under, as plain words, or empty for none. It belongs with cfg and
-  // steps: the training run chose all three together for a steady delivery.
+  // The delivery instruction the voice is spoken under, as plain words, or empty for none.
   style: string;
   // Which of the model's deliveries of a line this voice speaks: the same line, seed and settings give back the
   // same samples, so the seed a voice was chosen on by ear is the one it keeps.

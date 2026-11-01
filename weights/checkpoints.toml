@@ -2,18 +2,19 @@
 # this is the one place their folders are declared, and the service, the node scripts and the training scripts
 # read it (docs/voice-plan.md, 「The voices」).
 
-# Under the runtime data root on the operations machine: every installed voice, a folder per checkpoint holding
-# its LoRA settings (`lora_config.json`), its LoRA weights (`lora_weights.safetensors`) and its continuation
-# prompt clips (`prompt-<digest>.wav`, `prompt-en-<digest>.wav`).
+# Under the runtime data root on the operations machine: every installed voice, a folder per voice holding its
+# `voice.toml` (its engine, where it was trained, that it speaks with no reference) and its adapter `lora.pt`. The
+# retired VoxCPM2 voices keep their LoRA settings, weights and continuation prompt clips there, never served.
 voices = "voice/voices"
 
-# Under the same root: the reference clips a voice is conditioned on, one `<key>.wav` each.
+# Under the same root: the retired VoxCPM2 voices' reference clips, one `<key>.wav` each.
 references = "voice/voices/reference"
 
 # Under the account's home on a voice node: the server's folder, the copy of the voices pushed to it beneath
-# (`voices/`), and the virtual environment the server runs in (`.venv/`).
+# (`voices/`), the engine environment (`fish-speech/`, its virtual environment inside) and the base weights
+# (`s2-pro/`), which `synth/engine.toml` pins.
 node_place = "bmo-voice"
 
-# The VoxCPM2 base model every checkpoint is trained on stands in a voice node's Hugging Face cache, fetched there
-# by the node install; a checkpoint's `lora_config.json` names the snapshot it was trained on by its model id.
+# The base weights stand on the operations machine as their pinned revision's snapshot in the account's Hugging Face
+# cache, where `setup` carries them to each node from.
 base_model_cache = "huggingface"

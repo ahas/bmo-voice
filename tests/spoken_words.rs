@@ -86,8 +86,8 @@ impl Drop for Scratch {
   }
 }
 
-/// The engine's routes on the scratch store, its master out of reach so no line it takes in is ever spoken, and its
-/// agency the one `agency` names, or none.
+/// The engine's routes on the scratch store with one served voice, its master out of reach so no line it takes in is
+/// ever spoken, and its agency the one `agency` names, or none.
 async fn engine(scratch: &Scratch, agency: Option<std::net::SocketAddr>) -> axum::Router {
   let master = "127.0.0.1:9";
   let agency =
@@ -119,23 +119,18 @@ address = "http://127.0.0.1:9"
   let db = bmo_voice::store::connect(&settings.database, 4).await.expect("the store opens");
 
   bmo_voice::store::migrate(&db).await.expect("the store migrates");
-  db.execute_unprepared(
-    r#"INSERT INTO "voices" ("name", "checkpoint", "reference", "cfg", "steps", "set_at")
-       VALUES ('voice-a', 'voice-a', 'reference/voice-a.wav', 2.0, 10, 0)"#,
-  )
-  .await
-  .expect("the voice is written");
+  // The one voice, served, its folder outside the voices root, so a line in it is never spoken.
+  let folder = scratch.root.join("elsewhere").join("voice-a");
 
-  let voices = settings.voices_folder();
-
+  std::fs::create_dir_all(&folder).expect("the voice folder is made");
+  std::fs::write(folder.join("voice.toml"), "engine = \"fish-s2-pro\"\n").expect("the voice is declared");
   db.execute_unprepared(&format!(
     r#"INSERT INTO "voices" ("name", "checkpoint", "reference", "cfg", "steps", "set_at")
-       VALUES ('voice-b', '{}', '{}', 2.0, 10, 0)"#,
-    voices.join("voice-b").display(),
-    voices.join("reference/voice-b.wav").display()
+       VALUES ('voice-a', '{}', '', 0, 0, 0)"#,
+    folder.display()
   ))
   .await
-  .expect("the voice under the root is written");
+  .expect("the voice is written");
 
   let units = Units::new(&settings).expect("the units are named");
   let context = Context {

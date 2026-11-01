@@ -13,6 +13,8 @@ pub struct VoicePolicy {
   pub run_cap_ms: i64,
   /// The emotions a voice may be asked to speak with.
   pub emotions: Vec<String>,
+  /// The engine every served voice belongs to.
+  pub engine: String,
 }
 
 /// The policy, read once.

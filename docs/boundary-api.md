@@ -71,8 +71,9 @@ asking `Accept: application/json`.
 | `GET /voices/{voiceName}` | | one voice |
 
 - **A voice:** `name` (its key), `language` (the language data's code for the language it speaks),
-  `checkpoint` (where its weights stand), `emotions` (the emotions it may be asked to speak with) and
-  `changedAt` (epoch milliseconds of its last change).
+  `checkpoint` (where its weights stand), `engine` (the engine its folder's `voice.toml` names, `voxcpm2` for a
+  folder that names none), `served` (true where that engine is the one the voice speaks, the policy's `engine`),
+  `emotions` (the emotions it may be asked to speak with) and `changedAt` (epoch milliseconds of its last change).
 - **The cursor is the last voice's `name`.** A name no voice holds is answered 404 `not-found`.
 - **The emotions are the engine's policy values** (`policy/voice.toml`, 「The policy」), the same for every
   voice.
@@ -99,8 +100,9 @@ asking `Accept: application/json`.
   card (every card in use, a card held by a claim or a lower tier, the service starting), its place in the
   line, or the master not reached. It is null once the card is granted, and on a synthesis that ended.
 - **`text` must hold something to say.** A `spoken` given that holds nothing, or that fails the check, is answered
-  422 `unconverted-run` (「The spoken words」). A voice no list holds is answered 404 `not-found`; an `emotion`
-  outside the voice's is answered 422 `unknown-emotion`. `style` and `seed` are laid over the voice's row
+  422 `unconverted-run` (「The spoken words」). A voice no list holds is answered 404 `not-found`; a voice that is
+  not served is answered 422 `retired-voice`; an `emotion` outside the voice's is answered 422 `unknown-emotion`.
+  `style` and `seed` are laid over the voice's row
   for this one synthesis.
 - **The sound** is answered only once the state is `done`; before that, and where a failed synthesis left
   none, 404 `not-found`. A sound is kept under the data root, never in the database.
@@ -184,7 +186,8 @@ server any other way.
   not (「The spoken words」), spoken on the voice server of the card granted it. `text` is the script. Its `state` and
   `durationMs` are its synthesis's, and `synthesisId` names it, whose `waitingOn` says what a waiting one waits
   on. `text` must hold something to say; a `spoken` that is empty or fails the check is 422 `unconverted-run`, a
-  voice no list holds is 404 `not-found`, and an emotion outside the policy's is 422 `unknown-emotion`.
+  voice no list holds is 404 `not-found`, a voice that is not served is 422 `retired-voice`, and an emotion outside
+  the policy's is 422 `unknown-emotion`.
 - **Whether it plays by itself is the caller's to say** in `plays`, true where absent, and the engine keeps what
   it was told. A listener plays by itself only a `summary` whose `plays` holds, once `briefing.ended` says it is
   `done`; it plays a `full` reading only when somebody asks for it, and shows a briefing it learns of more than
@@ -249,13 +252,14 @@ It asks no model, takes no card turn and keeps nothing. A language other than `k
 | `conflict` | 409 | the change asked for does not fit the member as it stands |
 | `gone` | 410 | the events since the number asked for are no longer kept |
 | `unknown-emotion` | 422 | the emotion is not one of the engine's policy values |
+| `retired-voice` | 422 | the voice belongs to an engine the voice no longer speaks; it is kept and never spoken |
 | `unreadable-source` | 422 | an encoding's wav is not a file the engine can read |
 | `unconverted-run` | 422 | the spoken words given hold nothing, or hold what the check finds; the sentence names the first word that failed |
 | `failed` | 500 | the engine failed; the sentence is the failure |
 
 ## The voice servers and the card
 
-- **Each voice node runs `synth/voice-vox.py` on the voice environment** as the user unit
+- **Each voice node runs `synth/voice-fish.py` on the engine environment** as the user unit
   `bmo-voice-server.service`, listening on the node's loopback and taking a line on the node's own shell
   (`docs/voice-plan.md`, 「The voice nodes」).
 - **A voice server takes its turn on the node's card through the card arbiter's own turn client,** installed
@@ -384,7 +388,8 @@ declares the nouns `listen` and `brief` when asked `nouns`, so the platform hand
 ## The policy
 
 `policy/voice.toml` holds the engine's own policy values, read once at start: `run_cap_ms`, how long one
-line may take to speak once its card is granted, and `emotions`, the emotions a voice may be asked to speak with. No route serves them;
+line may take to speak once its card is granted, `emotions`, the emotions a voice may be asked to speak with, and
+`engine`, the engine every served voice belongs to (`fish-s2-pro`). No route serves them;
 the voices list them, and a synthesis outside them is refused.
 
 ## Settings

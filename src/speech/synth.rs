@@ -1,4 +1,4 @@
-//! What the engine runs on this machine (docs/voice-plan.md, 「One voice environment」, 「One at a time on the
+//! What the engine runs on this machine (docs/voice-plan.md, 「The environments」, 「One at a time on the
 //! operations machine's card」, 「The voice as a tool」): the voice's mouth, encoder and transcriber run through
 //! its own tool entry, the line in front of the card every call to the synthesiser stands in, and how long a
 //! spoken sound runs.
@@ -71,16 +71,8 @@ pub fn mouth_arguments(words: &Words<'_>, out: &Path, voice: &VoiceRow) -> Value
   let mut arguments = json!({
     "out": out,
     "checkpoint": voice.checkpoint,
-    "reference": voice.reference,
-    "cfg": voice.cfg,
-    "steps": voice.steps,
     "seed": voice.seed,
     "sentences": voice.by_sentence,
-    "prompts": voice
-      .prompts
-      .iter()
-      .map(|(language, prompt)| json!({ "language": language, "clip": prompt.clip, "words": prompt.words }))
-      .collect::<Vec<_>>(),
   });
 
   match words {

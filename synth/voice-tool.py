@@ -4,8 +4,8 @@ transcriber, each an entry for the system, answered by running the file that doe
 
 It runs on the system's `python3` and the standard library alone, from the voice tool's placed folder, where the
 build places it with the three files it runs and the answer of the tool host's call protocol it answers through,
-`tool_protocol.py`. Each of those files runs
-on the voice environment's interpreter (docs/voice-plan.md, 「One voice environment」).
+`tool_protocol.py`. The encoder and the transcriber run on the voice environment's interpreter and the mouth on the
+engine environment's (docs/voice-plan.md, 「The environments」).
 """
 
 import json
@@ -19,6 +19,8 @@ HERE = Path(__file__).resolve().parent
 
 # The voice environment where the process names none, under the call's home.
 VOICE_ENVIRONMENT = "bmo-voice/.venv/bin/python"
+# The engine environment the mouth speaks on (docs/voice-plan.md, 「The environments」), relative to the home.
+ENGINE_ENVIRONMENT = "bmo-voice/fish-speech/.venv/bin/python"
 
 # How long a line stands in front of the card before it gives up its turn, and what the lock exits with when it
 # does, kept clear of anything the synthesiser exits with (docs/voice-plan.md, 「One at a time on the
@@ -30,10 +32,11 @@ QUEUE_EXIT = 75
 TAIL_LINES = 8
 
 
-def interpreter(variable):
-    """The interpreter the variable names, where the process holds it, else the voice environment's."""
+def interpreter(variable, environment=None):
+    """The interpreter the variable names, where the process holds it, else the environment's, the voice environment's
+    where none is named."""
     named = os.environ.get(variable)
-    return named if named else str(Path.home() / VOICE_ENVIRONMENT)
+    return named if named else str(Path.home() / (environment or VOICE_ENVIRONMENT))
 
 
 def run(line, cwd=None):
@@ -59,20 +62,17 @@ def mouth(call):
     lock.touch()
 
     line = ["flock", "--timeout", str(QUEUE_WAIT_S), "--conflict-exit-code", str(QUEUE_EXIT), "--no-fork", str(lock)]
-    line += [interpreter("BMO_VOX_PYTHON"), str(HERE / "voice-vox.py")]
+    line += [interpreter("BMO_VOX_PYTHON", ENGINE_ENVIRONMENT), str(HERE / "voice-fish.py")]
     line += ["--text-file", said["text_file"]] if said.get("text_file") is not None else ["--text", said["text"]]
     line += ["--out", said["out"]]
     if said.get("wav"):
         line += ["--wav", said["wav"]]
-    line += ["--checkpoint", said["checkpoint"], "--reference", said["reference"]]
-    line += ["--cfg", str(said["cfg"]), "--steps", str(said["steps"]), "--seed", str(said["seed"])]
+    line += ["--checkpoint", said["checkpoint"], "--seed", str(said["seed"])]
     line += ["--encoder-python", interpreter("BMO_VOICE_PYTHON")]
     if said.get("style"):
         line += ["--style", said["style"]]
     if said.get("sentences"):
         line.append("--sentences")
-    for prompt in said.get("prompts") or []:
-        line += ["--prompt", prompt["language"], prompt["clip"], prompt["words"]]
 
     ran = run(line)
     if ran.returncode == QUEUE_EXIT:

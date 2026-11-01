@@ -9,9 +9,9 @@
 name = "synth"
 protocol = 1
 language = "python"
-build = 'cp voice-tool.py tool_protocol.py voice-vox.py voice-encode.py voice-transcribe.py "$BMO_TOOL_OUT/"'
+build = 'cp voice-tool.py tool_protocol.py voice-fish.py voice-encode.py voice-transcribe.py "$BMO_TOOL_OUT/"'
 # The tests are deferred (README.md, 「Tests」); until they stand, the check reads every file the placement carries.
-check = 'python3 -m py_compile voice-tool.py tool_protocol.py voice-vox.py voice-encode.py voice-transcribe.py'
+check = 'python3 -m py_compile voice-tool.py tool_protocol.py voice-fish.py voice-encode.py voice-transcribe.py'
 run = ["python3", "voice-tool.py"]
 timeout = 60
 
