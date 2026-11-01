@@ -41,6 +41,7 @@ import {
   VOICE_SERVICE,
   VOICE_STAMP,
   VOICE_TOKEN,
+  VoiceNodeError,
   voiceNodeHealth,
   voiceNodeNames,
   voiceNodeRequest,
@@ -578,7 +579,30 @@ async function adapterAnswer(asked: string, node: string | null, placed: readonl
       await setup(at);
       await push(at);
       const started = Date.now();
-      const spoken = await speakOnNode(await speakRequest(moveCheckLine()), { shell: at.shell, timeoutMs: voiceCapMs });
+      let spoken;
+
+      try {
+        spoken = await speakOnNode(await speakRequest(moveCheckLine()), { shell: at.shell, timeoutMs: voiceCapMs });
+      } catch (error) {
+        // Another occupant of the voice's tier using the card is never made to yield for the check line; the server
+        // answering its health on the card's device stands for it, and the node's first granted line is its first.
+        if (!(error instanceof VoiceNodeError) || error.kind !== "taken") {
+          throw error;
+        }
+
+        const device = String((await voiceNodeHealth(at.shell)).device ?? "cpu");
+
+        if (device === "cpu") {
+          throw new NodeRefused(`the server answers with no card to speak on, and the check line waited: ${error.message}`);
+        }
+
+        const waited = `the check line waited: the card is another's in use; the server answers on ${device}`;
+
+        say(at, waited);
+
+        return { ok: true, node, state: "running", detail: waited };
+      }
+
       const tried = `${spoken.seconds.toFixed(2)}s of ${spoken.checkpoint} spoken in ${((Date.now() - started) / 1000).toFixed(1)}s`;
 
       say(at, `tried: ${tried}`);

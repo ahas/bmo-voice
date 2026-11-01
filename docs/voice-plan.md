@@ -320,7 +320,10 @@ the voice nodes. What a caller does with the sound is the caller's.
   current voice or the one `--voice` names, on a free node where `--node` names none.
 - **`adapter`** answers the card arbiter (`docs/boundary-api.md`, 「The node scripts and the card adapter」):
   `install` puts the node last on the list, runs `setup` and `push` and speaks there the check line of
-  `data/ko/voice-node.toml`; `uninstall` takes
+  `data/ko/voice-node.toml`. On a node whose card another occupant of the voice's tier is using, the check line is
+  not the voice's turn within the server's wait and the arbiter never makes that occupant yield for it: there the
+  install stands on the server answering its health on the card's device with its weights checked, says that the
+  check line waited, and the first line the master grants on the node is its first spoken one. `uninstall` takes
   it off the list and stops and disables its unit, keeping its installation; `start`, `stop` and `health` act on its
   unit and server; `placed` reads the list.
 - **The unit** declares the server to the node's card arbiter as `BMO_CARD_SERVICE=voice`, and names the arbiter's
