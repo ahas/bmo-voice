@@ -233,8 +233,8 @@ the voice nodes. What a caller does with the sound is the caller's.
     unit's `TORCHINDUCTOR_CACHE_DIR`). The first line after a start pays it, and the first after another voice is
     loaded. The graph takes about 50 MiB of the card beside the model.
   - **The graph reads the weights and the key-value caches where they stood when it was captured,** so it is let go
-    before either is let go or moved, as each piece's codes are made into sound and as the model goes down, and
-    captured again by the next frame, in under a second. What was compiled stays for the process's life, across
+    before either is let go or moved, before a long piece's codec pass and as the model goes down, and captured
+    again by the next frame, in under a second. What was compiled stays for the process's life, across
     hand-overs and the lines of every thread, and is let go with the model when another voice is loaded.
   - **A frame step that fails to compile is taken uncompiled** for the rest of the process, said once in the
     journal, its attention on the card's fused kernels rather than the plain one fish-speech's generator asks for,
@@ -395,8 +395,9 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 - **The model stays on the card between lines** until another occupant asks for the card; off it, it stands in
   pinned host memory, about 9 GiB of it, and goes back up from there over the bus rather than from the disk. The
-  key-value caches are scratch every piece writes before it reads, so they are not kept: they are let go as each
-  piece's codes are made into sound and as the model goes down, and made again, on the card, by the next piece.
+  key-value caches are scratch every piece writes before it reads, so they are never carried down: they stay on the
+  card from piece to piece while the model is up, are let go before a long piece's codec pass (「What a long line
+  takes of the card」) and as the model goes down, and are made again, on the card, by the next piece.
 - **After each line** the server asks the arbiter whether the next line waiting still stands first; while it does,
   that line is spoken with the model still up. **With no line waiting the turn rests,** the model and the lock kept.
 - **It gives way the moment another occupant asks** or a claim begins: the model goes down into its host copies and
@@ -411,16 +412,18 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 - **A line is cut into pieces:** a row that speaks a sentence at a time speaks each sentence as one piece, and any
   other row speaks a line in passes of whole sentences of up to 240 characters, 0.3 seconds apart.
-- **No piece is longer than 400 characters.** A sentence longer than that is cut at its clauses — after a comma, a
+- **No piece is longer than 340 characters.** A sentence longer than that is cut at its clauses — after a comma, a
   semicolon, a colon or a dash before a space — and its clauses gathered in order into parts each as long as it can
-  be within 400, each part one piece; a clause longer than 400 alone is cut at the last space within the limit. A
+  be within 340, each part one piece; a clause longer than 340 alone is cut at the last space within the limit. A
   cut never leaves a word out and never falls inside one. The bound is what the codec takes of the card: it makes a
-  piece's sound from its codes in one pass, its memory growing with the piece's length, beside the 9.4 GiB the model
-  and the codec keep, and on a 4070 the sound of 800 tokens does not fit beside them and the caches; a piece runs
-  about 1.45 tokens a character, so 400 characters is under 600 tokens, and far inside the 2,048 a piece may
-  generate.
-- **The codec has the card to itself beside the weights.** The model's key-value caches, 453 MiB at the context
-  above, are let go and the allocator's cache emptied before a piece's codes are made into sound.
+  piece's sound from its frames in one pass, its memory growing with the piece's length, beside the 9.4 GiB the
+  model and the codec keep. On a 4070 the sound of 1,000 frames fits beside them alone and 1,050 does not; dense
+  text, English names and figures among Korean, runs up to 2.7 frames a character, so 340 characters is at most
+  about 920 frames, and far inside the 2,048 a piece may generate.
+- **The key-value caches stay on the card from piece to piece,** 453 MiB at the context above, so the frame step's
+  graph stands for the whole of a card turn. They are let go, with the graph, and the allocator's cache emptied,
+  only before the codec pass of a piece of more than 600 frames: on a 4070 the sound of 750 frames fits beside the
+  caches and 800 does not, and 600 leaves a fifth of that to spare.
 - **Every piece carries the line's first piece, and only that one.** The first piece of a line is asked as a bare
   conversation, its text and nothing more. Every later piece is asked with the first piece as its reference: its
   words and the codes the model generated for them, in the place S2-Pro reads a reference from. The model ends a
@@ -432,7 +435,7 @@ the voice nodes. What a caller does with the sound is the caller's.
   30 dB of its loudest frame, with under 100 ms after its last loud frame, was ended by the model before its last
   syllable fell away; it is asked once more with no reference, on the same seed, and that one is kept.
 - **A piece the card runs out of memory for is spoken once more,** as its sentences one by one on an emptied cache,
-  each cut at its clauses into parts of at most 200 characters; only a second shortfall fails the line.
+  each cut at its clauses into parts of at most 170 characters; only a second shortfall fails the line.
 
 ## What the sound carries
 

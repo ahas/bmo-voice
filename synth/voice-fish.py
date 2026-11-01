@@ -88,7 +88,11 @@ MOST_PASS = 240
 
 # The most characters of any piece (docs/voice-plan.md, 「What a long line takes of the card」): what the codec can make
 # into sound in one pass beside the weights on a 12 GB card. A longer sentence is cut at its clauses.
-MOST_PIECE = 400
+MOST_PIECE = 340
+
+# The most frames a piece's codec pass is made with the key-value caches and the frame step's graph still on the card
+# beside it (docs/voice-plan.md, 「What a long line takes of the card」); a longer piece lets them go first.
+BESIDE_CACHES = 600
 
 # How a line is cut into sentences: at a full stop, a question or exclamation mark or an ellipsis before a space,
 # and at every line break.
@@ -686,9 +690,13 @@ class Mouth:
                 raise RuntimeError("the model closed its turn before it spoke")
 
             made = torch.cat(codes, dim=1)
-            # The codec's pass grows with the piece; the caches the next piece makes again are let go first.
-            self.drop_caches()
-            torch.cuda.empty_cache()
+
+            if made.shape[1] > BESIDE_CACHES:
+                # The codec's pass grows with the piece: past what fits beside them, the caches and the graph the
+                # next piece makes again are let go first.
+                self.drop_caches()
+                torch.cuda.empty_cache()
+
             audio = self.codec.from_indices(made.to("cuda")[None])[0].squeeze().float().cpu().numpy()
 
             return made, audio
