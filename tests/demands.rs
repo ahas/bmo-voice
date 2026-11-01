@@ -1,7 +1,9 @@
 //! The card a line is spoken on (`docs/boundary-api.md`, 「The voice servers and the card」, 「bmo-arbiter」): a demand
 //! for one card of `voice` granted at once, or waiting in the master's line however long it takes and then
-//! granted, each reason it waits on told once; asked again where the master no longer holds it; kept in the ledger
-//! while it is held; and given back as the line ends, and at the next start where a process left it.
+//! granted, each reason it waits on told once; read again by its id where a read of every demand does not hold it,
+//! and asked again only where the master answers `404` for it; found by its work key where its ask was not
+//! answered; given back where the master refuses to read it; kept in the ledger while it is held; and given back as
+//! the line ends, and at the next start where a process left it, in the ledger or only on the master.
 
 use std::collections::VecDeque;
 use std::net::SocketAddr;
@@ -11,7 +13,7 @@ use std::time::Duration;
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use bmo_voice::settings::Settings;
@@ -26,6 +28,9 @@ static MADE: AtomicU32 = AtomicU32::new(0);
 
 const WAITING: &str = "Every card of voice is in use: song.";
 
+// The demands the stand-in is asked are numbered past it; those at or below it stood on it before the test.
+const ASKED_PAST: i64 = 100;
+
 /// How the stand-in master answers: what a demand asked is answered first, and what each read answers after, the
 /// last standing for every read past them.
 #[derive(Clone)]
@@ -35,6 +40,7 @@ enum Answer {
   Gone,
 }
 
+/// The stand-in master: every demand it holds, by id and work key, and how its routes misbehave where a test asks.
 #[derive(Default)]
 struct Stand {
   asked: Mutex<Vec<Value>>,
@@ -42,23 +48,55 @@ struct Stand {
   given: Mutex<Vec<i64>>,
   first: Mutex<Option<Answer>>,
   next_id: Mutex<i64>,
-  live: Mutex<Vec<i64>>,
+  live: Mutex<Vec<(i64, Option<String>)>>,
+  // Each read of every demand leaves out those asked of it, as a read taken before they were asked does.
+  omits: bool,
+  // How many asks are taken in and answered 502, as an answer lost on its way.
+  unanswered: Mutex<u32>,
+  // Each read of every demand is refused.
+  refuses: bool,
 }
 
-fn demand(id: i64, answer: &Answer) -> Value {
+impl Stand {
+  // The next answer a read takes.
+  fn next(&self) -> Answer {
+    let mut reads = self.reads.lock().unwrap();
+
+    if reads.len() > 1 { reads.pop_front() } else { reads.front().cloned() }.unwrap_or(Answer::Granted)
+  }
+
+  // Every demand dropped, as a master restarted; the demands asked after are granted.
+  fn drop_all(&self) {
+    self.live.lock().unwrap().clear();
+    *self.reads.lock().unwrap() = VecDeque::from([Answer::Granted]);
+    *self.first.lock().unwrap() = Some(Answer::Granted);
+  }
+
+  fn holds(&self, id: i64) -> bool {
+    self.live.lock().unwrap().iter().any(|(live, _)| *live == id)
+  }
+}
+
+fn demand(id: i64, key: Option<&str>, answer: &Answer) -> Value {
   match answer {
     Answer::Granted => json!({
       "id": id, "serviceName": "voice", "count": 1, "state": "granted", "taken": null, "reason": null,
-      "waitedMs": 0, "cards": [{ "nodeName": "node-a", "address": null, "keyFile": null }]
+      "waitedMs": 0, "cards": [{ "nodeName": "node-a", "address": null, "keyFile": null }], "workKey": key
     }),
     _ => json!({
       "id": id, "serviceName": "voice", "count": 1, "state": "waiting", "taken": null, "cards": [],
-      "reason": { "code": "in-use", "text": WAITING }, "waitedMs": 5
+      "reason": { "code": "in-use", "text": WAITING }, "waitedMs": 5, "workKey": key
     }),
   }
 }
 
-async fn ask(State(stand): State<Arc<Stand>>, Json(body): Json<Value>) -> impl IntoResponse {
+fn not_found() -> Response {
+  (StatusCode::NOT_FOUND, Json(json!({ "code": "not-found", "error": "no such demand" }))).into_response()
+}
+
+async fn ask(State(stand): State<Arc<Stand>>, Json(body): Json<Value>) -> Response {
+  let key = body["workKey"].as_str().map(str::to_owned);
+
   stand.asked.lock().unwrap().push(body);
 
   let id = {
@@ -67,75 +105,107 @@ async fn ask(State(stand): State<Arc<Stand>>, Json(body): Json<Value>) -> impl I
     *next
   };
 
-  stand.live.lock().unwrap().push(id);
+  stand.live.lock().unwrap().push((id, key.clone()));
+
+  {
+    let mut unanswered = stand.unanswered.lock().unwrap();
+
+    if *unanswered > 0 {
+      *unanswered -= 1;
+
+      return (
+        StatusCode::BAD_GATEWAY,
+        Json(json!({ "code": "unreached", "error": "the answer was lost" })),
+      )
+        .into_response();
+    }
+  }
+
   let first = stand.first.lock().unwrap().clone().unwrap_or(Answer::Granted);
   let status = match first {
     Answer::Granted => StatusCode::CREATED,
     _ => StatusCode::ACCEPTED,
   };
 
-  (status, Json(demand(id, &first)))
+  (status, Json(demand(id, key.as_deref(), &first))).into_response()
 }
 
-async fn read(State(stand): State<Arc<Stand>>, Path(id): Path<i64>) -> impl IntoResponse {
-  let answer = {
-    let mut reads = stand.reads.lock().unwrap();
+// One demand read by its id: `404` where the stand-in holds it no more, else the next answer.
+async fn read(State(stand): State<Arc<Stand>>, Path(id): Path<i64>) -> Response {
+  if !stand.holds(id) {
+    return not_found();
+  }
 
-    if reads.len() > 1 { reads.pop_front() } else { reads.front().cloned() }.unwrap_or(Answer::Granted)
-  };
+  let answer = stand.next();
 
   // A read is held open a moment, as the master holds a waiting one.
   tokio::time::sleep(Duration::from_millis(20)).await;
 
-  match answer {
-    Answer::Gone => {
-      // Once gone, the demand asked again is granted.
-      *stand.reads.lock().unwrap() = VecDeque::from([Answer::Granted]);
-      *stand.first.lock().unwrap() = Some(Answer::Granted);
+  if let Answer::Gone = answer {
+    stand.drop_all();
 
-      (StatusCode::NOT_FOUND, Json(json!({ "code": "not-found", "error": "no such demand" })))
-    }
-    answer => (StatusCode::OK, Json(demand(id, &answer))),
+    return not_found();
   }
+
+  let key = stand
+    .live
+    .lock()
+    .unwrap()
+    .iter()
+    .find(|(live, _)| *live == id)
+    .and_then(|(_, key)| key.clone());
+
+  Json(demand(id, key.as_deref(), &answer)).into_response()
 }
 
 // Every demand the stand-in holds, as one read answers them: each read takes the next answer, and a demand gone is
-// one the page holds no more.
-async fn list(State(stand): State<Arc<Stand>>) -> impl IntoResponse {
-  let answer = {
-    let mut reads = stand.reads.lock().unwrap();
-
-    if reads.len() > 1 { reads.pop_front() } else { reads.front().cloned() }.unwrap_or(Answer::Granted)
-  };
-  let live = stand.live.lock().unwrap().clone();
-
-  if let Answer::Gone = answer {
-    // Once gone, the demand asked again is granted.
-    stand.live.lock().unwrap().clear();
-    *stand.reads.lock().unwrap() = VecDeque::from([Answer::Granted]);
-    *stand.first.lock().unwrap() = Some(Answer::Granted);
-
-    return Json(json!({ "items": [], "more": false }));
+// one the page holds no more. A stand-in that omits leaves out every demand asked of it and takes no answer.
+async fn list(State(stand): State<Arc<Stand>>) -> Response {
+  if stand.refuses {
+    return (StatusCode::BAD_REQUEST, Json(json!({ "code": "bad-request", "error": "refused" })))
+      .into_response();
   }
 
-  Json(json!({ "items": live.iter().map(|id| demand(*id, &answer)).collect::<Vec<_>>(), "more": false }))
+  let live = stand.live.lock().unwrap().clone();
+
+  if stand.omits {
+    let items: Vec<Value> = live
+      .iter()
+      .filter(|(id, _)| *id <= ASKED_PAST)
+      .map(|(id, key)| demand(*id, key.as_deref(), &Answer::Granted))
+      .collect();
+
+    return Json(json!({ "items": items, "more": false })).into_response();
+  }
+
+  let answer = stand.next();
+
+  if let Answer::Gone = answer {
+    stand.drop_all();
+
+    return Json(json!({ "items": [], "more": false })).into_response();
+  }
+
+  let items: Vec<Value> = live.iter().map(|(id, key)| demand(*id, key.as_deref(), &answer)).collect();
+
+  Json(json!({ "items": items, "more": false })).into_response()
 }
 
 async fn give_back(State(stand): State<Arc<Stand>>, Path(id): Path<i64>) -> StatusCode {
   stand.given.lock().unwrap().push(id);
-  stand.live.lock().unwrap().retain(|live| *live != id);
+  stand.live.lock().unwrap().retain(|(live, _)| *live != id);
 
   StatusCode::NO_CONTENT
 }
 
 /// The stand-in master serving on a port of its own, answering a demand first with `first` and its reads with
-/// `reads`.
-async fn master(first: Answer, reads: Vec<Answer>) -> (Arc<Stand>, SocketAddr) {
+/// `reads`, as `stand` sets it otherwise.
+async fn serve(stand: Stand, first: Answer, reads: Vec<Answer>) -> (Arc<Stand>, SocketAddr) {
   let stand = Arc::new(Stand {
     reads: Mutex::new(reads.into()),
     first: Mutex::new(Some(first)),
-    next_id: Mutex::new(100),
-    ..Stand::default()
+    next_id: Mutex::new(ASKED_PAST),
+    ..stand
   });
   let router = Router::new()
     .route("/demands", post(ask).get(list))
@@ -148,6 +218,10 @@ async fn master(first: Answer, reads: Vec<Answer>) -> (Arc<Stand>, SocketAddr) {
   tokio::spawn(async move { axum::serve(listener, router).await });
 
   (stand, at)
+}
+
+async fn master(first: Answer, reads: Vec<Answer>) -> (Arc<Stand>, SocketAddr) {
+  serve(Stand::default(), first, reads).await
 }
 
 /// A data root of this test's own, with settings naming the stand-in master and a node service nothing answers.
@@ -277,7 +351,7 @@ async fn a_waiting_demand_tells_why_once_and_is_held_until_its_grant() {
 }
 
 #[tokio::test]
-async fn a_demand_the_master_no_longer_holds_is_asked_again() {
+async fn a_demand_the_master_answers_404_for_by_its_id_is_asked_again() {
   let (stand, at) = master(Answer::Waiting, vec![Answer::Gone]).await;
   let (_root, settings) = settings(at);
   let units = Units::new(&settings).expect("the units are named");
@@ -288,6 +362,83 @@ async fn a_demand_the_master_no_longer_holds_is_asked_again() {
   assert_eq!(held.demand, 102, "the second demand is the one granted");
   assert_eq!(stand.asked.lock().unwrap().len(), 2);
   assert_eq!(ledger(&settings), ["102"], "the demand gone is out of the ledger");
+}
+
+#[tokio::test]
+async fn a_read_of_every_demand_that_leaves_out_a_waiting_one_never_asks_a_second() {
+  let stand = Stand {
+    omits: true,
+    ..Stand::default()
+  };
+  let (stand, at) =
+    serve(stand, Answer::Waiting, vec![Answer::Waiting, Answer::Waiting, Answer::Granted]).await;
+  let (_root, settings) = settings(at);
+  let units = Units::new(&settings).expect("the units are named");
+  let held = card::hold(&units.arbiter, &settings.demands_folder(), &asking(), &mut |_| {})
+    .await
+    .expect("a card is granted");
+
+  assert_eq!(held.demand, 101, "the demand read by its id is the one granted");
+  assert_eq!(stand.asked.lock().unwrap().len(), 1, "no second demand is asked");
+  assert!(stand.given.lock().unwrap().is_empty());
+  assert_eq!(ledger(&settings), ["101"]);
+}
+
+#[tokio::test]
+async fn an_ask_whose_answer_was_lost_is_found_by_its_work_key_not_asked_twice() {
+  let stand = Stand {
+    unanswered: Mutex::new(1),
+    ..Stand::default()
+  };
+  let (stand, at) = serve(stand, Answer::Granted, vec![]).await;
+  let (_root, settings) = settings(at);
+  let units = Units::new(&settings).expect("the units are named");
+  let mut told = vec![];
+  let held = card::hold(&units.arbiter, &settings.demands_folder(), &asking(), &mut |why| {
+    told.push(why.to_owned())
+  })
+  .await
+  .expect("a card is granted");
+
+  assert_eq!(held.demand, 101, "the demand the master took in is the line's");
+  assert_eq!(stand.asked.lock().unwrap().len(), 1, "no second demand is asked");
+  assert_eq!(told, [card::UNREACHED]);
+  assert_eq!(ledger(&settings), ["101"]);
+}
+
+#[tokio::test]
+async fn a_line_finding_two_demands_of_its_work_key_keeps_one() {
+  let stand = Stand {
+    live: Mutex::new(vec![(99, Some("voice:synthesis:7".to_owned()))]),
+    unanswered: Mutex::new(1),
+    ..Stand::default()
+  };
+  let (stand, at) = serve(stand, Answer::Granted, vec![]).await;
+  let (_root, settings) = settings(at);
+  let units = Units::new(&settings).expect("the units are named");
+  let held = card::hold(&units.arbiter, &settings.demands_folder(), &asking(), &mut |_| {})
+    .await
+    .expect("a card is granted");
+
+  assert_eq!(held.demand, 99, "the first of the line's work key is kept");
+  assert_eq!(*stand.given.lock().unwrap(), [101], "the one beyond it is given back");
+  assert_eq!(ledger(&settings), ["99"]);
+}
+
+#[tokio::test]
+async fn a_refused_read_gives_the_demand_back_before_the_line_fails() {
+  let stand = Stand {
+    refuses: true,
+    ..Stand::default()
+  };
+  let (stand, at) = serve(stand, Answer::Waiting, vec![]).await;
+  let (_root, settings) = settings(at);
+  let units = Units::new(&settings).expect("the units are named");
+  let held = card::hold(&units.arbiter, &settings.demands_folder(), &asking(), &mut |_| {}).await;
+
+  assert!(held.is_err(), "a refusal of the master's ends the wait: {held:?}");
+  assert_eq!(*stand.given.lock().unwrap(), [101]);
+  assert!(ledger(&settings).is_empty());
 }
 
 #[tokio::test]
@@ -341,8 +492,18 @@ async fn a_line_gives_its_card_back_however_it_ends_and_says_each_stage() {
 }
 
 #[tokio::test]
-async fn the_demands_a_process_left_are_given_back_at_the_next_start() {
-  let (stand, at) = master(Answer::Granted, vec![]).await;
+async fn the_demands_a_process_left_are_given_back_at_the_next_start_from_the_ledger_and_the_master() {
+  let left = |id: i64, key: &str| (id, Some(key.to_owned()));
+  let stand = Stand {
+    live: Mutex::new(vec![
+      left(41, "voice:synthesis:5"),
+      left(43, "voice:synthesis:9"),
+      left(44, "research:run:1"),
+      (45, None),
+    ]),
+    ..Stand::default()
+  };
+  let (stand, at) = serve(stand, Answer::Granted, vec![]).await;
   let (_root, settings) = settings(at);
   let units = Units::new(&settings).expect("the units are named");
   let folder = settings.demands_folder();
@@ -351,12 +512,16 @@ async fn the_demands_a_process_left_are_given_back_at_the_next_start() {
   std::fs::write(folder.join("41"), "").expect("a demand is left");
   std::fs::write(folder.join("42"), "").expect("a demand is left");
 
-  let given = card::give_back_left(&units.arbiter, &folder).await;
+  let given = card::give_back_left(&units.arbiter, &folder, node::WORK).await;
   let mut back = stand.given.lock().unwrap().clone();
 
   back.sort_unstable();
 
-  assert_eq!(given, 2);
-  assert_eq!(back, [41, 42]);
+  assert_eq!(given, 3);
+  assert_eq!(
+    back,
+    [41, 42, 43],
+    "the ledger's and the master's demands of the voice's work, and no other"
+  );
   assert!(ledger(&settings).is_empty());
 }

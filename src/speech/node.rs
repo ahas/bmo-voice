@@ -34,6 +34,9 @@ use crate::units::node::Reach;
 /// the node for.
 pub const SERVICE: &str = "voice";
 
+/// The start of every synthesis's work key, `voice:synthesis:<synthesisId>`: the key its demand is asked with.
+pub const WORK: &str = "voice:synthesis:";
+
 // Where everything lands on the node, relative to its home, the port the server listens on there, and the token
 // file beside the node's other configuration.
 const PLACE: &str = "bmo-voice";

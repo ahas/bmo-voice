@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::context::Context;
 use crate::events::Events;
 use crate::http::{Served, router};
-use crate::speech::{card, spoken};
+use crate::speech::{card, node, spoken};
 
 /// The service run: its settings read, its store migrated, the demands and seats an earlier process left given back,
 /// the lines it left unspoken taken up, and its
@@ -15,7 +15,8 @@ pub async fn serve() -> Result<(), String> {
   raise_open_files();
 
   let context = Context::open(8).await?;
-  let left = card::give_back_left(&context.units.arbiter, &context.settings.demands_folder()).await;
+  let left =
+    card::give_back_left(&context.units.arbiter, &context.settings.demands_folder(), node::WORK).await;
 
   if left > 0 {
     eprintln!("voice-server: gave back {left} demands an earlier process left");

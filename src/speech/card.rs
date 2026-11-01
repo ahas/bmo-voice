@@ -1,9 +1,12 @@
 //! The card a line is spoken on (`docs/boundary-api.md`, 「The voice servers and the card」): a demand for one card
 //! of the voice's service asked of the arbiter's master and waited on however long its grant takes, each reason it
 //! waits on told as it changes; read again where the card was held from under the line; and given back as the line
-//! ends. Every demand asked stands in the ledger, one file under `voice/demands/` named by its id, until it is given
-//! back, so one a process left behind is given back as the next one starts.
+//! ends. A line holds one demand at a time and forgets it only where the master answers `404` for it by its id or
+//! answers its give-back. Every demand asked stands in the ledger, one file under `voice/demands/` named by its id,
+//! until then, so one a process left behind is given back as the next one starts, with every demand of the voice's
+//! work the master holds.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -58,7 +61,9 @@ fn tell(said: &mut Option<String>, why: String, waiting: &mut (dyn FnMut(&str) +
   }
 }
 
-// A demand asked and kept in the ledger, asked again while the master is not reached.
+// A demand asked and kept in the ledger, asked again while the master is not reached. An ask whose answer did not
+// arrive may have been taken in, so before it is asked again the master's demands are read for one asked with the
+// line's work key.
 async fn asked(
   arbiter: &Arbiter,
   ledger: &Path,
@@ -66,7 +71,25 @@ async fn asked(
   said: &mut Option<String>,
   waiting: &mut (dyn FnMut(&str) + Send),
 ) -> Result<Demand, String> {
+  let mut unanswered = false;
+
   loop {
+    if unanswered {
+      match taken_in(arbiter, ledger, ask).await {
+        Ok(Some(demand)) => return Ok(demand),
+        Ok(None) => {}
+        Err(why) if !unreached(&why) => {
+          return Err(format!("the arbiter's master refused to read its demands: {why}"));
+        }
+        Err(_) => {
+          tell(said, UNREACHED.to_owned(), waiting);
+          tokio::time::sleep(AGAIN).await;
+
+          continue;
+        }
+      }
+    }
+
     match arbiter.ask(ask).await {
       Ok(demand) => {
         keep(ledger, demand.id);
@@ -77,6 +100,7 @@ async fn asked(
         return Err(format!("the arbiter's master refused a demand for {}: {why}", ask.service_name));
       }
       Err(_) => {
+        unanswered = true;
         tell(said, UNREACHED.to_owned(), waiting);
         tokio::time::sleep(AGAIN).await;
       }
@@ -84,8 +108,32 @@ async fn asked(
   }
 }
 
-// A demand read until a card is granted it, however long that takes. A demand the master no longer holds, a master
-// restarted, is asked again.
+// The demand of the line's work key the master took in from an ask whose answer did not arrive, kept in the ledger;
+// any beyond the first given back, so the line holds one. None where the master holds none, or the ask names no key.
+async fn taken_in(arbiter: &Arbiter, ledger: &Path, ask: &Ask) -> Result<Option<Demand>, UnitError> {
+  let Some(key) = &ask.work_key else {
+    return Ok(None);
+  };
+  let mut found = arbiter
+    .demands()
+    .await?
+    .into_iter()
+    .filter(|demand| demand.work_key.as_ref() == Some(key));
+  let Some(first) = found.next() else {
+    return Ok(None);
+  };
+
+  keep(ledger, first.id);
+
+  for beyond in found {
+    give_back(arbiter, ledger, beyond.id).await;
+  }
+
+  Ok(Some(first))
+}
+
+// A demand read until a card is granted it, however long that takes. A demand the master answers `404` for, a
+// master restarted, is asked again; a refusal of the master's gives the demand back before it ends the wait.
 async fn granted(
   arbiter: &Arbiter,
   ledger: &Path,
@@ -111,6 +159,8 @@ async fn granted(
         demand = asked(arbiter, ledger, ask, said, waiting).await?;
       }
       Err(why) if !unreached(&why) => {
+        give_back(arbiter, ledger, demand.id).await;
+
         return Err(format!("the arbiter's master refused to read the demand {}: {why}", demand.id));
       }
       Err(_) => {
@@ -136,7 +186,7 @@ pub async fn hold(
 }
 
 /// The card of a demand held already, read again until it is granted again: where other work held the card from
-/// under the line, or a lower tier took it.
+/// under the line, or a lower tier took it. A refusal of the master's gives the demand back before it ends the wait.
 pub async fn again(
   arbiter: &Arbiter,
   ledger: &Path,
@@ -153,6 +203,8 @@ pub async fn again(
         break asked(arbiter, ledger, ask, &mut said, waiting).await?;
       }
       Err(why) if !unreached(&why) => {
+        give_back(arbiter, ledger, held.demand).await;
+
         return Err(format!("the arbiter's master refused to read the demand {}: {why}", held.demand));
       }
       Err(_) => {
@@ -185,24 +237,40 @@ pub async fn give_back(arbiter: &Arbiter, ledger: &Path, demand: i64) {
   }
 }
 
-/// Every demand the ledger holds given back once: what a process left behind as it ended, given back as the next
-/// one starts, since none of its lines holds a card yet. Answers how many were given back.
-pub async fn give_back_left(arbiter: &Arbiter, ledger: &Path) -> usize {
-  let Ok(entries) = std::fs::read_dir(ledger) else {
-    return 0;
-  };
+/// Every demand an earlier process left given back once: each the ledger holds, and each the master holds whose work
+/// key starts with `work`, since none of this process's lines holds one yet. It runs before any line asks. One the
+/// master refuses to give back stays in the ledger for the next start. Answers how many were given back.
+pub async fn give_back_left(arbiter: &Arbiter, ledger: &Path, work: &str) -> usize {
+  let mut left: BTreeSet<i64> = std::fs::read_dir(ledger)
+    .map(|entries| {
+      entries
+        .filter_map(Result::ok)
+        .filter_map(|one| one.file_name().to_str()?.parse::<i64>().ok())
+        .collect()
+    })
+    .unwrap_or_default();
+
+  match arbiter.demands().await {
+    Ok(demands) => left.extend(
+      demands
+        .into_iter()
+        .filter(|demand| demand.work_key.as_deref().is_some_and(|key| key.starts_with(work)))
+        .map(|demand| demand.id),
+    ),
+    Err(why) => {
+      eprintln!("voice: the master's demands were not read for those an earlier process left: {why}")
+    }
+  }
+
   let mut given = 0;
 
-  for demand in entries
-    .filter_map(Result::ok)
-    .filter_map(|one| one.file_name().to_str()?.parse::<i64>().ok())
-  {
+  for demand in left {
     match arbiter.give_back(demand).await {
       Ok(()) => {
         forget(ledger, demand);
         given += 1;
       }
-      Err(why) => eprintln!("voice: the demand {demand} left in the ledger was not given back: {why}"),
+      Err(why) => eprintln!("voice: the demand {demand} an earlier process left was not given back: {why}"),
     }
   }
 

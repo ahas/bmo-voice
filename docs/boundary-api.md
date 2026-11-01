@@ -296,19 +296,27 @@ It asks no model, takes no card turn and keeps nothing. A language other than `k
   failed.
 - **One read of the master serves every waiting line.** No waiting line holds a request of its own open: while any
   line waits, the engine reads every demand the master holds once a second, and each waiting line takes its
-  demand's state from that read; a demand the read does not hold is one the master holds no more. However many
-  lines wait, the master is read through one request at a time.
+  demand's state from that read. However many lines wait, the master is read through one request at a time.
+- **A line holds one demand at a time, and forgets it only on the master's word.** A read of every demand may
+  have been taken before a line's demand was asked, so a demand the read does not hold is read again by its id,
+  and only the master's `404` for that id is the demand no longer held; absence from a read is never enough. An
+  ask whose answer did not arrive may have been taken in, so before it is asked again the master's demands are
+  read for one of the line's work key: the first found is the line's demand, and any beyond it are given back.
 - **Every line runs on the service's one runtime and through its one HTTP client,** whose idle connections are
   kept to a bound, so a waiting line holds no thread, poller or socket of its own.
 - **The wait has no end but the grant.** While the master holds the demand in line, or cannot be reached, the
-  synthesis stays `waiting`, its `waitingOn` saying why. A master that no longer holds the demand, one
+  synthesis stays `waiting`, its `waitingOn` saying why. A master that answers `404` for the demand, one
   restarted, is asked a new one. `voice` placed on no node (`no-place`) and any other refusal of the master's
-  fail the synthesis at once.
+  fail the synthesis at once, the demand it held given back.
 - **A card held from under the line:** where the node's server answers that other work held its card past its
   own wait (503), the demand is read again until its card is granted again, and the line is asked of that
   card's node once more; nothing bounds that either.
 - **Every demand the engine holds stands in its ledger** (`docs/store.md`, 「The folder」) from its asking until
-  it is given back, and each one a process left there is given back as the next process starts.
+  the master answers its give-back, `204` or `404`, or answers `404` for it by its id; a give-back the master
+  refuses leaves it there.
+- **The master is the truth at start.** Before any line of the new process asks, every demand the ledger holds
+  is given back, and so is every demand the master holds whose work key is `voice:synthesis:<synthesisId>`, since
+  no line of the new process holds one yet: what a process left behind, in the ledger or not.
 - **A node out of reach is never quietly replaced by this machine's card:** the synthesis fails, naming the node
   and what it met.
 
@@ -330,8 +338,8 @@ The arbiter's master (its `docs/api.md`, 「Demands」).
 | Call | Route | Used for |
 |---|---|---|
 | a demand | `POST /demands` with `serviceName` `voice`, `count` 1, `workKey` and `ref` | a card of `voice` for one synthesis: `201` granted, `202` waiting, `422` `no-place` where `voice` is placed on no node |
-| the demands read | `GET /demands` | every demand the master holds, read once a second while any line waits: each waiting line's demand as it stands, or none where the master holds it no more |
-| a demand read | `GET /demands/{demandId}` | a held line's demand as it stands once other work held its card from under it; `404` where the master holds it no more |
+| the demands read | `GET /demands` | every demand the master holds: read once a second while any line waits, each waiting line's demand as it stands; read for a line's work key where its ask was not answered; and read once as the service starts, for the demands of `voice:synthesis:` work keys an earlier process left |
+| a demand read | `GET /demands/{demandId}` | a line's demand as it stands where a read of every demand did not hold it, or once other work held its card from under the line; `404` alone is the master holding it no more |
 | the demand given back | `DELETE /demands/{demandId}` | `204`, or `404` where it is given back already |
 
 - **A granted card** is the first of `cards` on a demand `granted` with nothing `taken`; its `nodeName` is the

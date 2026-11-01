@@ -1,6 +1,7 @@
 //! The arbiter's master, as its `docs/api.md` states it (「Demands」): a demand for cards of a service asked, read, and
 //! given back. Every waiting line takes its demand from one read of all the master holds, made once a second while any
-//! line waits, so no line holds a request of its own open. Which node answers a card is the master's to say.
+//! line waits, so no line holds a request of its own open; a demand that read does not hold is read again by its id,
+//! since the read may have been taken before it was asked. Which node answers a card is the master's to say.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -94,6 +95,9 @@ pub struct Demand {
   pub taken: Option<Value>,
   #[serde(default)]
   pub reason: Option<Reason>,
+  /// The key of the work it continues, as it was asked.
+  #[serde(default)]
+  pub work_key: Option<String>,
 }
 
 impl Demand {
@@ -137,9 +141,10 @@ impl Arbiter {
     Ok(page.items)
   }
 
-  /// A waiting line's demand as the next read of the master finds it: the demand, none where the master holds it no
-  /// more, or the read's failure. The loop that reads is started by the first line that waits, and reads only while
-  /// one does.
+  /// A waiting line's demand as the next read of the master finds it: the demand, none where the master answers
+  /// `404` for it by its id, or the read's failure. A demand the read does not hold is read by its id, since a read
+  /// taken before the demand was asked does not hold it. The loop that reads is started by the first line that
+  /// waits, and reads only while one does.
   pub async fn watched(&self, id: i64) -> Result<Option<Demand>, UnitError> {
     self.read_while_watched();
 
@@ -157,7 +162,10 @@ impl Arbiter {
     let reading = next.borrow().clone();
 
     match reading {
-      Some(Reading::Held(demands)) => Ok(demands.get(&id).cloned()),
+      Some(Reading::Held(demands)) => match demands.get(&id) {
+        Some(demand) => Ok(Some(demand.clone())),
+        None => self.demand(id).await,
+      },
       Some(Reading::Failed {
         unreached: true,
         why,
@@ -174,7 +182,7 @@ impl Arbiter {
         code: None,
         error: why,
       }),
-      None => Ok(None),
+      None => self.demand(id).await,
     }
   }
 

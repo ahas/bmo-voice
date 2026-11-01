@@ -538,7 +538,7 @@ async fn speak(context: Arc<Context>, events: Events, id: i64, voice: voices::Vo
   let ask = Ask {
     service_name: node::SERVICE.to_owned(),
     count: 1,
-    work_key: Some(format!("voice:synthesis:{id}")),
+    work_key: Some(format!("{}{id}", node::WORK)),
     reference: Some(format!("voice synthesis {id} in {}", voice.name)),
   };
   let speech = node::Speech {
