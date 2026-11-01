@@ -94,6 +94,14 @@ PIECE_RMS_DB = -20.0
 VOICED_DB = 40.0
 LEVEL_FRAME = 1024
 
+# What says a piece stopped before its last syllable fell away (docs/voice-plan.md, 「What a long line takes of the
+# card」): its last `CUT_TAIL_S` still within `CUT_DB` of its loudest frame, and less than `CUT_DECAY_S` after its last
+# frame within `LOUD_DB` of the loudest.
+CUT_TAIL_S = 0.03
+CUT_DB = 30.0
+CUT_DECAY_S = 0.10
+LOUD_DB = 20.0
+
 # How long each edge of a spoken piece is faded over, in seconds (docs/voice-plan.md, 「The voices」).
 EDGE_FADE = 0.01
 
@@ -268,6 +276,28 @@ def levelled(audio: np.ndarray) -> np.ndarray:
     return (audio * (10 ** (PIECE_RMS_DB / 20) / rms)).astype(np.float32)
 
 
+def stops_short(audio: np.ndarray, rate: int) -> bool:
+    """Whether the piece ends while its voice is still loud: the model closed its turn before the last syllable fell
+    away, which a listener hears as the line stopping mid-word and the next sentence starting."""
+    frames = len(audio) // LEVEL_FRAME
+    tail = audio[-int(CUT_TAIL_S * rate):]
+
+    if frames < 2 or len(tail) == 0:
+        return False
+
+    energy = np.sqrt(np.mean(audio[: frames * LEVEL_FRAME].reshape(frames, LEVEL_FRAME).astype(np.float64) ** 2, axis=1))
+    loudest = float(energy.max())
+
+    if loudest <= 0.0:
+        return False
+
+    last_loud = int(np.where(energy >= loudest * 10 ** (-LOUD_DB / 20))[0].max())
+    decay = (frames - 1 - last_loud) * LEVEL_FRAME / rate
+    still = float(np.sqrt(np.mean(tail.astype(np.float64) ** 2))) >= loudest * 10 ** (-CUT_DB / 20)
+
+    return still and decay < CUT_DECAY_S
+
+
 def faded(audio: np.ndarray, rate: int) -> np.ndarray:
     """The piece with both edges faded over `EDGE_FADE` on a raised-cosine curve, so neither steps
     between the model's noise floor and the digital silence beside it. A piece shorter than two fades
@@ -417,12 +447,12 @@ class Mouth:
     def pieces(self, checkpoint: Path, text: str, seed: int, style: str = "", by_sentence: bool = False):
         """The line's pieces at the codec's rate, each levelled (`levelled`) and faded at both edges (`faded`): a
         sentence at a time where asked (`sentences`), in passes the context holds otherwise (`passes`). Each piece
-        after the first is spoken on from the one before it (`piece`), and every piece on the same seed, so the same
-        line gives back the same samples every time."""
+        after the first is spoken on from the first (`piece`), and every piece on the same seed, so the same line gives
+        back the same samples every time."""
         self.ready(checkpoint)
         rate = self.codec.sample_rate
-        # The piece before, as its words and the codes the model made for them; none before the first.
-        carried: dict = {"before": None}
+        # The line's first piece, as its words and the codes the model made for them, once it is spoken.
+        carried: dict = {"first": None}
         out: list[np.ndarray] = []
 
         for piece in sentences(text) if by_sentence else passes(text):
@@ -450,47 +480,57 @@ class Mouth:
         return [say(sentence) for sentence in sentences(piece)]
 
     def piece(self, words: str, seed: int, carried: dict) -> np.ndarray:
-        """One piece on the line's seed, asked with the piece before it as its reference where there is one: that
-        piece's words and its generated codes, which carry its timbre, pitch and pace into this one. Where the two
-        would not fit the prompt's share of the context the piece is asked bare. What this piece made is then carried
-        for the next, and its codes are decoded by the codec."""
+        """One piece on the line's seed, asked with the line's first piece as its reference once that one is spoken:
+        its words and its generated codes, which carry its timbre, pitch and pace into this one. Where the two would
+        not fit the prompt's share of the context, the piece is asked bare; and a piece that stops short
+        (`stops_short`) is asked once more bare and that one is kept. The first piece, always asked bare, is carried for
+        the rest of the line."""
         import torch
         from fish_speech.models.text2semantic.errors import InvalidInputError
         from fish_speech.models.text2semantic.inference import decode_one_token_ar, generate_long
 
-        def generated(before) -> list:
+        def spoken(reference) -> tuple:
             random.seed(seed)
             np.random.seed(seed)
             torch.manual_seed(seed)
-            reference = {} if before is None else {"prompt_text": [before[0]], "prompt_tokens": [before[1]]}
+            asked = {} if reference is None else {"prompt_text": [reference[0]], "prompt_tokens": [reference[1]]}
             codes = []
 
             for answer in generate_long(
                 model=self.model, device="cuda", decode_one_token=decode_one_token_ar, text=words,
-                max_new_tokens=MOST_NEW_TOKENS, compile=False, **reference, **self.sampling,
+                max_new_tokens=MOST_NEW_TOKENS, compile=False, **asked, **self.sampling,
             ):
                 if answer.action == "sample" and answer.codes is not None:
                     codes.append(answer.codes)
                 elif answer.action == "next":
                     break
 
-            return codes
-
-        with torch.inference_mode():
-            try:
-                codes = generated(carried["before"])
-            except InvalidInputError:
-                # The piece before and this one's text over the prompt's share: this one is asked bare.
-                codes = generated(None)
-
             if not codes:
                 raise RuntimeError("the model closed its turn before it spoke")
 
-            spoken = torch.cat(codes, dim=1)
-            carried["before"] = (words, spoken.cpu())
-            audio = self.codec.from_indices(spoken.to("cuda")[None])[0].squeeze()
+            made = torch.cat(codes, dim=1)
+            audio = self.codec.from_indices(made.to("cuda")[None])[0].squeeze().float().cpu().numpy()
 
-        return audio.float().cpu().numpy()
+            return made, audio
+
+        with torch.inference_mode():
+            first = carried["first"]
+
+            try:
+                made, audio = spoken(first)
+            except InvalidInputError:
+                # The first piece and this one's text over the prompt's share: this one is asked bare.
+                first = None
+                made, audio = spoken(None)
+
+            if first is not None and stops_short(audio, self.codec.sample_rate):
+                print("voice-fish: a piece stopped short on its reference, so it is spoken again bare", file=sys.stderr, flush=True)
+                made, audio = spoken(None)
+
+        if carried["first"] is None:
+            carried["first"] = (words, made.cpu())
+
+        return audio
 
     def held(self):
         """Every tensor the loaded models hold, each once: their parameters, their buffers (the key-value caches

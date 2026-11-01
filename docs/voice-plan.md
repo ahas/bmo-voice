@@ -185,8 +185,8 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **How a piece ends and meets the next.** A piece is what one call to the model speaks. It ends where the model
   closes its turn, is levelled to the line's loudness (「What the sound carries」), and both its edges are faded over
   10 ms on a raised-cosine curve.
-- **A line is one voice from its first piece to its last.** Every piece after the first is spoken on from the one
-  before it (「What a long line takes of the card」), so the timbre, pitch and pace the first piece took carry through
+- **A line is one voice from its first piece to its last.** Every piece after the first is spoken on from the line's
+  first piece (「What a long line takes of the card」), so the timbre, pitch and pace the first piece took carry through
   the line rather than being drawn afresh at every sentence.
 - **No served voice takes a continuation prompt.** `--prompt` and `--prompt-en` are refused; the prompt columns
   stand only on the retired VoxCPM2 rows.
@@ -377,12 +377,16 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **A line is cut into pieces:** a row that speaks a sentence at a time speaks each sentence as one piece, and any
   other row speaks a line in passes of whole sentences of up to 240 characters, 0.3 seconds apart; a sentence longer
   than the limit is one pass all the same. A pass stays far inside the 2,048 tokens a piece may generate.
-- **Each piece carries the one before it, and only that one.** The first piece of a line is asked as a bare
-  conversation, its text and nothing more. Every later piece is asked with the piece before it as its reference:
-  that piece's words and the codes the model generated for them, in the place S2-Pro reads a reference from. Only
-  the piece before is carried, so the prompt holds one sentence's sound and stays inside the 1,024 tokens the
-  context leaves it; a piece whose predecessor would not fit there is spoken from no reference, and the one after it
-  carries it in turn. Every piece is spoken on the line's seed.
+- **Every piece carries the line's first piece, and only that one.** The first piece of a line is asked as a bare
+  conversation, its text and nothing more. Every later piece is asked with the first piece as its reference: its
+  words and the codes the model generated for them, in the place S2-Pro reads a reference from. The model ends a
+  piece the way its reference ends, so a reference cut short makes the piece after it stop short too; a piece asked
+  bare ends on the voice's own fall, so only such a piece is ever carried. One sentence's sound is all the prompt
+  holds, inside the 1,024 tokens the context leaves it; a piece whose text would not fit beside the first piece is
+  asked bare. Every piece is spoken on the line's seed.
+- **A piece that stops short is spoken again bare.** A piece whose voice is still loud in its last 30 ms, within
+  30 dB of its loudest frame, with under 100 ms after its last loud frame, was ended by the model before its last
+  syllable fell away; it is asked once more with no reference, on the same seed, and that one is kept.
 - **A piece the card runs out of memory for is spoken once more,** as its sentences one by one on an emptied cache;
   only a second shortfall fails the line.
 
