@@ -183,6 +183,11 @@ impl Settings {
     self.voice_folder().join("demands")
   }
 
+  /// The ledger of the seats of agency's co-worker pool the service holds, one file each.
+  pub fn seats_folder(&self) -> PathBuf {
+    self.voice_folder().join("seats")
+  }
+
   /// The token the voice servers on the voice nodes check.
   pub fn node_token_file(&self) -> PathBuf {
     self.voice_folder().join("voice.token")

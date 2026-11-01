@@ -4,6 +4,7 @@
 //! asked again, as is every refusal and every silence on the way, with no count and no clock; the readings the
 //! model chose for names the table did not hold are written into it.
 
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -99,7 +100,7 @@ pub async fn derived(
           Ok(answer) => match answer.and_then(|answer| checked(&answer, language).map(|()| answer)) {
             Ok(answer) => {
               if let Some(standing) = held.take() {
-                release(agency, standing, "answered").await;
+                release(context, agency, standing, "answered").await;
               }
 
               keep_readings(context, language, &answer.readings).await;
@@ -124,7 +125,7 @@ pub async fn derived(
               }
             ) && let Some(standing) = held.take()
             {
-              release(agency, standing, "failed").await;
+              release(context, agency, standing, "failed").await;
             }
 
             Missed::Road(format!("the turn did not answer: {why}"))
@@ -253,8 +254,20 @@ async fn stand(context: &Context, agency: &Agency, id: i64, n: u64) -> Result<He
     work_key: format!("role:{}", spoken.role),
     provider: spoken.provider.clone(),
   };
+  let ledger = context.settings.seats_folder();
   let seat = agency.ask_seat(&ask).await.map_err(|why| format!("no seat was given: {why}"))?;
-  let seat = admitted(agency, seat).await.map_err(|why| format!("the seat was not let in: {why}"))?;
+
+  keep(&ledger, &seat.token);
+
+  let token = seat.token.clone();
+  let seat = match admitted(agency, seat).await {
+    Ok(seat) => seat,
+    Err(why) => {
+      give_back(agency, &ledger, &token, "cancelled: not let in", true).await;
+
+      return Err(format!("the seat was not let in: {why}"));
+    }
+  };
   let start = json!({
     "agent": spoken.line,
     "scope": "apart",
@@ -269,7 +282,7 @@ async fn stand(context: &Context, agency: &Agency, id: i64, n: u64) -> Result<He
   let session = match agency.start_session(&start).await {
     Ok(session) => session,
     Err(why) => {
-      let _ = agency.give_back(&seat.token, "cancelled: no session", true).await;
+      give_back(agency, &ledger, &seat.token, "cancelled: no session", true).await;
 
       return Err(format!("no session was started: {why}"));
     }
@@ -283,10 +296,59 @@ async fn stand(context: &Context, agency: &Agency, id: i64, n: u64) -> Result<He
 }
 
 // A derivation's session ended and its seat given back with what it came to.
-async fn release(agency: &Agency, held: Held, outcome: &str) {
+async fn release(context: &Context, agency: &Agency, held: Held, outcome: &str) {
   end(agency, &held.session).await;
+  give_back(agency, &context.settings.seats_folder(), &held.seat.token, outcome, false).await;
+}
 
-  let _ = agency.give_back(&held.seat.token, outcome, false).await;
+// A seat's file in the ledger. A token is agency's own word, so only its letters, figures and dashes name the file.
+fn entry(ledger: &Path, token: &str) -> PathBuf {
+  let name: String = token.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
+
+  ledger.join(name)
+}
+
+fn keep(ledger: &Path, token: &str) {
+  let written = std::fs::create_dir_all(ledger).and_then(|()| std::fs::write(entry(ledger, token), token));
+
+  if let Err(why) = written {
+    eprintln!("voice: the seat {token} was not written into the ledger: {why}");
+  }
+}
+
+// A seat given back and taken out of the ledger; one agency did not take back stays in it, for the next process.
+async fn give_back(agency: &Agency, ledger: &Path, token: &str, outcome: &str, cancel: bool) {
+  match agency.give_back(token, outcome, cancel).await {
+    Ok(()) | Err(UnitError::Refused { status: 404, .. }) => {
+      let _ = std::fs::remove_file(entry(ledger, token));
+    }
+    Err(why) => eprintln!("voice: the seat {token} was not given back: {why}"),
+  }
+}
+
+/// Every seat an earlier process left in the ledger given back, cancelled; how many were.
+pub async fn give_back_left(agency: &Agency, ledger: &Path) -> usize {
+  let Ok(entries) = std::fs::read_dir(ledger) else {
+    return 0;
+  };
+  let mut given = 0;
+
+  for path in entries.filter_map(Result::ok).map(|one| one.path()) {
+    let Ok(token) = std::fs::read_to_string(&path) else {
+      continue;
+    };
+    let token = token.trim();
+
+    match agency.give_back(token, "cancelled: left by an earlier voice process", true).await {
+      Ok(()) | Err(UnitError::Refused { status: 404, .. }) => {
+        let _ = std::fs::remove_file(&path);
+        given += 1;
+      }
+      Err(why) => eprintln!("voice: the seat {token} left in the ledger was not given back: {why}"),
+    }
+  }
+
+  given
 }
 
 // One try: one turn in the derivation's session. The answer where the model gave one, else agency's refusal or
@@ -325,8 +387,17 @@ async fn admitted(agency: &Agency, mut seat: Seat) -> Result<Seat, UnitError> {
 
     tokio::time::sleep(LOOK_AGAIN).await;
 
-    if let Some(now) = agency.admit(&seat.token).await? {
-      seat = now;
+    // Agency not reached is asked again about the same seat, which keeps its place in the line.
+    match agency.admit(&seat.token).await {
+      Ok(Some(now)) => seat = now,
+      Ok(None) => {}
+      Err(
+        UnitError::Unreached { .. }
+        | UnitError::Refused {
+          status: 502 | 503, ..
+        },
+      ) => {}
+      Err(why) => return Err(why),
     }
   }
 

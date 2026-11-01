@@ -455,6 +455,13 @@ async fn written_words_alone_are_derived_on_a_seat_the_agreed_readings_first_and
   assert_eq!(seat["role"], "transliterator");
   assert_eq!(seat["workKey"], "role:transliterator");
 
+  let ledger = scratch.root.join("voice").join("seats");
+
+  assert!(
+    std::fs::read_dir(&ledger).map_or(true, |mut left| left.next().is_none()),
+    "a seat given back leaves the ledger"
+  );
+
   let start = asked.starts.lock().unwrap()[0].clone();
 
   assert_eq!(start["scope"], "apart");
@@ -479,4 +486,53 @@ async fn written_words_alone_are_derived_on_a_seat_the_agreed_readings_first_and
   assert_eq!(nuxt, "넉스트", "a row that stands is never written over");
 
   store.close().await.expect("the store connection closes");
+}
+
+#[tokio::test]
+async fn a_seat_an_earlier_process_left_in_the_ledger_is_given_back_cancelled() {
+  let scratch = Scratch::new().await;
+  let asked = Arc::new(Asked::default());
+  let at = stand_in_agency(Arc::clone(&asked)).await;
+  let settings_path = scratch.root.join("env").join("left.toml");
+
+  std::fs::write(
+    &settings_path,
+    format!(
+      r#"listen = "127.0.0.1:0"
+address = "http://127.0.0.1:0"
+token_file = "voice.token"
+database = "{}"
+data_root = "{}"
+
+[units.node]
+address = "http://127.0.0.1:9"
+
+[units.arbiter]
+address = "http://127.0.0.1:9"
+
+[units.web]
+address = "http://127.0.0.1:9"
+
+[units.agency]
+address = "http://{at}"
+"#,
+      address_of(&scratch.name),
+      scratch.root.display()
+    ),
+  )
+  .expect("the settings are written");
+
+  let settings = Settings::read(&settings_path).expect("the settings read");
+  let ledger = settings.seats_folder();
+
+  std::fs::create_dir_all(&ledger).expect("the ledger is made");
+  std::fs::write(ledger.join("seat-left"), "seat-left").expect("a left seat is written");
+
+  let units = Units::new(&settings).expect("the units are named");
+  let agency = units.agency.as_ref().expect("an agency is named");
+  let given = bmo_voice::speech::spoken::give_back_left(agency, &ledger).await;
+
+  assert_eq!(given, 1);
+  assert_eq!(asked.given_back.lock().unwrap()[0]["cancel"], true, "it never ran, so it is cancelled");
+  assert!(!ledger.join("seat-left").exists(), "and it leaves the ledger");
 }

@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.11.
+Fixed at 0.1.0-rev.12.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -159,6 +159,11 @@ server any other way.
   each is written into the voice name table, so the same spelling is read the same way next time. A spelling
   the table holds is never written over: the owner's correction of a row (`scripts/voice-names.ts --set`) wins
   from then on. A chosen reading that holds what the check finds is not kept.
+- **Every seat asked stands in the ledger** (`docs/store.md`, 「The folder」) until it is given back, and each one a
+  process left there is given back, cancelled, as the next process starts: the pool lets its line in one at a time
+  from its head, so a seat left waiting by a process that is gone would hold every later line behind it. A seat
+  waiting while agency is not reached is asked about again, never left for a new one; one agency no longer holds,
+  or given back before it was let in, is dropped and a new one asked.
 - **Nothing gives it up.** An answer that fails the check, one that does not read, a seat or a session agency
   refuses and agency not reached are each asked again five seconds later, however often; `waitingOn` says which
   it was and why, and the synthesis stays `waiting` until its spoken words stand. They are kept as its
@@ -320,7 +325,7 @@ and 「sessions」), for the spoken words a synthesis is derived (「How the eng
 | Call | Route | Used for |
 |---|---|---|
 | a seat | `POST /seat-requests` with `requestKey` and `owner` `voice:synthesis:<synthesisId>:<n>`, `n` counting the seats the line was asked, `role`, `selection` `auto`, `workKey` `role:<role>` and `provider` where the settings name one | the seat the derivation runs on, with the provider, model, effort and tier its role's key resolves to |
-| its admission and its end | `PATCH /seat-requests/{token}` | asked with no state until it is `active`; bound to the session with `bound`; given back with `finished` and its outcome, `cancel` where no turn ran |
+| its admission and its end | `PATCH /seat-requests/{token}` | asked with no state until it is `active`; bound to the session with `bound`; given back with `finished` and its outcome, `cancel` where no turn ran, and every seat an earlier process left in the ledger given back cancelled as the service starts |
 | a session | `POST /sessions` with `scope` `apart`, `line`, `systemPrompt`, `toolsAllowed` empty and the seat's provider and model | the derivation's thrown-away session |
 | its turns | `POST /sessions/{sessionId}/turns` with `prompt` and a work turn's parts: `provider` and `model` the seat's, `mapping` its `model`, `effort` and `tier`, `resume` `fresh`, `cwd` empty, `name`, `title`, `chat` 0 (the derivation stands under no room), `workKey` `role:<role>`, `hearsWords` false and `variables` empty | one try, answered once it ends; its answer is the model's |
 | its end | `DELETE /sessions/{sessionId}` | the session ended once the spoken words stand; one still busy is asked again |

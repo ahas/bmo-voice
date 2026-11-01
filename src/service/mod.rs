@@ -6,9 +6,10 @@ use std::sync::Arc;
 use crate::context::Context;
 use crate::events::Events;
 use crate::http::{Served, router};
-use crate::speech::card;
+use crate::speech::{card, spoken};
 
-/// The service run: its settings read, its store migrated, the demands an earlier process left given back, and its
+/// The service run: its settings read, its store migrated, the demands and seats an earlier process left given back,
+/// and its
 /// routes served until it is stopped.
 pub async fn serve() -> Result<(), String> {
   let context = Context::open(8).await?;
@@ -16,6 +17,14 @@ pub async fn serve() -> Result<(), String> {
 
   if left > 0 {
     eprintln!("voice-server: gave back {left} demands an earlier process left");
+  }
+
+  if let Some(agency) = &context.units.agency {
+    let left = spoken::give_back_left(agency, &context.settings.seats_folder()).await;
+
+    if left > 0 {
+      eprintln!("voice-server: gave back {left} seats an earlier process left");
+    }
   }
 
   let token = context.settings.token(&context.settings.token_file).map_err(|why| why.to_string())?;
