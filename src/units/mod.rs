@@ -1,6 +1,7 @@
 //! The other units the voice calls, each a client of only the routes that unit's own document states
 //! (`docs/boundary-api.md`, 「What the voice calls」).
 
+pub mod agency;
 pub mod arbiter;
 pub mod hub;
 pub mod node;
@@ -19,6 +20,8 @@ pub struct Units {
   pub arbiter: arbiter::Arbiter,
   /// The account service the script studio signs a person in against.
   pub web: web::Web,
+  /// Agency, whose co-worker pool derives a line's spoken words; none where the settings name none.
+  pub agency: Option<agency::Agency>,
 }
 
 impl Units {
@@ -32,6 +35,10 @@ impl Units {
       node: node::Node::new(caller("node", &units.node)?),
       arbiter: arbiter::Arbiter::new(caller("arbiter", &units.arbiter)?),
       web: web::Web::new(caller("web", &units.web)?),
+      agency: match &units.agency {
+        Some(unit) => Some(agency::Agency::new(caller("agency", unit)?)),
+        None => None,
+      },
     })
   }
 }

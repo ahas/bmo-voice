@@ -23,6 +23,8 @@ static MADE: AtomicU32 = AtomicU32::new(0);
 
 const TOKEN: &str = "a-test-token";
 const ROOM: i64 = -500;
+/// Spoken words a Korean voice says as they stand, given beside each line so none waits on a derivation.
+const SPOKEN: &str = "백업이 끝났습니다.";
 
 fn server() -> String {
   std::env::var("BMO_TEST_POSTGRES")
@@ -186,7 +188,7 @@ async fn a_summary_is_taken_in_at_once_its_end_is_told_and_its_line_is_named_aft
     "POST",
     "/briefings",
     Some(
-      json!({ "voiceName": "voice-a", "text": "The backup finished.", "chatId": ROOM, "kind": "summary",
+      json!({ "voiceName": "voice-a", "text": "The backup finished.", "spoken": SPOKEN, "chatId": ROOM, "kind": "summary",
       "title": "The backup", "plays": false }),
     ),
   )
@@ -234,7 +236,7 @@ async fn a_full_reading_names_its_line_keeps_it_and_the_page_narrows_to_it() {
   let scratch = Scratch::new().await;
   let engine = engine(&scratch, None).await;
   let asked = |message: Value| {
-    json!({ "voiceName": "voice-a", "text": "The whole line, read out.", "chatId": ROOM, "messageId": message,
+    json!({ "voiceName": "voice-a", "text": "The whole line, read out.", "spoken": SPOKEN, "chatId": ROOM, "messageId": message,
       "kind": "full" })
   };
   let (status, _) = call(&engine, "POST", "/briefings", Some(asked(Value::Null))).await;
@@ -258,7 +260,7 @@ async fn a_full_reading_names_its_line_keeps_it_and_the_page_narrows_to_it() {
     &engine,
     "POST",
     "/briefings",
-    Some(json!({ "voiceName": "voice-a", "text": "Another room.", "chatId": 9, "kind": "summary" })),
+    Some(json!({ "voiceName": "voice-a", "text": "Another room.", "spoken": SPOKEN, "chatId": 9, "kind": "summary" })),
   )
   .await;
 
@@ -360,7 +362,7 @@ async fn a_synthesis_waits_for_its_card_says_why_and_gives_it_back_as_it_ends() 
     &engine,
     "POST",
     "/syntheses",
-    Some(json!({ "voiceName": "voice-b", "text": "A short line." })),
+    Some(json!({ "voiceName": "voice-b", "text": "A short line.", "spoken": SPOKEN })),
   )
   .await;
 

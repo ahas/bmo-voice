@@ -27,7 +27,7 @@ use crate::events::{
 };
 use crate::policy::POLICY;
 use crate::script::reading::Language;
-use crate::script::spoken;
+use crate::script::{spoken, unconverted};
 use crate::speech::{node, synth};
 use crate::store::{self, StoreError, voices};
 use crate::units::arbiter::Ask;
@@ -328,11 +328,14 @@ async fn create_synthesis(
 
   known_emotion(asked.emotion.as_deref())?;
 
+  let language = voice_language(&row)?;
+  let spoken = checked_spoken(asked.spoken.as_deref(), language)?;
   let at = crate::now_ms();
   let id = store::syntheses::insert(
     &served.context.db,
     &asked.voice_name,
     &asked.text,
+    spoken.as_deref(),
     asked.emotion.as_deref(),
     at,
   )
@@ -341,6 +344,7 @@ async fn create_synthesis(
     id,
     voice_name: asked.voice_name.clone(),
     text: asked.text.clone(),
+    spoken: spoken.clone(),
     emotion: asked.emotion.clone(),
     state: SynthesisState::Waiting,
     waiting_on: None,
@@ -365,11 +369,54 @@ async fn create_synthesis(
   // their shells and their waits, which no request's task is to carry.
   tokio::task::spawn_blocking(move || {
     if let Ok(runtime) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
-      runtime.block_on(speak(context, events, id, voice, text));
+      runtime.block_on(speak(
+        context,
+        events,
+        id,
+        voice,
+        Words {
+          text,
+          spoken,
+          language,
+        },
+      ));
     }
   });
 
   Ok((StatusCode::CREATED, Json(synthesis)).into_response())
+}
+
+// The language a voice's spoken words are checked in; a voice of any other is no voice a line can be spoken in.
+fn voice_language(row: &voices::VoiceRow) -> Result<Language, Refused> {
+  Language::parse(&row.language).ok_or_else(|| {
+    Refused::failed(format!(
+      "{} speaks {}, a language the spoken words have no check for",
+      row.name, row.language
+    ))
+  })
+}
+
+// The spoken words a caller gave, held to the check before anything is taken in (docs/boundary-api.md, 「The spoken
+// words」): never mended, refused naming the first word that failed.
+fn checked_spoken(spoken: Option<&str>, language: Language) -> Result<Option<String>, Refused> {
+  let Some(spoken) = spoken else {
+    return Ok(None);
+  };
+
+  match unconverted::unconverted(spoken, language) {
+    Some(found) => {
+      Err(Refused::new(StatusCode::UNPROCESSABLE_ENTITY, "unconverted-run", found.to_string()))
+    }
+    None => Ok(Some(spoken.trim().to_owned())),
+  }
+}
+
+// A line's two texts, the written words and the spoken words where they already stand, and the language the voice
+// says them in.
+struct Words {
+  text: String,
+  spoken: Option<String>,
+  language: Language,
 }
 
 // An emotion outside the policy's is refused before anything is taken in.
@@ -384,9 +431,28 @@ fn known_emotion(emotion: Option<&str>) -> Result<(), Refused> {
   }
 }
 
+// The spoken words a synthesis taken in without them is derived (docs/boundary-api.md, 「How the engine derives the
+// spoken words」), kept as its own once they stand; what the derivation waits on is told as the synthesis's wait.
+async fn derived_words(context: &Context, id: i64, language: Language, text: &str) -> String {
+  let mut told = |why: &str| context.waits.set(id, Some(why));
+  let words = crate::speech::spoken::derived(context, id, language, text, &mut told).await;
+
+  if let Err(why) = store::syntheses::set_spoken(&context.db, id, &words).await {
+    eprintln!("voice: synthesis {id}'s spoken words were not kept: {why}");
+  }
+
+  context.waits.set(id, None);
+
+  words
+}
+
 // One synthesis spoken on the card the arbiter's master grants it, its state, what it waits on and the event of its
 // end told as they come.
-async fn speak(context: Arc<Context>, events: Events, id: i64, voice: voices::VoiceRow, text: String) {
+async fn speak(context: Arc<Context>, events: Events, id: i64, voice: voices::VoiceRow, words: Words) {
+  let text = match words.spoken {
+    Some(spoken) => spoken,
+    None => derived_words(&context, id, words.language, &words.text).await,
+  };
   let out = sound_path(&context, id);
   if let Some(folder) = out.parent().map(std::path::Path::to_path_buf) {
     let _ = tokio::fs::create_dir_all(folder).await;
@@ -542,11 +608,20 @@ async fn create_briefing(
   known_emotion(asked.emotion.as_deref())?;
 
   let db = &served.context.db;
-  let script = spoken::spoken_script(&asked.text);
+  let language = voice_language(&voice)?;
+  let spoken_words = checked_spoken(asked.spoken.as_deref(), language)?;
+  let script = spoken::finished_script(&spoken::spoken_script(&asked.text));
   let script = if script.trim().is_empty() { asked.text.trim().to_owned() } else { script };
   let at = crate::now_ms();
-  let synthesis_id =
-    store::syntheses::insert(db, &asked.voice_name, &script, asked.emotion.as_deref(), at).await?;
+  let synthesis_id = store::syntheses::insert(
+    db,
+    &asked.voice_name,
+    &script,
+    spoken_words.as_deref(),
+    asked.emotion.as_deref(),
+    at,
+  )
+  .await?;
   let id = store::briefings::insert(
     db,
     &store::briefings::Taken {
@@ -576,7 +651,13 @@ async fn create_briefing(
 
   tokio::task::spawn_blocking(move || {
     if let Ok(runtime) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
-      runtime.block_on(brief(context, events, id, synthesis_id, voice, script));
+      let words = Words {
+        text: script,
+        spoken: spoken_words,
+        language,
+      };
+
+      runtime.block_on(brief(context, events, id, synthesis_id, voice, words));
     }
   });
 
@@ -590,9 +671,9 @@ async fn brief(
   id: i64,
   synthesis_id: i64,
   voice: voices::VoiceRow,
-  script: String,
+  words: Words,
 ) {
-  speak(Arc::clone(&context), events.clone(), synthesis_id, voice, script).await;
+  speak(Arc::clone(&context), events.clone(), synthesis_id, voice, words).await;
 
   let db = &context.db;
   let spoken = store::syntheses::get(db, synthesis_id).await.ok().flatten();

@@ -26,11 +26,15 @@ It calls the engine at the address in the voice settings, with the engine's toke
 1. `voice_voices` lists the trained voices: each one's `name`, `language`, `checkpoint` and `emotions`.
    Choose a voice by its name.
 2. `voice_synthesize` with `{ "voiceName": "<name>", "text": "<the words>", "emotion": "<one of its emotions>" }`.
-   `emotion`, `style` and `seed` are optional. The answer is the synthesis: its `id` and its state, `waiting`
-   or `speaking`.
+   `text` is the written words, what people read of the line. `spoken`, optional, is the words the voice says:
+   the same words as a reader of the voice's language says them aloud, every foreign name, acronym, product and
+   model name in that language's letters, every number, date and unit in words, and no address, path, code or
+   markup. Write them with judgement and pass them, or leave them out and the engine derives them. `emotion`,
+   `style` and `seed` are optional. The answer is the synthesis: its `id` and its state, `waiting` or
+   `speaking`.
 3. `voice_synthesis` with `{ "synthesisId": <id> }` until the state is `done` or `failed`. A `done`
-   synthesis carries `durationMs`. A `waiting` one waits for a voice server's card however long that takes,
-   and its `waitingOn` says what it waits on.
+   synthesis carries `durationMs` and its `spoken` words. A `waiting` one waits for its spoken words to be
+   derived and for a voice server's card however long that takes, and its `waitingOn` says what it waits on.
 4. The sound is the synthesis's `sound` route of the engine's API, `GET /syntheses/{synthesisId}/sound`, an
    OGG/Opus answer that honours `Range`. The MCP server names no tool for the bytes; read them through the
    engine's client or its address.
@@ -61,6 +65,8 @@ A tool error's text is JSON: `status`, `code` and `error`, the engine's English 
 - `not-found`: no voice, synthesis or transcription stands at the name or id.
 - `bad-request`: the arguments are not the shape the tool takes; the sentence names what is wrong.
 - `unknown-emotion`: the emotion is not one the voice offers; `voice_voices` lists them.
+- `unconverted-run`: the `spoken` given holds a word a voice cannot say as written; the sentence names the first
+  one. Write that word in the voice's language and ask again.
 - `unreadable-source`: an encoding's wav is not a file the engine can read.
 - `unauthorized`: the token is missing or wrong.
 - `failed`: the engine failed; the sentence is the failure.

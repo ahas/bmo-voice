@@ -11,6 +11,7 @@ pub struct Row {
   pub id: i64,
   pub voice_name: String,
   pub text: String,
+  pub spoken: Option<String>,
   pub emotion: Option<String>,
   pub state: SynthesisState,
   pub duration_ms: Option<i64>,
@@ -24,6 +25,7 @@ impl Row {
       id: self.id,
       voice_name: self.voice_name.clone(),
       text: self.text.clone(),
+      spoken: self.spoken.clone(),
       emotion: self.emotion.clone(),
       state: self.state,
       waiting_on: None,
@@ -42,6 +44,7 @@ fn row_of(row: &QueryResult) -> Result<Row, StoreError> {
     id: row.try_get("", "id")?,
     voice_name: row.try_get("", "voice_name")?,
     text: row.try_get("", "text")?,
+    spoken: row.try_get("", "spoken")?,
     emotion: row.try_get("", "emotion")?,
     state,
     duration_ms: row.try_get("", "duration_ms")?,
@@ -49,21 +52,23 @@ fn row_of(row: &QueryResult) -> Result<Row, StoreError> {
   })
 }
 
-/// A synthesis taken in, waiting to be spoken.
+/// A synthesis taken in, waiting to be spoken: its written words and, where the caller gave them, its spoken words.
 pub async fn insert(
   db: &DatabaseConnection,
   voice_name: &str,
   text: &str,
+  spoken: Option<&str>,
   emotion: Option<&str>,
   at: i64,
 ) -> Result<i64, StoreError> {
   let row = one(
     db,
-    r#"INSERT INTO "voice_syntheses" ("voice_name", "text", "emotion", "state", "created_at")
-       VALUES ($1, $2, $3, $4, $5) RETURNING "id""#,
+    r#"INSERT INTO "voice_syntheses" ("voice_name", "text", "spoken", "emotion", "state", "created_at")
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING "id""#,
     vec![
       voice_name.into(),
       text.into(),
+      spoken.map_or(Value::String(None), |spoken| spoken.into()),
       emotion.map_or(Value::String(None), |emotion| emotion.into()),
       SynthesisState::Waiting.as_str().into(),
       at.into(),
@@ -79,7 +84,7 @@ pub async fn insert(
 pub async fn get(db: &DatabaseConnection, id: i64) -> Result<Option<Row>, StoreError> {
   one(
     db,
-    r#"SELECT "id", "voice_name", "text", "emotion", "state", "duration_ms", "created_at"
+    r#"SELECT "id", "voice_name", "text", "spoken", "emotion", "state", "duration_ms", "created_at"
        FROM "voice_syntheses" WHERE "id" = $1"#,
     vec![id.into()],
   )
@@ -87,6 +92,18 @@ pub async fn get(db: &DatabaseConnection, id: i64) -> Result<Option<Row>, StoreE
   .as_ref()
   .map(row_of)
   .transpose()
+}
+
+/// A synthesis's spoken words, once they stand.
+pub async fn set_spoken(db: &DatabaseConnection, id: i64, spoken: &str) -> Result<(), StoreError> {
+  run(
+    db,
+    r#"UPDATE "voice_syntheses" SET "spoken" = $2 WHERE "id" = $1"#,
+    vec![id.into(), spoken.into()],
+  )
+  .await?;
+
+  Ok(())
 }
 
 /// A synthesis's state, and how long its sound runs where it is done.
@@ -115,7 +132,7 @@ pub async fn of_voice(
 ) -> Result<Vec<Row>, StoreError> {
   all(
     db,
-    r#"SELECT "id", "voice_name", "text", "emotion", "state", "duration_ms", "created_at"
+    r#"SELECT "id", "voice_name", "text", "spoken", "emotion", "state", "duration_ms", "created_at"
        FROM "voice_syntheses"
        WHERE "voice_name" = $1 AND ($2 = 0 OR "id" < $2)
        ORDER BY "id" DESC LIMIT $3"#,

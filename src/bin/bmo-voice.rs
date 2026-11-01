@@ -43,9 +43,12 @@ enum Word {
     /// The trained voice that speaks it.
     #[arg(long)]
     voice: String,
-    /// What it says.
+    /// What it says: the written words.
     #[arg(long)]
     text: String,
+    /// The words the voice says, where the caller writes them; derived from the written words otherwise.
+    #[arg(long)]
+    spoken: Option<String>,
     /// `summary` for a line or two played by itself, `full` for a whole line read out.
     #[arg(long, default_value = "summary")]
     kind: String,
@@ -143,13 +146,19 @@ async fn listen(
   Ok(())
 }
 
+// A briefing's two texts: the written words and, where the caller writes them, the spoken words.
+struct Words {
+  text: String,
+  spoken: Option<String>,
+}
+
 // `bmo brief`: a line spoken for a room, waiting for the engine to speak it.
 #[allow(clippy::too_many_arguments)]
 async fn brief(
   settings: &Settings,
   chat: i64,
   voice: String,
-  text: String,
+  words: Words,
   kind: String,
   title: Option<String>,
   emotion: Option<String>,
@@ -165,7 +174,8 @@ async fn brief(
   let mut held = client
     .create_briefing(&NewBriefing {
       voice_name: voice,
-      text,
+      text: words.text,
+      spoken: words.spoken,
       chat_id: chat,
       message_id: message,
       kind,
@@ -268,6 +278,7 @@ async fn main() -> ExitCode {
       chat,
       voice,
       text,
+      spoken,
       kind,
       title,
       emotion,
@@ -275,7 +286,11 @@ async fn main() -> ExitCode {
       plays,
       wait,
       json,
-    } => brief(&settings, chat, voice, text, kind, title, emotion, message, plays, wait, json).await,
+    } => {
+      let words = Words { text, spoken };
+
+      brief(&settings, chat, voice, words, kind, title, emotion, message, plays, wait, json).await
+    }
     Word::Health => {
       let waited = tokio::time::timeout(HEALTH_WAIT, health(&settings)).await;
 

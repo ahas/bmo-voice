@@ -82,7 +82,7 @@ the voice nodes. What a caller does with the sound is the caller's.
 ## A line is spoken as a script
 
 - **A line written for a room is markdown, and a voice reads its marks.** The engine makes the line a script for
-  speaking first, mechanically, before the names and the figures; no model rewrites its words here.
+  speaking first, mechanically; no model rewrites its words here.
   - A list item whose head is a bold title, or a title closed by a colon, is joined to what follows it as one
     sentence, the title taking its topic particle by its last syllable.
   - An item's other lines are joined to it with a space, so one item is one sentence.
@@ -104,7 +104,9 @@ the voice nodes. What a caller does with the sound is the caller's.
   - one sentence closes the script, however many addresses were taken out, in the line's language and politeness,
     as the reading table words it.
 - **The particle after a title** is settled last, once the title's reading stands.
-- **The script is what the synthesiser is handed and what `POST /script-readings` answers.**
+- **The script is a briefing's written words and what `POST /script-readings` answers.** The synthesiser is handed
+  a line's spoken words, which a model makes of the written words with judgement (`docs/boundary-api.md`, 「The
+  spoken words」), never the script itself.
 
 ### Which sentences are English
 
@@ -120,18 +122,23 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 - **One table says it for both languages:** `voice_names` (`docs/store.md`), one row per spelling, each with what a
   Korean stretch and an English stretch say in its place. An empty reading leaves the spelling as written.
-- **A row is read without a model,** so a name is said the same every time. A name the voice gets wrong is a row,
-  not a deployment: `scripts/voice-names.ts` lists the table, `--set <spelling> <korean> <english>` writes a row,
-  `--remove <spelling>` takes one off. A Korean reading carries no roman letter and an English one no Hangul.
+- **Its rows are the agreed readings every line's spoken words are derived with** (`docs/boundary-api.md`, 「How the
+  engine derives the spoken words」): the rows with a reading in the voice's language are handed to the model as
+  readings to apply as they stand, and the model reads whatever else the line needs with its own judgement. No
+  row is applied to a line by the engine itself.
+- **A reading the model chose is written in as a row,** for a spelling the table does not hold, so the same name is
+  read the same way next time. A spelling the table holds is never written over.
+- **A row is the owner's to correct,** and a correction wins from then on: `scripts/voice-names.ts` lists the table,
+  `--set <spelling> <korean> <english>` writes a row, `--remove <spelling>` takes one off. A Korean reading carries
+  no roman letter and an English one no Hangul.
 - **A table first made is given the seed names** of `data/ko/voice-names.toml`; a table that stands is left as it is.
-- **Where it applies:** to each stretch once the line is cut into its languages, before the figures.
-- **How a spelling is matched:** whatever its case, and only as a word of its own: no letter or figure before it, no
-  roman letter or figure after it, a Korean particle allowed. The longest spelling is tried first.
+  The names a deployment's own agents, units and owner go by are its own rows.
 
 ## How figures are said
 
-- **A figure is said by rule,** never by a model, in each Korean stretch once its names are said. An English
-  stretch keeps its figures.
+- **No line is spoken by these rules.** A line's figures are said as its spoken words say them, which a model
+  writes with judgement, and the check refuses spoken words that still hold a digit (`docs/boundary-api.md`, 「The
+  spoken words」). The rules are the reading table's, kept with it.
 - **What it reads:** a figure with the marks it is written with (`#`, a thousands comma, a decimal point, a colon, a
   slash, a tilde, `%`, a currency sign), not a figure in or only spaces away from a run holding a roman letter
   unless a counter follows it, and not a figure inside code.

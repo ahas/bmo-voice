@@ -131,7 +131,11 @@ impl SynthesisState {
 pub struct Synthesis {
   pub id: i64,
   pub voice_name: String,
+  /// The written words: what people read of the line.
   pub text: String,
+  /// The words the voice says (`docs/boundary-api.md`, 「The spoken words」); null until they stand.
+  #[serde(default)]
+  pub spoken: Option<String>,
   pub emotion: Option<String>,
   pub state: SynthesisState,
   /// What a waiting synthesis waits on for its card, an English sentence; null once its card is granted.
@@ -148,7 +152,11 @@ pub struct Synthesis {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NewSynthesis {
   pub voice_name: String,
+  /// The written words: what people read of the line.
   pub text: String,
+  /// The words the voice says, checked before they are spoken; derived from `text` where absent.
+  #[serde(default)]
+  pub spoken: Option<String>,
   /// One of the voice's emotions; the voice's own where absent.
   #[serde(default)]
   pub emotion: Option<String>,
@@ -298,7 +306,11 @@ pub struct Briefing {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NewBriefing {
   pub voice_name: String,
+  /// The written words, read into a script by the engine's reading rules.
   pub text: String,
+  /// The words the voice says, checked before they are spoken; derived from the script where absent.
+  #[serde(default)]
+  pub spoken: Option<String>,
   pub chat_id: i64,
   /// The line it speaks; a summary may leave it out and await its line, a full reading names it.
   #[serde(default)]

@@ -129,7 +129,11 @@ where
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Speaking {
   voice_name: String,
+  /// The written words: what people read of the line.
   text: String,
+  /// The words the voice says, checked before they are spoken; derived from `text` where absent.
+  #[serde(default)]
+  spoken: Option<String>,
   #[serde(default)]
   emotion: Option<String>,
   #[serde(default)]
@@ -170,6 +174,7 @@ pub fn tools() -> Vec<VoiceTool> {
         let synthesis = NewSynthesis {
           voice_name: asked.voice_name,
           text: asked.text,
+          spoken: asked.spoken,
           emotion: asked.emotion,
           style: asked.style,
           seed: asked.seed,

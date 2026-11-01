@@ -12,7 +12,7 @@ How the repository is laid out, what each part is, and where it runs. Read this 
 | `.graph/` | The code dependency graph, one node per feature in its areas (`api`, `calls`, `core`, `nodes`, `script`, `speech`, `studio`, `synth`, `training`), written only by `bmo graph` |
 | `plugin/` | The harness plugin's skill, `plugin/skills/bmo-voice/`, telling a harness when and how to use the MCP server |
 | `policy/` | The engine's own policy values, `policy/voice.toml` |
-| `prompts/` | What the engine's own model runs are told: the training lines' writer. English only |
+| `prompts/` | What the engine's own model runs are told: the training lines' writer and the spoken words' deriver. English only |
 | `scripts/` | The node and training scripts, a Bun project of its own: the voice node install, push, sync, health, speak and card adapter, a voice installed and checked, the voice names, training stages placed on a card, the training lines written |
 | `src/` | The crate: the settings, the store, the event log, the service's client, the MCP server, the OpenAPI document, the script rules, synthesis and the voice nodes, the routes, the script studio's server, and the `voice-server`, `bmo-voice` and `script-studio` binaries |
 | `studio/` | The script studio's screen (`studio/client/`, a Nuxt project) and its media tools (`studio/lib/` and `studio/scripts/`, Bun and Python), with their records' shared fixtures |

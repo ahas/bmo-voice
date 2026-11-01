@@ -4,6 +4,7 @@
 
 pub mod card;
 pub mod node;
+pub mod spoken;
 pub mod synth;
 
 /// A path or a word as one word of a POSIX shell line: as it stands where it holds nothing a shell reads, quoted

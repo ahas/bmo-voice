@@ -5,6 +5,7 @@ use sea_orm::{DatabaseConnection, QueryResult};
 use serde::Deserialize;
 
 use super::{StoreError, all, one, run};
+use crate::script::reading::Language;
 pub use crate::script::reading::VoiceName;
 
 /// The seed names a table first made is given (`data/ko/voice-names.toml`).
@@ -130,6 +131,30 @@ pub async fn said_names(db: &DatabaseConnection) -> Result<Vec<VoiceName>, Store
     })
   })
   .collect()
+}
+
+/// A reading the spoken words' model chose for a spelling, kept as a row in the language's column; a spelling the
+/// table holds is left as it stands, so a row the owner set is never written over. Answers whether it was kept.
+pub async fn keep_reading(
+  db: &DatabaseConnection,
+  written: &str,
+  language: Language,
+  said: &str,
+  now: i64,
+) -> Result<bool, StoreError> {
+  let (ko, en) = match language {
+    Language::Ko => (said, ""),
+    Language::En => ("", said),
+  };
+  let kept = one(
+    db,
+    r#"INSERT INTO "voice_names" ("written", "ko", "en", "set_at") VALUES ($1, $2, $3, $4)
+       ON CONFLICT ("written") DO NOTHING RETURNING 1 AS "kept""#,
+    vec![written.into(), ko.into(), en.into(), now.into()],
+  )
+  .await?;
+
+  Ok(kept.is_some())
 }
 
 /// A names table first made given its seed names; a table that holds any row is left as it is. Answers whether

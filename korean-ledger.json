@@ -7,5 +7,7 @@
   "src/studio/subtitles.rs": 6,
   "synth/voice-cer.py": 9,
   "synth/voice-vox.py": 2,
-  "tests/import.rs": 2
+  "tests/briefings.rs": 1,
+  "tests/import.rs": 2,
+  "tests/spoken_words.rs": 22
 }

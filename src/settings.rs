@@ -27,6 +27,9 @@ pub struct Units {
   pub arbiter: Unit,
   /// The account service the script studio signs a person in against.
   pub web: Unit,
+  /// Agency, whose co-worker pool derives a line's spoken words; none where the deployment names none.
+  #[serde(default)]
+  pub agency: Option<Unit>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -49,6 +52,32 @@ pub struct Settings {
   /// The script studio's deployment values.
   #[serde(default)]
   pub studio: Studio,
+  /// How a line's spoken words are derived.
+  #[serde(default)]
+  pub spoken: Spoken,
+}
+
+/// How a line's spoken words are derived on agency's co-worker pool (`docs/boundary-api.md`, 「How the engine
+/// derives the spoken words」).
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct Spoken {
+  /// The agency role the seat is asked for.
+  pub role: String,
+  /// The runner line the derivation's session goes out on.
+  pub line: String,
+  /// The provider the seat is asked on, where the deployment names one.
+  pub provider: Option<String>,
+}
+
+impl Default for Spoken {
+  fn default() -> Self {
+    Self {
+      role: "transliterator".to_owned(),
+      line: "search".to_owned(),
+      provider: None,
+    }
+  }
 }
 
 /// What the script studio holds of a deployment (`docs/script-studio.md`, 「Access and service」).

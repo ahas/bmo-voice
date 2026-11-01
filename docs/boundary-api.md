@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.7.
+Fixed at 0.1.0-rev.10.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -81,21 +81,25 @@ asking `Accept: application/json`.
 
 | Route | Body or query | Answer |
 |---|---|---|
-| `POST /syntheses` | `voiceName`, `text`, `emotion?`, `style?`, `seed?` | 201, the synthesis |
+| `POST /syntheses` | `voiceName`, `text`, `spoken?`, `emotion?`, `style?`, `seed?` | 201, the synthesis |
 | `GET /syntheses/{synthesisId}` | | one synthesis |
 | `GET /syntheses/{synthesisId}/sound` | | the sound, OGG/Opus, with `Range` |
 
-- **A synthesis:** `id`, `voiceName`, `text`, `emotion`, `state`, `waitingOn`, `durationMs` (null until
-  done) and `createdAt`. Its `state` is `waiting` (taken in, its card not yet granted), `speaking` (a voice
+- **A synthesis:** `id`, `voiceName`, `text` (the written words), `spoken` (the words the voice says, null until
+  they stand; 「The spoken words」), `emotion`, `state`, `waitingOn`, `durationMs` (null until done) and
+  `createdAt`. Its `state` is `waiting` (taken in, its card not yet granted), `speaking` (a voice
   server is speaking it), `done` (its sound stands) or `failed`.
 - **A synthesis is answered at once;** the speaking runs apart on the voice server of the card the arbiter's
   master grants it (「The voice servers and the card」), and the caller reads the member again until its
   state is `done` or `failed`. `done` carries `durationMs`, the sound's length read from its Ogg pages.
+- **A synthesis taken in with no `spoken` has them derived first** (「How the engine derives the spoken words」),
+  before any card is asked; it is `waiting` meanwhile, and `waitingOn` says how the derivation stands.
 - **A synthesis waits for its card however long the grant takes:** nothing ends the wait and nothing refuses
   it as busy. While it waits, `waitingOn` is an English sentence saying what on: the master's reason for its
   card (every card in use, a card held by a claim or a lower tier, the service starting), its place in the
   line, or the master not reached. It is null once the card is granted, and on a synthesis that ended.
-- **`text` must hold something to say.** A voice no list holds is answered 404 `not-found`; an `emotion`
+- **`text` must hold something to say.** A `spoken` given that holds nothing, or that fails the check, is answered
+  422 `unconverted-run` (「The spoken words」). A voice no list holds is answered 404 `not-found`; an `emotion`
   outside the voice's is answered 422 `unknown-emotion`. `style` and `seed` are laid over the voice's row
   for this one synthesis.
 - **The sound** is answered only once the state is `done`; before that, and where a failed synthesis left
@@ -103,11 +107,61 @@ asking `Accept: application/json`.
 - **One synthesis speaks one text.** There is no list route: a caller that wants to know a synthesis it
   started reads its member or listens to the stream.
 
+## The spoken words
+
+Every line the engine speaks, a synthesis's and a briefing's alike, is two texts, and no line reaches a voice
+server any other way.
+
+- **`text` is the written words:** what people read of the line, the caption, the reading a road folds under a
+  voice note, a transcript. The engine keeps them as they were given, and a briefing's as the script its reading
+  rules make of them (「Script readings」); nothing else changes them.
+- **`spoken` is the words the voice says:** the same words as a reader of the voice's language says them aloud.
+  Every foreign name, acronym, product name and model name stands in that language's reading, every number,
+  date, time and unit in the words a reader says, and a web address, a file path, code and markup are said in a
+  few words for what they are or left out. Nothing else differs from the written words.
+- **A language model makes them, with judgement; no table and no rule of the engine's does.** Context decides how
+  a name, an acronym or a number is read aloud, so no reading table, substitution or romanisation produces them,
+  and the engine's own reading rules (「Script readings」, `docs/voice-plan.md`) unfold markup into the written
+  words and never read them. A caller writes them itself and passes `spoken`, or passes `text` alone and the
+  engine derives them (「How the engine derives the spoken words」).
+- **The check:** before a line is spoken its spoken words are checked for what was left unconverted. It finds,
+  and the engine never mends:
+  - a letter of another script than the voice's language writes: a Latin letter in a voice whose language is
+    Korean, a Hangul letter in one whose language is English;
+  - a digit, in every voice;
+  - the marks a web address, a path, code or markup is written with: a slash or a backslash, and any of
+    `` ` `` `*` `_` `#` `|` `<` `>` `[` `]` `{` `}` `~` `=` `^` `@` `$` `%` `&` `+`, and a character of the
+    private use area.
+- **A `spoken` a caller passed that fails the check is refused** 422 `unconverted-run`, the sentence naming the
+  first word that failed and what it holds, so a caller that claims to have converted a line and did not is
+  caught; it corrects that word and asks again. A derived one that fails is asked of the model again.
+
+## How the engine derives the spoken words
+
+- **On a seat of agency's co-worker pool,** asked for the role `[spoken]` names in the settings,
+  `transliterator` where they name none, with the provider they name where they name one. The role is a
+  registration of agency's (its `docs/agent-roles.md`) and must stand there; the engine creates none.
+- **In a thrown-away session of one turn** on the runner line `[spoken]` names, `search` where it names none,
+  its instructions the engine's own (`prompts/spoken-words.md`) and no tool allowed. The turn hands the model
+  the voice's language, the agreed readings, the written words, and, where the answer before failed the check,
+  the word it failed on. The session is ended and the seat given back once the turn answers.
+- **The agreed readings come first, the model's judgement after:** every row of the voice name table
+  (`docs/store.md`, `voice_names`) with a reading in the voice's language is handed over as a reading to apply
+  as it stands, and the model reads whatever else the words need with its own judgement.
+- **A reading the model chose is kept:** its answer names each name it read that the readings did not hold, and
+  each is written into the voice name table, so the same spelling is read the same way next time. A spelling
+  the table holds is never written over: the owner's correction of a row (`scripts/voice-names.ts --set`) wins
+  from then on. A chosen reading that holds what the check finds is not kept.
+- **Nothing gives it up.** An answer that fails the check, one that does not read, a seat or a session agency
+  refuses and agency not reached are each asked again five seconds later, however often; `waitingOn` says which
+  it was and why, and the synthesis stays `waiting` until its spoken words stand. They are kept as its
+  `spoken`, and its card is asked after.
+
 ## Briefings
 
 | Route | Body or query | Answer |
 |---|---|---|
-| `POST /briefings` | `voiceName`, `text`, `chatId`, `messageId?`, `kind`, `title?`, `emotion?`, `plays?` | 201, the briefing |
+| `POST /briefings` | `voiceName`, `text`, `spoken?`, `chatId`, `messageId?`, `kind`, `title?`, `emotion?`, `plays?` | 201, the briefing |
 | `GET /briefings` | `chatId?`, `messageId?`, `kind?`, `awaitsLine?`, `after`, `limit` | a page of briefings, newest first |
 | `GET /briefings/{briefingId}` | | one briefing |
 | `POST /briefings/{briefingId}/line` | `messageId`, a number or null | the briefing |
@@ -122,11 +176,12 @@ asking `Accept: application/json`.
   that line, which a listener plays only when asked; it names its line, and one that names none is answered 400
   `bad-request`.
 - **It is spoken as a synthesis is.** `POST /briefings` answers at once, state `waiting`; the engine reads the
-  words into a script by its own reading rules (「Script readings」) and speaks the script in the named voice as a
-  synthesis, on the voice server of the card granted it, and `text` is the script spoken. Its `state` and
+  words into a script by its own reading rules (「Script readings」), and the script is the written words of a
+  synthesis in the named voice, `spoken` its spoken words where the caller gave them and derived where it did
+  not (「The spoken words」), spoken on the voice server of the card granted it. `text` is the script. Its `state` and
   `durationMs` are its synthesis's, and `synthesisId` names it, whose `waitingOn` says what a waiting one waits
-  on. `text` must hold something to say; a voice no list holds is 404 `not-found`, and an
-  emotion outside the policy's is 422 `unknown-emotion`.
+  on. `text` must hold something to say; a `spoken` that is empty or fails the check is 422 `unconverted-run`, a
+  voice no list holds is 404 `not-found`, and an emotion outside the policy's is 422 `unknown-emotion`.
 - **Whether it plays by itself is the caller's to say** in `plays`, true where absent, and the engine keeps what
   it was told. A listener plays by itself only a `summary` whose `plays` holds, once `briefing.ended` says it is
   `done`; it plays a `full` reading only when somebody asks for it, and shows a briefing it learns of more than
@@ -192,6 +247,7 @@ It asks no model, takes no card turn and keeps nothing. A language other than `k
 | `gone` | 410 | the events since the number asked for are no longer kept |
 | `unknown-emotion` | 422 | the emotion is not one of the engine's policy values |
 | `unreadable-source` | 422 | an encoding's wav is not a file the engine can read |
+| `unconverted-run` | 422 | the spoken words given hold nothing, or hold what the check finds; the sentence names the first word that failed |
 | `failed` | 500 | the engine failed; the sentence is the failure |
 
 ## The voice servers and the card
@@ -246,6 +302,19 @@ The arbiter's master (its `docs/api.md`, 「Demands」).
   node that speaks the line.
 - **The master not reached,** an answer of 502 or 503 and an answer that does not arrive are all asked again a
   second later, however often.
+
+### bmo-agency
+
+The co-worker pool and its thrown-away sessions (its `docs/api.md`, 「pool, seat-requests, reservations and roles」
+and 「sessions」), for the spoken words a synthesis is derived (「How the engine derives the spoken words」).
+
+| Call | Route | Used for |
+|---|---|---|
+| a seat | `POST /seat-requests` with `requestKey` and `owner` `voice:synthesis:<synthesisId>:<try>`, `role`, `selection` `auto`, `workKey` `role:<role>` and `provider` where the settings name one | the seat the derivation runs on, with the provider, model, effort and tier its role's key resolves to |
+| its admission and its end | `PATCH /seat-requests/{token}` | asked with no state until it is `active`; bound to the session with `bound`; given back with `finished` and its outcome, `cancel` where no turn ran |
+| a session | `POST /sessions` with `scope` `apart`, `line`, `systemPrompt`, `toolsAllowed` empty and the seat's provider and model | the derivation's thrown-away session |
+| its turn | `POST /sessions/{sessionId}/turns` | the one turn, answered once it ends; its answer is the model's |
+| its end | `DELETE /sessions/{sessionId}` | the session ended once its turn answered; one still busy is asked again |
 
 ### bmo-web
 
@@ -304,7 +373,7 @@ declares the nouns `listen` and `brief` when asked `nouns`, so the platform hand
 |---|---|
 | `nouns` | answers `listen` and `brief`, one a line |
 | `listen <file>…` | asks `POST /transcriptions` for the files in `--language` and waits, up to `--wait` seconds, for it to end; prints what was heard, or the transcription as JSON with `--json` |
-| `brief` | asks `POST /briefings` for a line spoken in `--voice` for the room `--chat`, of kind `--kind` (`summary` or `full`), with `--text`, and optional `--title`, `--emotion`, `--message` and `--plays`; waits, up to `--wait` seconds, for the engine to speak it, then prints its id, or the briefing as JSON with `--json` |
+| `brief` | asks `POST /briefings` for a line spoken in `--voice` for the room `--chat`, of kind `--kind` (`summary` or `full`), with `--text`, and optional `--spoken`, `--title`, `--emotion`, `--message` and `--plays`; waits, up to `--wait` seconds, for the engine to speak it, then prints its id, or the briefing as JSON with `--json` |
 | `health` | asks the service the settings name for `GET /health`, with its token, and exits 0 where it answers ready, 1 otherwise |
 | `mcp` | runs the harness plugin's MCP server; `--address` and `--token` name the engine |
 | `openapi` | prints `docs/openapi.json` as the repository keeps it |
@@ -332,6 +401,8 @@ tool」).
 | `[units.node]` | `address` and `token_file?` of the node service |
 | `[units.arbiter]` | `address` and `token_file?` of the arbiter's master, which grants every synthesis its card |
 | `[units.web]` | `address` and `token_file?` of the account service the script studio signs in against |
+| `[units.agency]` | optional, `address` and `token_file?` of agency, whose co-worker pool derives the spoken words; a line with no `spoken` waits, its `waitingOn` saying so, while none is named |
+| `[spoken]` | optional, how the spoken words are derived: `role`, the agency role the seat is asked for (`transliterator`), `line`, the runner line its session goes out on (`search`), and `provider?`, the provider the seat is asked on |
 | `[studio]` | optional, the script studio's deployment values (`docs/script-studio.md`, 「Access and service」) |
 
 Every token stands in its own file under the data root's `env/`, never in the settings, a log, a command

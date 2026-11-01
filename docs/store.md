@@ -33,7 +33,8 @@ One row per trained voice.
 
 ### `voice_names`
 
-One row per spelling whose reading is settled (`docs/voice-plan.md`, 「How names are said」).
+One row per spelling whose reading is settled: the agreed readings a line's spoken words are derived with, and
+the readings the model chose for spellings no row held (`docs/voice-plan.md`, 「How names are said」).
 
 | Column | What it holds |
 |---|---|
@@ -87,7 +88,8 @@ One row per text handed to the engine.
 |---|---|
 | `id` | the synthesis's id, the key |
 | `voice_name` | the voice it is spoken in |
-| `text` | the words |
+| `text` | the written words |
+| `spoken` | the words the voice says, given by the caller or derived; null until they stand |
 | `emotion` | the emotion it was asked for; null where none was |
 | `state` | `waiting`, `speaking`, `done` or `failed` |
 | `duration_ms` | the sound's length once it is done; null before |
