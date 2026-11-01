@@ -82,6 +82,10 @@ pub struct Voice {
   pub language: String,
   /// The checkpoint its weights stand at.
   pub checkpoint: String,
+  /// The engine its folder's `voice.toml` names; `voxcpm2` for a folder that names none.
+  pub engine: String,
+  /// Whether it is spoken: true where its engine is the one the voice speaks.
+  pub served: bool,
   /// The emotions it may be asked to speak with.
   pub emotions: Vec<String>,
   /// Epoch milliseconds of its last change.

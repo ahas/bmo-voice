@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use serde::Deserialize;
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use tokio::io::AsyncWriteExt;
 
 use super::{card, shell_word, synth};
@@ -42,6 +42,9 @@ const TOKEN: &str = ".config/bmo-voice/token";
 
 // The start of a call's command exits with this where the server is not installed on the node.
 const NOT_INSTALLED: i32 = 4;
+
+// The engine environment's interpreter under the node's place (`docs/voice-plan.md`, 「The environments」).
+const ENGINE_PYTHON: &str = "fish-speech/.venv/bin/python";
 
 // The longest one wait on the node lasts: a cut the clock asks for is heard within it.
 const ASK_WAIT_SECONDS: i64 = 10;
@@ -335,50 +338,26 @@ fn under(root: &Path, path: &str) -> Option<String> {
     .filter(|name| !name.is_empty())
 }
 
-/// What the node is asked for one line in one voice: the row's files named under the voices root, which is all
-/// the node's copy shares, a clip left empty beside its words going as it stands for the node to refuse.
+/// What the node is asked for one line in one voice: the row's folder named under the voices root, which is all the
+/// node's copy shares, with the seed, the delivery and the sentence switch the row speaks with
+/// (`docs/voice-plan.md`, 「What it answers」).
 pub fn request(voice: &VoiceRow, text: &str, root: &Path) -> Result<Value, NodeError> {
-  let mut prompts = Map::new();
-
-  for (language, prompt) in &voice.prompts {
-    let clip = if prompt.clip.is_empty() {
-      String::new()
-    } else {
-      under(root, &prompt.clip).ok_or_else(|| {
-        NodeError::new(
-          Failure::Elsewhere,
-          None,
-          Some(format!(
-            "{}'s {language} continuation prompt is not under {}",
-            voice.name,
-            root.display()
-          )),
-        )
-      })?
-    };
-
-    prompts.insert((*language).to_owned(), json!({ "clip": clip, "words": prompt.words }));
-  }
-
-  let elsewhere = || {
+  let checkpoint = under(root, &voice.checkpoint).ok_or_else(|| {
     NodeError::new(
       Failure::Elsewhere,
       None,
       Some(format!("{} is not under {}", voice.name, root.display())),
     )
-  };
-  let checkpoint = under(root, &voice.checkpoint).ok_or_else(elsewhere)?;
-  let reference = under(root, &voice.reference).ok_or_else(elsewhere)?;
+  })?;
 
   Ok(json!({
-    "text": text, "checkpoint": checkpoint, "reference": reference, "cfg": voice.cfg, "steps": voice.steps,
-    "seed": voice.seed, "style": voice.style, "sentences": voice.by_sentence, "prompts": prompts,
+    "text": text, "checkpoint": checkpoint, "seed": voice.seed, "style": voice.style, "sentences": voice.by_sentence,
   }))
 }
 
 // The node's interpreter running the server file, as a line of the node's shell.
 fn on_node() -> String {
-  format!(r#""$HOME/{PLACE}/.venv/bin/python" "$HOME/{PLACE}/voice-vox.py""#)
+  format!(r#""$HOME/{PLACE}/{ENGINE_PYTHON}" "$HOME/{PLACE}/voice-fish.py""#)
 }
 
 // Starts the asker apart from the call and says where the call's files stand. The asker holds the call's lock
@@ -393,7 +372,7 @@ fn start_command(id: &str, wait_seconds: i64) -> String {
     r#"find "$d" -type f -mmin +60 ! -name "*.lock" -delete 2>/dev/null"#.to_owned(),
     r#"find "$d" -type f -name "*.lock" -mmin +60 -exec flock -n {} rm -f {} \; 2>/dev/null"#.to_owned(),
     format!(
-      r#"[ -x "$HOME/{PLACE}/.venv/bin/python" ] || {{ echo "the voice server is not installed on this node" >&2; exit {NOT_INSTALLED}; }}"#
+      r#"[ -x "$HOME/{PLACE}/{ENGINE_PYTHON}" ] || {{ echo "the voice server is not installed on this node" >&2; exit {NOT_INSTALLED}; }}"#
     ),
     "umask 077".to_owned(),
     format!(r#"cat > "$d/{id}.in" || exit 3"#),

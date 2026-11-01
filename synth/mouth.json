@@ -1,44 +1,12 @@
 {
   "additionalProperties": false,
   "properties": {
-    "cfg": {
-      "description": "The voice row's guidance.",
-      "type": "number"
-    },
     "checkpoint": {
-      "description": "The voice row's checkpoint.",
+      "description": "The voice row's folder.",
       "type": "string"
     },
     "out": {
       "description": "Where the OGG/Opus sound is written.",
-      "type": "string"
-    },
-    "prompts": {
-      "description": "The voice row's continuation prompts, one per language.",
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "clip": {
-            "type": "string"
-          },
-          "language": {
-            "type": "string"
-          },
-          "words": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "language",
-          "clip",
-          "words"
-        ],
-        "type": "object"
-      },
-      "type": "array"
-    },
-    "reference": {
-      "description": "The voice row's reference clip.",
       "type": "string"
     },
     "seed": {
@@ -49,10 +17,6 @@
       "default": false,
       "description": "Whether the line is spoken sentence by sentence.",
       "type": "boolean"
-    },
-    "steps": {
-      "description": "The voice row's steps.",
-      "type": "integer"
     },
     "style": {
       "description": "The delivery the line is spoken with, where the voice row names one.",
@@ -86,9 +50,6 @@
   "required": [
     "out",
     "checkpoint",
-    "reference",
-    "cfg",
-    "steps",
     "seed"
   ],
   "type": "object"

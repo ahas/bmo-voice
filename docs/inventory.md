@@ -395,5 +395,5 @@ The tables are taken from the old archive schema (`archive/bmo-archive/src/migra
 | `env/voice.token` (the bearer token voice node servers check) | `voice/voice.token` |
 | `news-brief/` | not carried (row #1863) |
 
-The VoxCPM2 base model stands on each voice node, installed by the node scripts, and is declared in `weights/`
+The Fish S2-Pro base weights stand on each voice node, installed by the node scripts, and are declared in `synth/engine.toml`
 as well.

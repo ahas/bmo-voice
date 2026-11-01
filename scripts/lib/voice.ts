@@ -1,5 +1,5 @@
 import { mkdir } from "node:fs/promises";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { parseFile } from "music-metadata";
@@ -9,11 +9,26 @@ import { releaseRoot, settings, synthFolder } from "./settings";
 import type { VoiceRow } from "./store";
 
 // What the scripts share with the service about speaking a line (docs/voice-plan.md): how long a line may take,
-// the line in front of this machine's card, the delivery a trained voice starts with, and the voice's own entries
+// the line in front of this machine's card, the engine a served voice belongs to, and the voice's own entries
 // in `synth/`, which do the speaking, encoding and transcribing.
 
 // The voice's own policy values (`policy/voice.toml`).
-const policy = Bun.TOML.parse(readFileSync(join(releaseRoot, "policy/voice.toml"), "utf8")) as { run_cap_ms: number; emotions: string[] };
+const policy = Bun.TOML.parse(readFileSync(join(releaseRoot, "policy/voice.toml"), "utf8")) as { run_cap_ms: number; emotions: string[]; engine: string };
+
+// The engine every served voice belongs to (`policy/voice.toml`, docs/voice-plan.md 「The synthesiser」).
+export const servedEngine = policy.engine;
+
+// The engine a voice folder's `voice.toml` names; `voxcpm2` for a folder that holds none, which is what VoxCPM2's
+// folders are (docs/voice-plan.md, 「The voices」).
+export function voiceEngine(folder: string): string {
+  const declaration = join(folder, "voice.toml");
+
+  if (!existsSync(declaration)) {
+    return "voxcpm2";
+  }
+
+  return String((Bun.TOML.parse(readFileSync(declaration, "utf8")) as { engine?: unknown }).engine ?? "");
+}
 
 // How long a line may take before it is called off.
 export const voiceCapMs: number = policy.run_cap_ms;
@@ -37,18 +52,13 @@ export const voiceQueueWaitMs = 5 * 60_000;
 // What flock exits with when a lock is somebody else's, kept clear of anything the process it guards exits with.
 export const voiceQueueExit = 75;
 
-// The delivery instruction a trained voice is spoken under: the one the training run chose together with cfg 1.5
-// and 16 steps for a lower, steadier delivery (docs/voice-plan.md, 「How steady the pitch is」). It is the value a
-// voice row starts with, and the row is where it is changed.
-export const trainedDelivery = "A calm, steady voice, slightly lower pitch, even pacing, restrained expression";
-
 // What the trained mouth refuses in an instruction, said before a row is written that no voice could speak: a
 // bracket would close the instruction early and have the rest read aloud, and the mouth takes a sentence rather
-// than a script. The mouth holds the same two limits on its side (`synth/voice-vox.py`).
+// than a script. The mouth holds the same two limits on its side (`synth/voice-fish.py`).
 export const mostDelivery = 300;
 
 export function deliveryRefusal(style: string): string | null {
-  if (/[()]/.test(style) || style.length > mostDelivery) {
+  if (/[[\]]/.test(style) || style.length > mostDelivery) {
     return `a delivery instruction is plain words of at most ${mostDelivery} characters, without brackets`;
   }
 
@@ -70,13 +80,9 @@ export function voiceMouthArguments(words: VoiceWords, out: string, voice: Voice
     ...("textFile" in words ? { text_file: words.textFile } : { text: words.text }),
     out,
     checkpoint: voice.checkpoint,
-    reference: voice.reference,
-    cfg: voice.cfg,
-    steps: voice.steps,
     seed: voice.seed,
     ...(voice.style === "" ? {} : { style: voice.style }),
     sentences: voice.bySentence,
-    prompts: Object.entries(voice.prompts).map(([language, prompt]) => ({ language, clip: prompt.clip, words: prompt.words })),
   };
 }
 

@@ -3,7 +3,7 @@
 # docs/voice-plan.md, 「The voice nodes」). The adapter runs from this folder and is the node scripts' own
 # (docs/layout.md).
 service = "voice"
-card_mib = 9000
+card_mib = 11300
 priority = 70
 spread = "many"
 alone = true

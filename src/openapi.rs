@@ -248,7 +248,7 @@ pub fn openapi() -> Value {
       },
       201,
       json_answer::<Synthesis>(&mut generator),
-      &["unauthorized", "bad-request", "not-found", "unknown-emotion"],
+      &["unauthorized", "bad-request", "not-found", "retired-voice", "unknown-emotion"],
     ),
   );
   path(
@@ -300,7 +300,7 @@ pub fn openapi() -> Value {
       },
       201,
       json_answer::<Briefing>(&mut generator),
-      &["unauthorized", "bad-request", "not-found", "unknown-emotion"],
+      &["unauthorized", "bad-request", "not-found", "retired-voice", "unknown-emotion"],
     ),
   );
   path(

@@ -6,6 +6,5 @@
   "src/studio/review.rs": 2,
   "src/studio/subtitles.rs": 6,
   "synth/voice-cer.py": 9,
-  "synth/voice-vox.py": 2,
   "tests/import.rs": 2
 }

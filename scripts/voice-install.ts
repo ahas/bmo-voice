@@ -1,50 +1,37 @@
 // The trained voices, brought where a synthesis may rely on them and written into the table that says which one
-// speaks.
+// speaks (docs/voice-plan.md, 「The voices」).
 //
-// The weights are trained in an experiment directory, a scratch area another job may prune, rewrite or clean. A
-// the engine is a live service, so what it speaks with lives in the runtime data root instead: outside every checkout,
-// taken by the deploy's own backup. This copies what a voice actually needs (the LoRA weights and the config that
-// names their base model, and the clip the voice is conditioned on) and nothing else. `resume.pt` is optimiser state
-// for resuming training and has no part in speaking, so it stays where it was made.
+// The weights are trained in an experiment directory, a scratch area another job may prune, rewrite or clean. The
+// engine is a live service, so what it speaks with lives in the runtime data root instead: outside every checkout,
+// taken by the deploy's own backup. This copies what a voice needs, its folder's `voice.toml` and its adapter
+// `lora.pt`, and nothing else.
 //
-// `--add <name> --checkpoint <dir> --reference <clip.wav>` brings one trained checkpoint in under a name of its own.
-// The first voice on an empty table is the current one; any later one is not, so it can be heard by name and then
-// chosen with `--use`. Running it again for a name the table holds is refused, and a file already in place is left
-// alone.
+// `--add <name> --checkpoint <dir>` brings one trained adapter in under a name of its own; a folder whose `voice.toml`
+// names another engine than the policy's is refused, and a voice speaks with no reference clip. The first voice on an
+// empty table is the current one; any later one is not, so it can be heard by name and then chosen with `--use`.
+// Running it again for a name the table holds is refused, and a file already in place is left alone.
 //
-// The current voice speaks wherever nothing names another; `--use <name>` moves the mark and copies nothing. An agent
-// whose registration names a voice of its own speaks in that one, which is the registration's to change.
-// `--style <name> '<instruction>'` rewrites the delivery instruction a voice is spoken under, and an empty one speaks
-// it with none. `--seed <name> <n>` sets the seed it is spoken at, which is what names the one delivery of a line its
-// row was chosen on. `--prompt <name> <clip.wav> '<words>'` gives a voice a continuation prompt (a clip of it speaking
-// Korean and the words the clip says) which every Korean stretch of a line is then spoken on from; `--prompt-en`
-// gives it the English one its English stretches are spoken on from. Either is given only once whole lines
-// spoken on the clip came through, and `--dry-run` asks that of a clip without giving it. `--sentences <name> on|off`
-// says whether it speaks a line a sentence at a time, each on from that prompt, or in one pass. A voice spoken on the
-// node needs its files there too, which `bun scripts/voice-node.ts push` brings at once and the next deployment
-// brings otherwise.
+// The current voice speaks wherever nothing names another; `--use <name>` moves the mark and copies nothing, and a
+// retired voice is refused. An agent whose registration names a voice of its own speaks in that one, which is the
+// registration's to change. `--style <name> '<instruction>'` rewrites the delivery instruction a voice is spoken under,
+// and an empty one speaks it with none. `--seed <name> <n>` sets the seed it is spoken at. `--sentences <name> on|off`
+// says whether it speaks a line a sentence at a time or in passes. `--prompt` and `--prompt-en` are refused: no served
+// voice takes a continuation prompt. A voice spoken on the node needs its files there too, which
+// `bun scripts/voice-node.ts push` brings at once and the next deployment brings otherwise.
 //
 //   bun scripts/voice-install.ts
-//   bun scripts/voice-install.ts --add <name> --checkpoint <dir> --reference <clip.wav> [--dry-run]
+//   bun scripts/voice-install.ts --add <name> --checkpoint <dir> [--dry-run]
 //   bun scripts/voice-install.ts --use <name>
 //   bun scripts/voice-install.ts --style <name> '<instruction>'
 //   bun scripts/voice-install.ts --seed <name> <n>
-//   bun scripts/voice-install.ts --prompt <name> <clip.wav> '<words>' [--dry-run] | none
-//   bun scripts/voice-install.ts --prompt-en <name> <clip.wav> '<words>' [--dry-run] | none
 //   bun scripts/voice-install.ts --sentences <name> on|off
 
-import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { copyFileSync, existsSync, mkdirSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
 import { voicesFolder } from "./lib/settings";
 import { nowSeconds, store } from "./lib/store";
-import { deliveryRefusal, trainedDelivery } from "./lib/voice";
-import { checkFile, checkLines, checkPrompt, putClipOnNodes, speakForCheck, transcribeFiles } from "./lib/voice-prompt-check";
-
-import type { LineVerdict } from "./lib/voice-prompt-check";
-import type { VoiceLanguage, VoiceRow } from "./lib/store";
+import { deliveryRefusal, servedEngine, voiceEngine } from "./lib/voice";
 
 const args = process.argv.slice(2);
 const argValue = (name: string): string | null => {
@@ -61,18 +48,14 @@ const promptOf = argValue("--prompt");
 const promptEnOf = argValue("--prompt-en");
 const sentencesOf = argValue("--sentences");
 
-// The settings a voice starts with: the ones the training run chose together with the delivery instruction.
-const cfg = 1.5;
-const steps = 16;
-
 async function list(): Promise<void> {
   for (const row of await store().voices()) {
-    const style = row.style === "" ? "no delivery instruction" : `(${row.style})`;
-    const spoken = row.bySentence ? "a sentence at a time" : "in one pass";
-    const prompted = Object.keys(row.prompts);
-    const prompts = prompted.length === 0 ? "no continuation prompt" : `prompts ${prompted.join(", ")}`;
+    const engine = voiceEngine(row.checkpoint);
+    const style = row.style === "" ? "no delivery instruction" : `[${row.style}]`;
+    const spoken = row.bySentence ? "a sentence at a time" : "in passes";
+    const served = engine === servedEngine ? engine : `${engine}, retired and never spoken`;
 
-    console.log(`voice-install: ${row.current ? ">" : " "} ${row.name} · ${row.checkpoint} · cfg ${row.cfg} · ${row.steps} steps · seed ${row.seed} · ${style} · ${prompts} · ${spoken}`);
+    console.log(`voice-install: ${row.current ? ">" : " "} ${row.name} · ${served} · ${row.checkpoint} · seed ${row.seed} · ${style} · ${spoken}`);
   }
 }
 
@@ -139,111 +122,19 @@ if (styleOf !== null) {
   process.exit(0);
 }
 
-// A continuation prompt is the voices row's, one pair of columns a language; `none` empties the pair and takes the
-// clip away. A clip is copied into the voice's own directory under a name made of its content
-// (`prompt-<digest>.wav` for Korean, `prompt-en-<digest>.wav` for English) and put in the same place on every voice
-// node, then checked by speaking whole lines on it (docs/voice-plan.md, 「How a prompt is checked before it is
-// installed」). Only a clip that passed is written into the row with its words, which is all the mouth reads, and
-// `--dry-run` stops short of that. Named by its content, a clip a node was not given is refused by that node rather
-// than spoken against the words of the clip before it.
-const promptFlag = promptOf !== null ? "--prompt" : promptEnOf !== null ? "--prompt-en" : null;
-
-if (promptFlag !== null) {
-  const name = (promptOf ?? promptEnOf) as string;
-  const [language, stem, languageName]: [VoiceLanguage, string, string] = promptFlag === "--prompt" ? ["ko", "prompt", "Korean"] : ["en", "prompt-en", "English"];
-  const clip = args[args.indexOf(promptFlag) + 2] ?? "";
-  const words = (args[args.indexOf(promptFlag) + 3] ?? "").trim();
-  const row = (await store().voice(name)) ?? (await refuseUnknown(name));
-  const before = row.prompts[language]?.clip ?? null;
-
-  if (clip === "none") {
-    await store().setVoicePrompt(name, language, null, nowSeconds());
-
-    if (before !== null) {
-      rmSync(before, { force: true });
-    }
-
-    console.log(`voice-install: ${name} speaks its ${languageName} from its reference alone`);
-    await list();
-    process.exit(0);
-  }
-
-  if (!clip.endsWith(".wav") || !existsSync(clip) || words === "") {
-    refuse(`${promptFlag} <name> <clip.wav> '<words>': a wav on this machine and the words it says, or none`);
-  }
-
-  if (!existsSync(row.checkpoint)) {
-    refuse(`${name}'s directory is not on this machine: ${row.checkpoint}`);
-  }
-
-  const clipAt = join(row.checkpoint, `${stem}-${createHash("sha256").update(readFileSync(clip)).digest("hex").slice(0, 12)}.wav`);
-  const broughtHere = !existsSync(clipAt);
-
-  if (broughtHere) {
-    copyFileSync(clip, clipAt);
-  }
-
-  // What a failed or dry check leaves behind: nothing it brought, and the row as it was.
-  const takeBack = (): void => {
-    if (broughtHere) {
-      rmSync(clipAt, { force: true });
-    }
-  };
-
-  for (const missed of await putClipOnNodes(clipAt, voicesFolder())) {
-    console.error(`voice-install: the clip did not reach ${missed}; that node refuses a line on it until voice-node.ts sync brings it`);
-  }
-
-  const candidate: VoiceRow = { ...row, prompts: { ...row.prompts, [language]: { clip: clipAt, words } } };
-  const room = mkdtempSync(join(tmpdir(), "voice-prompt-check-"));
-  let verdicts: LineVerdict[];
-
-  console.log(`voice-install: checking ${basename(clip)} on whole lines before ${name} speaks on it`);
-
-  try {
-    verdicts = await checkPrompt({
-      language,
-      lines: checkLines(language),
-      speak: (text, index) => speakForCheck(candidate, text, checkFile(room, index)),
-      transcribe: (files, spoken) => transcribeFiles(files, spoken),
-    });
-  } catch (error) {
-    takeBack();
-    refuse(`the check could not be run, so nothing was installed: ${error instanceof Error ? error.message : String(error)}`);
-  } finally {
-    rmSync(room, { recursive: true, force: true });
-  }
-
-  for (const [index, verdict] of verdicts.entries()) {
-    console.log(`voice-install: line ${index + 1} · ${verdict.seconds.toFixed(1)}s · ${verdict.pace.toFixed(1)} syllables a second · CER ${verdict.cer.toFixed(3)} · ${verdict.faults.length === 0 ? "passed" : verdict.faults.join("; ")}`);
-    console.log(`voice-install:   heard: ${verdict.heard}`);
-  }
-
-  const failed = verdicts.filter((verdict) => verdict.faults.length > 0).length;
-
-  if (failed > 0 || dryRun) {
-    takeBack();
-    console.log(failed > 0
-      ? `voice-install: refused: ${failed} of ${verdicts.length} lines came out wrong on ${basename(clip)}; ${name} speaks as it did`
-      : `voice-install: would give ${name} ${basename(clip)} for its ${languageName}; every line passed`);
-    process.exit(failed > 0 ? 1 : 0);
-  }
-
-  await store().setVoicePrompt(name, language, { clip: clipAt, words }, nowSeconds());
-
-  if (before !== null && before !== clipAt) {
-    rmSync(before, { force: true });
-  }
-
-  console.log(`voice-install: ${name} speaks its ${languageName} on from ${basename(clip)} (${statSync(clipAt).size} bytes)`);
-  await list();
-  process.exit(0);
+if (promptOf !== null || promptEnOf !== null) {
+  refuse("no served voice takes a continuation prompt: a voice of the engine speaks with none (docs/voice-plan.md, 「The voices」)");
 }
 
 if (use !== null) {
-  if (!await store().setCurrentVoice(use, nowSeconds())) {
-    await refuseUnknown(use);
+  const row = (await store().voice(use)) ?? (await refuseUnknown(use));
+  const engine = voiceEngine(row.checkpoint);
+
+  if (engine !== servedEngine) {
+    refuse(`${use} is a ${engine} voice, an engine the voice no longer speaks; it is kept and never made current`);
   }
+
+  await store().setCurrentVoice(use, nowSeconds());
 
   // The voice an agent speaks in is its registration's where that names one (docs/voice-plan.md, 「The voices」, 「Whose
   // voice」); agency states no route to write it, so that stays the registration's to change.
@@ -253,7 +144,7 @@ if (use !== null) {
 }
 
 // What a voice is made of on disk, and the whole of what gets copied.
-const weightFiles = ["lora_config.json", "lora_weights.safetensors"];
+const voiceFiles = ["voice.toml", "lora.pt"];
 
 function bring(from: string, to: string): void {
   if (existsSync(to)) {
@@ -280,18 +171,23 @@ function bring(from: string, to: string): void {
 // A name is a directory under the voices folder beside `reference/`, so it is one plain word and never that one.
 if (added !== null) {
   const from = argValue("--checkpoint") ?? "";
-  const clip = argValue("--reference") ?? "";
 
   if (!/^[a-z0-9][a-z0-9-]*$/.test(added) || added === "reference") {
     refuse(`a voice's name is lower-case letters, digits and hyphens, and not "reference": ${added}`);
   }
 
-  if (from === "" || !clip.endsWith(".wav")) {
-    refuse("--add <name> --checkpoint <dir> --reference <clip.wav>: the checkpoint directory the weights come from and the clip they are conditioned on");
+  if (from === "") {
+    refuse("--add <name> --checkpoint <dir>: the folder the adapter and its voice.toml come from");
   }
 
-  if (weightFiles.some((file) => !existsSync(join(from, file)))) {
-    refuse(`${from} does not hold ${weightFiles.join(" and ")}`);
+  if (voiceFiles.some((file) => !existsSync(join(from, file)))) {
+    refuse(`${from} does not hold ${voiceFiles.join(" and ")}`);
+  }
+
+  const engine = voiceEngine(from);
+
+  if (engine !== servedEngine) {
+    refuse(`${from} is a ${engine} voice, and the voice speaks ${servedEngine} voices only`);
   }
 
   if (await store().voice(added) !== null) {
@@ -299,11 +195,8 @@ if (added !== null) {
   }
 
   const checkpoint = join(voicesFolder(), added);
-  const reference = join(voicesFolder(), "reference", basename(clip));
 
-  bring(clip, reference);
-
-  for (const file of weightFiles) {
+  for (const file of voiceFiles) {
     bring(join(from, file), join(checkpoint, file));
   }
 
@@ -314,7 +207,8 @@ if (added !== null) {
     process.exit(0);
   }
 
-  await store().seedVoice({ name: added, checkpoint, reference, cfg, steps, style: trainedDelivery, seed: 0, prompts: {}, bySentence: false, current }, nowSeconds());
+  // A served voice speaks with no reference clip and reads no guidance or steps, so those columns stand empty.
+  await store().seedVoice({ name: added, checkpoint, reference: "", cfg: 0, steps: 0, style: "", seed: 0, prompts: {}, bySentence: true, current }, nowSeconds());
 }
 
 await list();

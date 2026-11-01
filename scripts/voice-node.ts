@@ -4,23 +4,25 @@
 //   bun scripts/voice-node.ts nodes   the voice node list
 //   bun scripts/voice-node.ts adapter install|uninstall|start|stop|health --node <name> --placed <name,...> | placed
 //       the voice's adapter, which the card arbiter runs for every placement of the voice
-//   bun scripts/voice-node.ts setup  [--node <name>]   the node's virtualenv and the base model
+//   bun scripts/voice-node.ts setup  [--node <name>]   the node's engine environment and the base weights
 //   bun scripts/voice-node.ts push   [--node <name>]   the mouth, the voices, the token and the unit; restarts it
 //   bun scripts/voice-node.ts sync   [--node <name>]   push, only where the stamp the last one left differs
 //   bun scripts/voice-node.ts health [--node <name>]   what the server holds right now
 //   bun scripts/voice-node.ts speak  [--node <name>] --text '<words>' --wav <path>
-//       [--voice <name> | --checkpoint <dir> --reference reference/<key>.wav]
-//       [--cfg 1.5] [--steps 16] [--style '<instruction>'] [--seed 0] [--sentences on|off]
+//       [--voice <name> | --checkpoint <folder under the voices root>] [--style '<instruction>'] [--seed 0]
+//       [--sentences on|off]
 //
 // Every verb but speak acts on every node of the voice node list, side by side, unless `--node` names one; speak
 // takes a free node the way a synthesis does unless `--node` names one. A node is one the node service lists,
 // reached through its own shell as the node service's target gives it. What lands on it lives under one directory
-// in its home: the server file, its virtualenv and a copy of the data root's voices directory laid out the same,
+// in its home: the server file, the engine environment, the base weights and a copy of the data root's voices
+// directory laid out the same,
 // which is what lets a request name a voice by its place under that directory. The unit and the token file are the
 // node's own, beside them.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { NodeShellError, nodeHome } from "./lib/node-shell";
@@ -29,6 +31,8 @@ import { nowSeconds, store } from "./lib/store";
 import { voiceCapMs, voiceQueueWaitMs } from "./lib/voice";
 import {
   anyNodeShell,
+  BASE_PLACE,
+  ENGINE_PYTHON,
   speakOnNode,
   takeVoiceNode,
   VOICE_PLACE,
@@ -55,16 +59,16 @@ const argValue = (name: string): string | null => {
 
   return at === -1 || at + 1 >= args.length ? null : (args[at + 1] as string);
 };
-const serverFile = join(releaseRoot, "synth/voice-vox.py");
-const requirementsFile = join(releaseRoot, "synth/voice-node-requirements.txt");
+const serverFile = join(releaseRoot, "synth/voice-fish.py");
+const engineFile = join(releaseRoot, "synth/engine.toml");
 const usage = "usage: bun scripts/voice-node.ts nodes | adapter <verb> --node <name> --placed <name,...> | setup|push|sync|health|speak [--node <name>]";
 
 const unit = "bmo-voice-server.service";
 // How long a freshly restarted server may take to answer. It loads no model until it is asked to speak, so this is
 // the interpreter starting and nothing more.
 const upWaitMs = 30_000;
-// Building the virtualenv downloads torch and the base model; this is the most it may take, and how often the node
-// is asked whether it is done.
+// Building the engine environment downloads torch and the engine's packages; this is the most it may take, and how
+// often the node is asked whether it is done.
 const setupWaitMs = 60 * 60_000;
 const setupPollMs = 5_000;
 // The machine's own certificate store. A node may stand behind a proxy that signs what it passes with a certificate
@@ -166,24 +170,108 @@ function token(): string {
   return made;
 }
 
-// The base model the trained weights name, as a Hugging Face repository and revision, read out of the cache path the
-// training run wrote into the current voice's config.
-async function baseModel(): Promise<{ repo: string; revision: string }> {
-  const current = await store().currentVoice();
+// The engine the voice servers speak with (`synth/engine.toml`): the code checkout their environment is built from and
+// the base weights each node carries.
+interface Engine {
+  code: { repository: string; commit: string; extra: string; python: string; leave_out: string[] };
+  base: { repository: string; revision: string; file: { name: string; bytes: number; sha256: string }[] };
+}
 
-  if (current === null) {
-    fail("no voice is current, so no checkpoint names the base model; install one with scripts/voice-install.ts");
+const engine = Bun.TOML.parse(readFileSync(engineFile, "utf8")) as Engine;
+
+// The least memory a voice node's card holds, in MiB: the server peaks at 11,295 MiB (docs/voice-plan.md, 「The
+// synthesiser」), so only a 12 GB card takes it.
+const leastCardMib = 12_000;
+
+// What one command carries of a base weight file to a node; a hub node takes a transfer this size whole.
+const sliceBytes = 256 * 1024 * 1024;
+
+// The base weights on this machine: the pinned revision's snapshot in the account's Hugging Face cache.
+function baseSnapshot(): string {
+  const hub = process.env.HF_HUB_CACHE ?? join(process.env.HF_HOME ?? join(homedir(), ".cache/huggingface"), "hub");
+
+  return join(hub, `models--${engine.base.repository.replace("/", "--")}`, "snapshots", engine.base.revision);
+}
+
+async function digestOf(path: string): Promise<string> {
+  const hash = createHash("sha256");
+
+  for await (const chunk of Bun.file(path).stream()) {
+    hash.update(chunk);
   }
 
-  const config = join(current.checkpoint, "lora_config.json");
-  const base = (JSON.parse(readFileSync(config, "utf8")) as { base_model: string }).base_model;
-  const found = /models--([^/]+)--([^/]+)\/snapshots\/([0-9a-f]+)/.exec(base);
+  return hash.digest("hex");
+}
 
-  if (found === null) {
-    fail(`the base model in ${config} is not a Hugging Face cache path: ${base}`);
+// Every base weight file this machine holds as the declaration says, checked once for every node a verb sets up.
+let checkedBase: string | null = null;
+
+async function localBase(): Promise<string> {
+  if (checkedBase !== null) {
+    return checkedBase;
   }
 
-  return { repo: `${found[1]}/${found[2]}`, revision: found[3] as string };
+  const snapshot = baseSnapshot();
+
+  for (const file of engine.base.file) {
+    const path = join(snapshot, file.name);
+
+    if (!existsSync(path) || statSync(path).size !== file.bytes || (await digestOf(path)) !== file.sha256) {
+      fail(`${path} is missing or is not the file synth/engine.toml declares; fetch ${engine.base.repository}@${engine.base.revision.slice(0, 8)} into this machine's Hugging Face cache first`);
+    }
+  }
+
+  checkedBase = snapshot;
+
+  return snapshot;
+}
+
+// The base weights carried to the node: each file only where the node's copy is missing or its digest differs, sent a
+// slice a command, joined there and checked by its digest before it takes the file's name.
+async function placeBase(node: VoiceNode): Promise<void> {
+  const place = `${VOICE_PLACE}/${BASE_PLACE}`;
+  const home = await nodeHome(node.shell);
+
+  await onNode(node, `mkdir -p ~/${place}/.incoming`);
+
+  for (const file of engine.base.file) {
+    const standing = (await onNode(node, `sha256sum ~/${place}/${file.name} 2>/dev/null | cut -c1-64 || true`)).trim();
+
+    if (standing === file.sha256) {
+      continue;
+    }
+
+    const source = Bun.file(join(await localBase(), file.name));
+    const slices = Math.max(1, Math.ceil(file.bytes / sliceBytes));
+
+    say(node, `carrying ${file.name} (${(file.bytes / 2 ** 20).toFixed(0)} MiB, ${slices} slices)`);
+
+    for (let at = 0; at < slices; at++) {
+      const bytes = new Uint8Array(await source.slice(at * sliceBytes, Math.min(file.bytes, (at + 1) * sliceBytes)).arrayBuffer());
+
+      try {
+        await node.shell.put(`${home}/${place}/.incoming/${file.name}.${String(at).padStart(4, "0")}`, bytes);
+      } catch (error) {
+        throw new NodeRefused(error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    const joined = (await onNode(node, [
+      `cd ~/${place}/.incoming`,
+      `cat ${file.name}.[0-9][0-9][0-9][0-9] > ${file.name}`,
+      `rm -f ${file.name}.[0-9][0-9][0-9][0-9]`,
+      `sha256sum ${file.name} | cut -c1-64`,
+    ].join(" && "))).trim();
+
+    if (joined !== file.sha256) {
+      await onNode(node, `rm -f ~/${place}/.incoming/${file.name}`);
+      throw new NodeRefused(`${file.name} arrived with another digest than synth/engine.toml declares`);
+    }
+
+    await onNode(node, `mv ~/${place}/.incoming/${file.name} ~/${place}/${file.name}`);
+  }
+
+  say(node, `the base weights ${engine.base.repository}@${engine.base.revision.slice(0, 8)} stand under ~/${place}, every file checked`);
 }
 
 function unitText(): string {
@@ -195,7 +283,7 @@ function unitText(): string {
     "",
     "[Service]",
     `WorkingDirectory=%h/${VOICE_PLACE}`,
-    `ExecStart=%h/${VOICE_PLACE}/.venv/bin/python %h/${VOICE_PLACE}/voice-vox.py --serve --voices %h/${VOICE_PLACE}/voices --token-file %h/${VOICE_TOKEN} --host 127.0.0.1 --port ${VOICE_PORT}`,
+    `ExecStart=%h/${VOICE_PLACE}/${ENGINE_PYTHON} %h/${VOICE_PLACE}/voice-fish.py --serve --voices %h/${VOICE_PLACE}/voices --base %h/${VOICE_PLACE}/${BASE_PLACE} --token-file %h/${VOICE_TOKEN} --host 127.0.0.1 --port ${VOICE_PORT}`,
     // Under WSL the driver's libraries and its nvidia-smi, which the server asks for the card's free memory, are
     // kept here; a directory that is not there is passed over.
     "Environment=LD_LIBRARY_PATH=/usr/lib/wsl/lib",
@@ -218,42 +306,43 @@ function unitText(): string {
 }
 
 // Building takes longer than a hub node lets one command run, so it runs apart on the node, its output in
-// `setup.log` and its exit in `setup.code`, and is asked after until the code is there.
+// `setup.log` and its exit in `setup.code`, while the base weights are carried beside it; the node is then asked after
+// until the code is there.
 async function setup(node: VoiceNode): Promise<void> {
-  const base = await baseModel();
+  const code = engine.code;
   const steps = [
     // uv into the account where it is missing, nothing written to the account's shell profile.
     "{ test -x ~/.local/bin/uv || curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh; }",
-    // The frozen torch is a CUDA 13 build, which a driver older than CUDA 13 does not run: such a node is refused
-    // here rather than failing on its first line. WSL keeps the driver's tools apart.
-    "{ PATH=$PATH:/usr/lib/wsl/lib nvidia-smi | grep -Eq \"CUDA Version: (1[3-9]|[2-9][0-9])[.]\" || { echo the driver runs no CUDA 13; false; }; }",
-    "test -x .venv/bin/python || ~/.local/bin/uv venv --python 3.12 .venv",
-    // The list is a full freeze, so it is installed as it stands rather than resolved.
-    "~/.local/bin/uv pip install --system-certs --python .venv/bin/python --index-strategy unsafe-best-match --no-deps -r requirements.txt",
-    `SSL_CERT_FILE=${systemCerts} REQUESTS_CA_BUNDLE=${systemCerts} .venv/bin/hf download ${base.repo} --revision ${base.revision} > /dev/null`,
+    // The engine's torch is a CUDA 12.9 build, which an older driver does not run, and the server needs a 12 GB card:
+    // such a node is refused here rather than failing on its first line. WSL keeps the driver's tools apart.
+    "{ PATH=$PATH:/usr/lib/wsl/lib nvidia-smi | grep -Eq \"CUDA Version: (12[.]9|1[3-9][.]|[2-9][0-9][.])\" || { echo the driver runs no CUDA 12.9; false; }; }",
+    `{ test "$(PATH=$PATH:/usr/lib/wsl/lib nvidia-smi --id=0 --query-gpu=memory.total --format=csv,noheader,nounits)" -ge ${leastCardMib} || { echo the card holds less than ${leastCardMib} MiB; false; }; }`,
+    `{ test -d fish-speech/.git || git clone --quiet ${code.repository} fish-speech; }`,
+    `{ git -C fish-speech -c advice.detachedHead=false checkout --quiet ${code.commit} 2>/dev/null || { git -C fish-speech fetch --quiet origin && git -C fish-speech -c advice.detachedHead=false checkout --quiet ${code.commit}; }; }`,
+    // The checkout's own lockfile, as it stands.
+    // In a subshell of its own, so the exit code is written beside the log rather than in the checkout.
+    `(cd fish-speech && UV_SYSTEM_CERTS=1 SSL_CERT_FILE=${systemCerts} ~/.local/bin/uv sync --frozen --python ${code.python} --extra ${code.extra} ${code.leave_out.map((name) => `--no-install-package ${name}`).join(" ")})`,
   ].join(" && ");
 
-  await onNode(node, `mkdir -p ~/${VOICE_PLACE} && cat > ~/${VOICE_PLACE}/requirements.txt`, readFileSync(requirementsFile, "utf8"));
-  await onNode(node, `cd ~/${VOICE_PLACE} && rm -f setup.code && (setsid sh -c '${steps}; echo $? > setup.code' > setup.log 2>&1 < /dev/null &)`);
+  await onNode(node, `mkdir -p ~/${VOICE_PLACE} && cd ~/${VOICE_PLACE} && rm -f setup.code && (setsid sh -c '${steps}; echo $? > setup.code' > setup.log 2>&1 < /dev/null &)`);
   say(node, `building on the node; its output is ~/${VOICE_PLACE}/setup.log there`);
+  await placeBase(node);
 
   const until = Date.now() + setupWaitMs;
 
   for (;;) {
-    await Bun.sleep(setupPollMs);
+    const done = (await onNode(node, `cat ~/${VOICE_PLACE}/setup.code 2>/dev/null || true`)).trim();
 
-    const code = (await onNode(node, `cat ~/${VOICE_PLACE}/setup.code 2>/dev/null || true`)).trim();
-
-    if (code !== "") {
+    if (done !== "") {
       const tail = await onNode(node, `tail -n 15 ~/${VOICE_PLACE}/setup.log`);
 
       console.log(tail);
 
-      if (code !== "0") {
-        throw new NodeRefused(`building ended with ${code}`);
+      if (done !== "0") {
+        throw new NodeRefused(`building ended with ${done}`);
       }
 
-      say(node, `the virtualenv and ${base.repo}@${base.revision.slice(0, 8)} are on the node`);
+      say(node, `the engine environment of fish-speech@${code.commit.slice(0, 8)} is on the node`);
 
       return;
     }
@@ -261,6 +350,8 @@ async function setup(node: VoiceNode): Promise<void> {
     if (Date.now() >= until) {
       throw new NodeRefused(`building did not end within ${setupWaitMs / 60_000} minutes; ~/${VOICE_PLACE}/setup.log on the node says how far it got`);
     }
+
+    await Bun.sleep(setupPollMs);
   }
 }
 
@@ -305,7 +396,7 @@ async function push(node: VoiceNode): Promise<void> {
   try {
     home = await nodeHome(node.shell);
     await onNode(node, `mkdir -p ~/${VOICE_PLACE}/voices ~/.config/${VOICE_PLACE} ~/.config/systemd/user`);
-    await node.shell.put(`${home}/${VOICE_PLACE}/voice-vox.py`, readFileSync(serverFile));
+    await node.shell.put(`${home}/${VOICE_PLACE}/voice-fish.py`, readFileSync(serverFile));
     await node.shell.put(`${home}/${VOICE_PLACE}/voices.tar`, voices);
   } catch (error) {
     throw new NodeRefused(error instanceof Error ? error.message : String(error));
@@ -360,15 +451,15 @@ async function nodes(): Promise<void> {
 }
 
 // One line in a voice, written as the wav the node answered. The voice is a row of the voices table by name, the
-// current row when none is named, or the checkpoint and reference named outright under the voices root, which is
-// how a measurement draws a checkpoint no row carries.
+// current row when none is named, or a voice folder named outright under the voices root, which is how a measurement
+// draws an adapter no row carries.
 async function speakRequest(text: string): Promise<VoiceNodeRequest> {
   const named = argValue("--voice");
   const checkpoint = argValue("--checkpoint");
   let request: VoiceNodeRequest;
 
   if (checkpoint !== null) {
-    request = { text, checkpoint, reference: argValue("--reference") ?? fail("--checkpoint needs --reference"), cfg: 1.5, steps: 16, seed: 0, style: "", sentences: false, prompts: {} };
+    request = { text, checkpoint, seed: 0, style: "", sentences: true };
   } else {
     const row = named === null ? await store().currentVoice() : await store().voice(named);
 
@@ -379,9 +470,7 @@ async function speakRequest(text: string): Promise<VoiceNodeRequest> {
     request = voiceNodeRequest(row, text, voicesFolder());
   }
 
-  const cfg = argValue("--cfg");
   const seed = argValue("--seed");
-  const steps = argValue("--steps");
   const style = argValue("--style");
   const sentences = argValue("--sentences");
 
@@ -391,8 +480,6 @@ async function speakRequest(text: string): Promise<VoiceNodeRequest> {
 
   return {
     ...request,
-    ...(cfg === null ? {} : { cfg: Number.parseFloat(cfg) }),
-    ...(steps === null ? {} : { steps: Number.parseInt(steps, 10) }),
     ...(seed === null ? {} : { seed: Number.parseInt(seed, 10) }),
     ...(style === null ? {} : { style }),
     ...(sentences === null ? {} : { sentences: sentences === "on" }),

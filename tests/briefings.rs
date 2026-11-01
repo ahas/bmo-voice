@@ -81,8 +81,9 @@ impl Drop for Scratch {
   }
 }
 
-/// The engine's routes on the scratch store, with one voice whose files stand nowhere a node holds, so every line
-/// in it fails to be spoken, and one, `voice-b`, under the voices root, whose lines ask the master `master` names.
+/// The engine's routes on the scratch store, with one voice whose folder stands outside the voices root, nowhere a node
+/// holds, so every line in it fails to be spoken; one, `voice-b`, under the voices root, whose lines ask the master
+/// `master` names; and one, `voice-c`, whose folder declares no engine, as a retired voice's does.
 async fn engine(scratch: &Scratch, master: Option<std::net::SocketAddr>) -> axum::Router {
   let master = master.map_or_else(|| "127.0.0.1:9".to_owned(), |at| at.to_string());
   let settings_path = scratch.root.join("env").join("voice.toml");
@@ -112,14 +113,23 @@ address = "http://127.0.0.1:9"
   let db = bmo_voice::store::connect(&settings.database, 4).await.expect("the store opens");
 
   bmo_voice::store::migrate(&db).await.expect("the store migrates");
-  db.execute_unprepared(
-    r#"INSERT INTO "voices" ("name", "checkpoint", "reference", "cfg", "steps", "set_at")
-       VALUES ('voice-a', 'voice-a', 'reference/voice-a.wav', 2.0, 10, 0)"#,
-  )
-  .await
-  .expect("the voice is written");
-
   let voices = settings.voices_folder();
+  let outside = scratch.root.join("elsewhere").join("voice-a");
+
+  for folder in [&outside, &voices.join("voice-b")] {
+    std::fs::create_dir_all(folder).expect("the voice folder is made");
+    std::fs::write(folder.join("voice.toml"), "engine = \"fish-s2-pro\"\n").expect("the voice is declared");
+  }
+
+  std::fs::create_dir_all(voices.join("voice-c")).expect("the retired voice's folder is made");
+  db.execute_unprepared(&format!(
+    r#"INSERT INTO "voices" ("name", "checkpoint", "reference", "cfg", "steps", "set_at")
+       VALUES ('voice-a', '{}', '', 0, 0, 0), ('voice-c', '{}', 'reference/voice-c.wav', 2.0, 10, 0)"#,
+    outside.display(),
+    voices.join("voice-c").display()
+  ))
+  .await
+  .expect("the voices are written");
 
   db.execute_unprepared(&format!(
     r#"INSERT INTO "voices" ("name", "checkpoint", "reference", "cfg", "steps", "set_at")
@@ -284,7 +294,7 @@ async fn a_full_reading_names_its_line_keeps_it_and_the_page_narrows_to_it() {
   )
   .await;
 
-  assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+  assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
   assert_eq!(refused["code"], "unknown-emotion");
 
   let (status, _) = call(
@@ -296,6 +306,27 @@ async fn a_full_reading_names_its_line_keeps_it_and_the_page_narrows_to_it() {
   .await;
 
   assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn a_retired_voice_is_listed_as_such_and_never_spoken() {
+  let scratch = Scratch::new().await;
+  let engine = engine(&scratch, None).await;
+  let (_, retired) = call(&engine, "GET", "/voices/voice-c", None).await;
+  let (_, served) = call(&engine, "GET", "/voices/voice-b", None).await;
+
+  assert_eq!((retired["engine"].as_str(), retired["served"].as_bool()), (Some("voxcpm2"), Some(false)));
+  assert_eq!((served["engine"].as_str(), served["served"].as_bool()), (Some("fish-s2-pro"), Some(true)));
+
+  for (path, body) in [
+    ("/syntheses", json!({ "voiceName": "voice-c", "text": "A line." })),
+    ("/briefings", json!({ "voiceName": "voice-c", "text": "A line.", "chatId": ROOM, "kind": "summary" })),
+  ] {
+    let (status, refused) = call(&engine, "POST", path, Some(body)).await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{path}: {refused}");
+    assert_eq!(refused["code"], "retired-voice", "{path}: {refused}");
+  }
 }
 
 /// A stand-in master: a demand waits, its reads saying why, until the test lets it be granted on a node nothing

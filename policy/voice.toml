@@ -6,3 +6,7 @@ run_cap_ms = 600000
 # The emotions a voice may be asked to speak with, one for each face a listener draws. A synthesis naming
 # any other is refused.
 emotions = ["기본", "기쁨", "슬픔", "놀람", "화남", "졸림", "폭소", "걱정", "아픔", "안간힘"]
+
+# The engine every served voice belongs to (docs/voice-plan.md, 「The synthesiser」): a voice whose folder's
+# `voice.toml` names another, or a folder with none, is kept and never spoken.
+engine = "fish-s2-pro"

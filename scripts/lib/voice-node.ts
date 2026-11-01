@@ -9,7 +9,7 @@ import { store } from "./store";
 import { encodeWav, readyVoiceLock, voiceQueueExit } from "./voice";
 
 import type { NodeShell } from "./node-shell";
-import type { VoiceLanguage, VoicePrompt, VoicePrompts, VoiceRow } from "./store";
+import type { VoiceRow } from "./store";
 
 // The scripts' way to the voice servers on the nodes that lend their cards (docs/voice-plan.md, 「The voice servers
 // on the voice nodes」). The server listens on the node's loopback alone, so every call goes through the node's own
@@ -59,6 +59,11 @@ export const VOICE_SERVICE = "voice";
 // listens on there. The token file is the node's own, beside the other configuration in its home.
 export const VOICE_PLACE = nodePlace;
 export const VOICE_PORT = 7432;
+
+// The engine environment's interpreter and the base weights, both relative to the node's place (docs/voice-plan.md,
+// 「The environments」, 「Where the weights live」).
+export const ENGINE_PYTHON = "fish-speech/.venv/bin/python";
+export const BASE_PLACE = "s2-pro";
 export const VOICE_TOKEN = `.config/${VOICE_PLACE}/token`;
 
 // The stamp a push leaves on the node, relative to its home: one digest of everything that push brought. The node
@@ -135,7 +140,7 @@ export function voicePushStamp(push: VoicePush): string {
 
 // The node's interpreter running the server file, as a line of the node's shell, which is what every verb that
 // asks the server starts from.
-export const voiceOnNode = `"$HOME/${VOICE_PLACE}/.venv/bin/python" "$HOME/${VOICE_PLACE}/voice-vox.py"`;
+export const voiceOnNode = `"$HOME/${VOICE_PLACE}/${ENGINE_PYTHON}" "$HOME/${VOICE_PLACE}/voice-fish.py"`;
 
 // The voice node list, in the order a free node is taken; empty where the trained voice is spoken on this machine.
 export async function voiceNodeNames(): Promise<string[]> {
@@ -177,18 +182,13 @@ export async function voiceNodeShell(name: string): Promise<NodeShell> {
 
 export interface VoiceNodeRequest {
   text: string;
-  // Both as names under the voices root: the node holds a copy of that directory, laid out the same.
+  // The voice's folder as a name under the voices root: the node holds a copy of that directory, laid out the same.
   checkpoint: string;
-  reference: string;
-  cfg: number;
-  steps: number;
   seed: number;
   // The delivery instruction as plain words; the node's mouth puts it where the model reads it.
   style: string;
-  // Whether the line is spoken a sentence at a time rather than in one pass.
+  // Whether the line is spoken a sentence at a time rather than in passes.
   sentences: boolean;
-  // The row's continuation prompts by language, each clip as a name under the voices root.
-  prompts: VoicePrompts;
 }
 
 function under(root: string, path: string): string | null {
@@ -197,29 +197,16 @@ function under(root: string, path: string): string | null {
   return name === "" || name.startsWith("..") || isAbsolute(name) ? null : name;
 }
 
-// What the node is asked for one line in one voice. The row names its files by where they stand on this machine;
-// the node is sent the part under the voices root, which is all its copy shares.
+// What the node is asked for one line in one voice (docs/voice-plan.md, 「What it answers」). The row names its folder
+// by where it stands on this machine; the node is sent the part under the voices root, which is all its copy shares.
 export function voiceNodeRequest(voice: VoiceRow, text: string, root: string = voicesFolder()): VoiceNodeRequest {
   const checkpoint = under(root, voice.checkpoint);
-  const reference = under(root, voice.reference);
-  const prompts: VoicePrompts = {};
 
-  // A clip left empty beside its words goes as it stands, for the node to refuse as a prompt half there.
-  for (const [language, prompt] of Object.entries(voice.prompts) as [VoiceLanguage, VoicePrompt][]) {
-    const clip = prompt.clip === "" ? "" : under(root, prompt.clip);
-
-    if (clip === null) {
-      throw new VoiceNodeError("elsewhere", null, `${voice.name}'s ${language} continuation prompt is not under ${root}`);
-    }
-
-    prompts[language] = { clip, words: prompt.words };
-  }
-
-  if (checkpoint === null || reference === null) {
+  if (checkpoint === null) {
     throw new VoiceNodeError("elsewhere", null, `${voice.name} is not under ${root}`);
   }
 
-  return { text, checkpoint, reference, cfg: voice.cfg, steps: voice.steps, seed: voice.seed, style: voice.style, sentences: voice.bySentence, prompts };
+  return { text, checkpoint, seed: voice.seed, style: voice.style, sentences: voice.bySentence };
 }
 
 export interface VoiceNodeSpoken {
