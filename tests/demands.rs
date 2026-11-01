@@ -42,6 +42,7 @@ struct Stand {
   given: Mutex<Vec<i64>>,
   first: Mutex<Option<Answer>>,
   next_id: Mutex<i64>,
+  live: Mutex<Vec<i64>>,
 }
 
 fn demand(id: i64, answer: &Answer) -> Value {
@@ -65,6 +66,8 @@ async fn ask(State(stand): State<Arc<Stand>>, Json(body): Json<Value>) -> impl I
     *next += 1;
     *next
   };
+
+  stand.live.lock().unwrap().push(id);
   let first = stand.first.lock().unwrap().clone().unwrap_or(Answer::Granted);
   let status = match first {
     Answer::Granted => StatusCode::CREATED,
@@ -96,8 +99,31 @@ async fn read(State(stand): State<Arc<Stand>>, Path(id): Path<i64>) -> impl Into
   }
 }
 
+// Every demand the stand-in holds, as one read answers them: each read takes the next answer, and a demand gone is
+// one the page holds no more.
+async fn list(State(stand): State<Arc<Stand>>) -> impl IntoResponse {
+  let answer = {
+    let mut reads = stand.reads.lock().unwrap();
+
+    if reads.len() > 1 { reads.pop_front() } else { reads.front().cloned() }.unwrap_or(Answer::Granted)
+  };
+  let live = stand.live.lock().unwrap().clone();
+
+  if let Answer::Gone = answer {
+    // Once gone, the demand asked again is granted.
+    stand.live.lock().unwrap().clear();
+    *stand.reads.lock().unwrap() = VecDeque::from([Answer::Granted]);
+    *stand.first.lock().unwrap() = Some(Answer::Granted);
+
+    return Json(json!({ "items": [], "more": false }));
+  }
+
+  Json(json!({ "items": live.iter().map(|id| demand(*id, &answer)).collect::<Vec<_>>(), "more": false }))
+}
+
 async fn give_back(State(stand): State<Arc<Stand>>, Path(id): Path<i64>) -> StatusCode {
   stand.given.lock().unwrap().push(id);
+  stand.live.lock().unwrap().retain(|live| *live != id);
 
   StatusCode::NO_CONTENT
 }
@@ -112,7 +138,7 @@ async fn master(first: Answer, reads: Vec<Answer>) -> (Arc<Stand>, SocketAddr) {
     ..Stand::default()
   });
   let router = Router::new()
-    .route("/demands", post(ask))
+    .route("/demands", post(ask).get(list))
     .route("/demands/{id}", get(read))
     .route("/demands/{id}", delete(give_back))
     .with_state(Arc::clone(&stand));

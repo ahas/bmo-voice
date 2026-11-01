@@ -371,23 +371,18 @@ async fn create_synthesis(
   let context = Arc::clone(&served.context);
   let events = served.events.clone();
   let text = asked.text;
-  // The speaking runs apart from the answer, on a runtime of its own: the call into the voice nodes holds
-  // their shells and their waits, which no request's task is to carry.
-  tokio::task::spawn_blocking(move || {
-    if let Ok(runtime) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
-      runtime.block_on(speak(
-        context,
-        events,
-        id,
-        voice,
-        Words {
-          text,
-          spoken,
-          language,
-        },
-      ));
-    }
-  });
+  // The speaking runs apart from the answer, a task of the service's one runtime, which every waiting line shares.
+  tokio::spawn(speak(
+    context,
+    events,
+    id,
+    voice,
+    Words {
+      text,
+      spoken,
+      language,
+    },
+  ));
 
   Ok((StatusCode::CREATED, Json(synthesis)).into_response())
 }
@@ -682,17 +677,13 @@ async fn create_briefing(
   let context = Arc::clone(&served.context);
   let events = served.events.clone();
 
-  tokio::task::spawn_blocking(move || {
-    if let Ok(runtime) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
-      let words = Words {
-        text: script,
-        spoken: spoken_words,
-        language,
-      };
+  let words = Words {
+    text: script,
+    spoken: spoken_words,
+    language,
+  };
 
-      runtime.block_on(brief(context, events, id, synthesis_id, voice, words));
-    }
-  });
+  tokio::spawn(brief(context, events, id, synthesis_id, voice, words));
 
   Ok((StatusCode::CREATED, Json(briefing)).into_response())
 }
@@ -735,14 +726,10 @@ pub async fn take_up(context: Arc<Context>, events: Events) -> Result<usize, Sto
     let context = Arc::clone(&context);
     let events = events.clone();
 
-    tokio::task::spawn_blocking(move || {
-      if let Ok(runtime) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
-        match briefing {
-          Some(briefing) => runtime.block_on(brief(context, events, briefing, id, voice, words)),
-          None => runtime.block_on(speak(context, events, id, voice, words)),
-        }
-      }
-    });
+    match briefing {
+      Some(briefing) => tokio::spawn(brief(context, events, briefing, id, voice, words)),
+      None => tokio::spawn(speak(context, events, id, voice, words)),
+    };
     taken += 1;
   }
 
@@ -891,11 +878,7 @@ async fn create_transcription(
   let language = asked.language;
   let files = asked.files;
 
-  tokio::task::spawn_blocking(move || {
-    if let Ok(runtime) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
-      runtime.block_on(transcribe(context, events, id, language, files));
-    }
-  });
+  tokio::spawn(transcribe(context, events, id, language, files));
 
   Ok((StatusCode::CREATED, Json(transcription)).into_response())
 }

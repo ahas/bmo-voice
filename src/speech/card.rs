@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::units::UnitError;
-use crate::units::arbiter::{Arbiter, Ask, DEMAND_WAIT, Demand};
+use crate::units::arbiter::{Arbiter, Ask, Demand};
 
 // How long a call that did not reach the master waits before it is made again.
 const AGAIN: Duration = Duration::from_secs(1);
@@ -104,7 +104,7 @@ async fn granted(
 
     tell(said, demand.waiting_on().unwrap_or_else(|| IN_LINE.to_owned()), waiting);
 
-    match arbiter.demand(demand.id, DEMAND_WAIT).await {
+    match arbiter.watched(demand.id).await {
       Ok(Some(now)) => demand = now,
       Ok(None) => {
         forget(ledger, demand.id);
@@ -146,7 +146,7 @@ pub async fn again(
 ) -> Result<Held, String> {
   let mut said = None;
   let demand = loop {
-    match arbiter.demand(held.demand, Duration::ZERO).await {
+    match arbiter.demand(held.demand).await {
       Ok(Some(demand)) => break demand,
       Ok(None) => {
         forget(ledger, held.demand);

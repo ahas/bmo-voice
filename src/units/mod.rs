@@ -11,6 +11,9 @@ use serde::de::DeserializeOwned;
 
 use crate::settings::{Settings, Unit};
 
+/// How many idle connections the one client keeps to each unit.
+const IDLE_PER_UNIT: usize = 8;
+
 /// Every unit the voice calls, each at the address the settings name.
 #[derive(Clone, Debug)]
 pub struct Units {
@@ -27,7 +30,14 @@ pub struct Units {
 impl Units {
   /// The units the settings name, called through one HTTP client.
   pub fn new(settings: &Settings) -> Result<Self, UnitError> {
-    let http = reqwest::Client::new();
+    // One client for every call, its idle connections to each unit kept to a bound.
+    let http = reqwest::Client::builder()
+      .pool_max_idle_per_host(IDLE_PER_UNIT)
+      .build()
+      .map_err(|why| UnitError::Unreached {
+        unit: "voice",
+        why: format!("the HTTP client did not stand: {why}"),
+      })?;
     let units = &settings.units;
     let caller = |name: &'static str, unit: &Unit| Caller::new(name, settings, unit, http.clone());
 

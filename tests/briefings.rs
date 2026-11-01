@@ -369,6 +369,9 @@ async fn line_master(line: Arc<Line>) -> std::net::SocketAddr {
       "/demands",
       post(|State(line): State<Arc<Line>>| async move {
         (StatusCode::ACCEPTED, axum::Json(line_demand(&line)))
+      })
+      .get(|State(line): State<Arc<Line>>| async move {
+        axum::Json(json!({ "items": [line_demand(&line)], "more": false }))
       }),
     )
     .route(
@@ -439,4 +442,39 @@ async fn a_synthesis_waits_for_its_card_says_why_and_gives_it_back_as_it_ends() 
   assert_eq!(read["state"], "failed", "the node granted is out of reach: {read}");
   assert_eq!(read["waitingOn"], Value::Null);
   assert_eq!(*line.given.lock().unwrap(), [9], "the card is given back as the line ends");
+}
+
+#[tokio::test]
+async fn three_hundred_waiting_lines_share_one_runtime_and_one_read_of_the_master() {
+  let scratch = Scratch::new().await;
+  let line = Arc::new(Line::default());
+  let engine = engine(&scratch, Some(line_master(Arc::clone(&line)).await)).await;
+  let open_files = || std::fs::read_dir("/proc/self/fd").map_or(0, Iterator::count);
+  let before = open_files();
+
+  for _ in 0..300 {
+    let (status, made) = call(
+      &engine,
+      "POST",
+      "/syntheses",
+      Some(json!({ "voiceName": "voice-b", "text": "A short line.", "spoken": SPOKEN })),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::CREATED, "{made}");
+  }
+
+  // Every line asks its demand and waits on it; the reads of the master go on meanwhile.
+  tokio::time::sleep(Duration::from_secs(3)).await;
+
+  let (_, read) = call(&engine, "GET", "/syntheses/300", None).await;
+  let during = open_files();
+
+  eprintln!("open files: {before} before 300 waiting lines, {during} while they wait");
+  assert_eq!(read["waitingOn"], IN_USE, "the line waits on its card, told why: {read}");
+  assert!(
+    during < before + 200,
+    "300 waiting lines hold {} files beyond the {before} before them",
+    during - before
+  );
 }

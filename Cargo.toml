@@ -9,7 +9,7 @@ members = [
 
 # One version for the whole repository (docs/boundary-api.md, 「Versions」).
 [workspace.package]
-version = "0.1.0-rev.14"
+version = "0.1.0-rev.15"
 edition = "2024"
 license = "MIT"
 publish = false
@@ -59,6 +59,8 @@ ogg = "0.9.2"
 percent-encoding = "2.3.1"
 # A video page's subtitle tracks, and a cue's text out of its markup, read as HTML is read.
 scraper = "0.25.0"
+# The service's open-files limit raised to its hard limit as it starts.
+libc = "0.2.191"
 # An asset named by the hash of its path, and a studio session token kept as its hash.
 sha2 = "0.10.9"
 # The provided subtitles, read as WebVTT is written.

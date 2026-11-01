@@ -1,7 +1,13 @@
-//! The arbiter's master, as its `docs/api.md` states it (「Demands」): a demand for cards of a service asked, read
-//! with its answer held open while it waits, and given back. Which node answers a card is the master's to say.
+//! The arbiter's master, as its `docs/api.md` states it (「Demands」): a demand for cards of a service asked, read, and
+//! given back. Every waiting line takes its demand from one read of all the master holds, made once a second while any
+//! line waits, so no line holds a request of its own open. Which node answers a card is the master's to say.
 
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+
+use tokio::sync::watch;
 
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
@@ -9,8 +15,8 @@ use serde_json::Value;
 
 use super::{Caller, UnitError};
 
-/// How long one read of a demand holds its answer open at the master.
-pub const DEMAND_WAIT: Duration = Duration::from_secs(30);
+/// How often the master's demands are read while any line waits on one.
+pub const READ_EVERY: Duration = Duration::from_secs(1);
 
 // How long a call waits for its answer beyond the time it asks the master to hold it open: a connection that
 // answers nothing within it is the master not reached, and the call is made again.
@@ -20,6 +26,27 @@ const CALL_SLACK: Duration = Duration::from_secs(15);
 #[derive(Clone, Debug)]
 pub struct Arbiter {
   caller: Caller,
+  reads: Arc<Reads>,
+}
+
+/// One read of every demand the master holds, by id; or, where the read failed, whether the master was not reached
+/// and why.
+#[derive(Clone, Debug)]
+pub enum Reading {
+  Held(Arc<HashMap<i64, Demand>>),
+  Failed { unreached: bool, why: String },
+}
+
+/// The reads every waiting line takes its demand from, and whether the loop that makes them stands.
+#[derive(Debug)]
+struct Reads {
+  latest: watch::Sender<Option<Reading>>,
+  started: AtomicBool,
+}
+
+#[derive(Deserialize)]
+struct Page {
+  items: Vec<Demand>,
 }
 
 /// What a demand asks: the service, how many cards, the key of the work it continues and a reference the master
@@ -93,7 +120,98 @@ impl Demand {
 
 impl Arbiter {
   pub fn new(caller: Caller) -> Self {
-    Self { caller }
+    Self {
+      caller,
+      reads: Arc::new(Reads {
+        latest: watch::Sender::new(None),
+        started: AtomicBool::new(false),
+      }),
+    }
+  }
+
+  /// Every demand the master holds, read once.
+  pub async fn demands(&self) -> Result<Vec<Demand>, UnitError> {
+    let request = self.caller.request(Method::GET, &["demands"]).timeout(CALL_SLACK);
+    let page: Page = self.caller.json(request).await?;
+
+    Ok(page.items)
+  }
+
+  /// A waiting line's demand as the next read of the master finds it: the demand, none where the master holds it no
+  /// more, or the read's failure. The loop that reads is started by the first line that waits, and reads only while
+  /// one does.
+  pub async fn watched(&self, id: i64) -> Result<Option<Demand>, UnitError> {
+    self.read_while_watched();
+
+    let mut next = self.reads.latest.subscribe();
+
+    next.mark_unchanged();
+
+    if next.changed().await.is_err() {
+      return Err(UnitError::Unreached {
+        unit: "arbiter",
+        why: "the reads of the master stopped".to_owned(),
+      });
+    }
+
+    let reading = next.borrow().clone();
+
+    match reading {
+      Some(Reading::Held(demands)) => Ok(demands.get(&id).cloned()),
+      Some(Reading::Failed {
+        unreached: true,
+        why,
+      }) => Err(UnitError::Unreached {
+        unit: "arbiter",
+        why,
+      }),
+      Some(Reading::Failed {
+        unreached: false,
+        why,
+      }) => Err(UnitError::Refused {
+        unit: "arbiter",
+        status: 500,
+        code: None,
+        error: why,
+      }),
+      None => Ok(None),
+    }
+  }
+
+  // The one loop that reads the master for every waiting line, started once and reading only while a line waits.
+  fn read_while_watched(&self) {
+    if self.reads.started.swap(true, Ordering::SeqCst) {
+      return;
+    }
+
+    let arbiter = self.clone();
+
+    tokio::spawn(async move {
+      loop {
+        if arbiter.reads.latest.receiver_count() > 0 {
+          let reading = match arbiter.demands().await {
+            Ok(demands) => {
+              Reading::Held(Arc::new(demands.into_iter().map(|demand| (demand.id, demand)).collect()))
+            }
+            Err(why) => Reading::Failed {
+              unreached: matches!(
+                why,
+                UnitError::Unreached { .. }
+                  | UnitError::Refused {
+                    status: 502 | 503,
+                    ..
+                  }
+              ),
+              why: why.to_string(),
+            },
+          };
+
+          arbiter.reads.latest.send_replace(Some(reading));
+        }
+
+        tokio::time::sleep(READ_EVERY).await;
+      }
+    });
   }
 
   /// A demand asked, answered as it stands: granted or waiting.
@@ -103,13 +221,9 @@ impl Arbiter {
     self.caller.json(request).await
   }
 
-  /// A demand read, its answer held open up to `wait` while it waits; none where the master holds no such demand.
-  pub async fn demand(&self, id: i64, wait: Duration) -> Result<Option<Demand>, UnitError> {
-    let request = self
-      .caller
-      .request(Method::GET, &["demands", &id.to_string()])
-      .query(&[("waitMs", wait.as_millis())])
-      .timeout(wait + CALL_SLACK);
+  /// A demand read as it stands; none where the master holds no such demand.
+  pub async fn demand(&self, id: i64) -> Result<Option<Demand>, UnitError> {
+    let request = self.caller.request(Method::GET, &["demands", &id.to_string()]).timeout(CALL_SLACK);
 
     match self.caller.json(request).await {
       Ok(demand) => Ok(Some(demand)),

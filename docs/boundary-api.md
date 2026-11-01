@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.14.
+Fixed at 0.1.0-rev.15.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -284,6 +284,12 @@ It asks no model, takes no card turn and keeps nothing. A language other than `k
   reference naming the synthesis and its voice. The line is spoken on the node of the card granted, reached as
   the node service's answer for that node says, and the demand is given back once the line ends, spoken or
   failed.
+- **One read of the master serves every waiting line.** No waiting line holds a request of its own open: while any
+  line waits, the engine reads every demand the master holds once a second, and each waiting line takes its
+  demand's state from that read; a demand the read does not hold is one the master holds no more. However many
+  lines wait, the master is read through one request at a time.
+- **Every line runs on the service's one runtime and through its one HTTP client,** whose idle connections are
+  kept to a bound, so a waiting line holds no thread, poller or socket of its own.
 - **The wait has no end but the grant.** While the master holds the demand in line, or cannot be reached, the
   synthesis stays `waiting`, its `waitingOn` saying why. A master that no longer holds the demand, one
   restarted, is asked a new one. `voice` placed on no node (`no-place`) and any other refusal of the master's
@@ -314,7 +320,8 @@ The arbiter's master (its `docs/api.md`, 「Demands」).
 | Call | Route | Used for |
 |---|---|---|
 | a demand | `POST /demands` with `serviceName` `voice`, `count` 1, `workKey` and `ref` | a card of `voice` for one synthesis: `201` granted, `202` waiting, `422` `no-place` where `voice` is placed on no node |
-| the demand read | `GET /demands/{demandId}` with `waitMs` 30,000 | the demand as it stands, the answer held open while it waits; `404` where the master holds it no more |
+| the demands read | `GET /demands` | every demand the master holds, read once a second while any line waits: each waiting line's demand as it stands, or none where the master holds it no more |
+| a demand read | `GET /demands/{demandId}` | a held line's demand as it stands once other work held its card from under it; `404` where the master holds it no more |
 | the demand given back | `DELETE /demands/{demandId}` | `204`, or `404` where it is given back already |
 
 - **A granted card** is the first of `cards` on a demand `granted` with nothing `taken`; its `nodeName` is the
