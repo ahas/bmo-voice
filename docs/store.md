@@ -92,6 +92,7 @@ One row per text handed to the engine.
 | `spoken` | the words the voice says, given by the caller or derived; null until they stand |
 | `language` | the language the line is said in, `ko` or `en`; null on a row taken in before lines named one, which is said in its voice's |
 | `emotion` | the emotion it was asked for; null where none was |
+| `key` | the caller's key for the line (`docs/boundary-api.md`, 「Syntheses」); null where none was given. No two rows that have not failed hold one key |
 | `state` | `waiting`, `speaking`, `done` or `failed` |
 | `duration_ms` | the sound's length once it is done; null before |
 | `created_at` | when it was taken in, in epoch milliseconds |

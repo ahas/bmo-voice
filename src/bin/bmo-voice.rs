@@ -183,6 +183,7 @@ async fn brief(
       title,
       emotion,
       plays,
+      key: None,
     })
     .await
     .map_err(|why| why.to_string())?;

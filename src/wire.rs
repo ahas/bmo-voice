@@ -141,6 +141,9 @@ pub struct Synthesis {
   #[serde(default)]
   pub spoken: Option<String>,
   pub emotion: Option<String>,
+  /// The caller's key for the line (`docs/boundary-api.md`, 「Syntheses」); null where none was given.
+  #[serde(default)]
+  pub key: Option<String>,
   pub state: SynthesisState,
   /// What a waiting synthesis waits on for its card, an English sentence; null once its card is granted.
   #[serde(default)]
@@ -172,6 +175,9 @@ pub struct NewSynthesis {
   pub style: Option<String>,
   #[serde(default)]
   pub seed: Option<i64>,
+  /// The caller's key for the line: a second call naming it while its synthesis has not failed answers that one.
+  #[serde(default)]
+  pub key: Option<String>,
 }
 
 /// One transcription.
@@ -334,6 +340,9 @@ pub struct NewBriefing {
   /// Whether a listener plays it by itself; true where absent.
   #[serde(default)]
   pub plays: Option<bool>,
+  /// The caller's key for the line: a second call naming it while its synthesis has not failed answers that briefing.
+  #[serde(default)]
+  pub key: Option<String>,
 }
 
 /// A page of briefings, narrowed.

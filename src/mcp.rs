@@ -143,6 +143,9 @@ struct Speaking {
   style: Option<String>,
   #[serde(default)]
   seed: Option<i64>,
+  /// The caller's key for the line: asked again while its synthesis has not failed, that synthesis answers.
+  #[serde(default)]
+  key: Option<String>,
 }
 
 /// One synthesis, by its id.
@@ -182,6 +185,7 @@ pub fn tools() -> Vec<VoiceTool> {
           emotion: asked.emotion,
           style: asked.style,
           seed: asked.seed,
+          key: asked.key,
         };
 
         client.create_synthesis(&synthesis).await

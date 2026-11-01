@@ -82,13 +82,13 @@ asking `Accept: application/json`.
 
 | Route | Body or query | Answer |
 |---|---|---|
-| `POST /syntheses` | `voiceName`, `text`, `spoken?`, `language?`, `emotion?`, `style?`, `seed?` | 201, the synthesis |
+| `POST /syntheses` | `voiceName`, `text`, `spoken?`, `language?`, `emotion?`, `style?`, `seed?`, `key?` | 201, the synthesis; 200, the one its `key` already names |
 | `GET /syntheses/{synthesisId}` | | one synthesis |
 | `GET /syntheses/{synthesisId}/sound` | | the sound, OGG/Opus, with `Range` |
 
 - **A synthesis:** `id`, `voiceName`, `text` (the written words), `spoken` (the words the voice says, null until
-  they stand; 「The spoken words」), `emotion`, `state`, `waitingOn`, `durationMs` (null until done) and
-  `createdAt`. Its `state` is `waiting` (taken in, its card not yet granted), `speaking` (a voice
+  they stand; 「The spoken words」), `emotion`, `key` (the caller's key, null where none was given), `state`,
+  `waitingOn`, `durationMs` (null until done) and `createdAt`. Its `state` is `waiting` (taken in, its card not yet granted), `speaking` (a voice
   server is speaking it), `done` (its sound stands) or `failed`.
 - **A synthesis is answered at once;** the speaking runs apart on the voice server of the card the arbiter's
   master grants it (「The voice servers and the card」), and the caller reads the member again until its
@@ -111,6 +111,11 @@ asking `Accept: application/json`.
   words derived where none stand, and a briefing spoken by it is ended and told as its synthesis ends. One whose
   voice no list holds any more, or whose voice is not served, fails. Nothing a caller took in is left `waiting`
   with no process to speak it.
+- **A key makes a line once.** `key` is the caller's own name for a line, of at most 200 characters and not blank,
+  in whatever shape the caller keys its work by. A `POST` naming a key that a synthesis `waiting`, `speaking` or
+  `done` already holds takes nothing in and is answered 200 with that synthesis, whatever else the body says; once
+  the one holding it has `failed`, the key takes a new one in. Two calls with one key at once take in one synthesis
+  between them. A key that is blank or longer is answered 400 `bad-request`.
 - **One synthesis speaks one text.** There is no list route: a caller that wants to know a synthesis it
   started reads its member or listens to the stream.
 
@@ -178,7 +183,7 @@ server any other way.
 
 | Route | Body or query | Answer |
 |---|---|---|
-| `POST /briefings` | `voiceName`, `text`, `spoken?`, `language?`, `chatId`, `messageId?`, `kind`, `title?`, `emotion?`, `plays?` | 201, the briefing |
+| `POST /briefings` | `voiceName`, `text`, `spoken?`, `language?`, `chatId`, `messageId?`, `kind`, `title?`, `emotion?`, `plays?`, `key?` | 201, the briefing; 200, the one its `key` already names |
 | `GET /briefings` | `chatId?`, `messageId?`, `kind?`, `awaitsLine?`, `after`, `limit` | a page of briefings, newest first |
 | `GET /briefings/{briefingId}` | | one briefing |
 | `POST /briefings/{briefingId}/line` | `messageId`, a number or null | the briefing |
@@ -200,6 +205,9 @@ server any other way.
   on. `text` must hold something to say; a `spoken` that is empty or fails the check is 422 `unconverted-run`, a
   voice no list holds is 404 `not-found`, a voice that is not served is 422 `retired-voice`, and an emotion outside
   the policy's is 422 `unknown-emotion`.
+- **A key makes a briefing once,** as it does a synthesis (「Syntheses」): the key is its synthesis's, and a `POST`
+  naming a key the synthesis of a briefing holds, not yet `failed`, is answered 200 with that briefing. A key a
+  synthesis holds that speaks no briefing is answered 409 `conflict`.
 - **Whether it plays by itself is the caller's to say** in `plays`, true where absent, and the engine keeps what
   it was told. A listener plays by itself only a `summary` whose `plays` holds, once `briefing.ended` says it is
   `done`; it plays a `full` reading only when somebody asks for it, and shows a briefing it learns of more than

@@ -1,7 +1,7 @@
 //! The briefings (`docs/boundary-api.md`, 「Briefings」): a line spoken for a room is taken in at once and kept with
 //! its room and its line, its end is told on the event stream, a summary's line is named after it, a full reading
 //! names its line and keeps it, and the page narrows by room, line and kind; and the synthesis a line is spoken as
-//! waits for its card, saying why, and gives it back as it ends.
+//! waits for its card, saying why, and gives it back as it ends; and a caller's key takes a line in once.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -476,5 +476,113 @@ async fn three_hundred_waiting_lines_share_one_runtime_and_one_read_of_the_maste
     during < before + 200,
     "300 waiting lines hold {} files beyond the {before} before them",
     during - before
+  );
+}
+
+#[tokio::test]
+async fn a_key_takes_a_line_in_once_until_it_fails() {
+  let scratch = Scratch::new().await;
+  let engine = engine(&scratch, None).await;
+  let line =
+    |text: &str| json!({ "voiceName": "voice-b", "text": text, "spoken": SPOKEN, "key": "research:7:ko" });
+  let (status, first) = call(&engine, "POST", "/syntheses", Some(line("The first asking."))).await;
+
+  assert_eq!(status, StatusCode::CREATED, "{first}");
+  assert_eq!(first["key"], "research:7:ko");
+
+  // Asked again with the same key while the first waits: the first answers, whatever else the body says.
+  let (status, again) = call(&engine, "POST", "/syntheses", Some(line("Another text."))).await;
+
+  assert_eq!(status, StatusCode::OK, "{again}");
+  assert_eq!(again["id"], first["id"]);
+  assert_eq!(again["text"], "The first asking.");
+
+  // Once the one holding the key has failed, the key takes a new one in.
+  let mut store = PgConnection::connect(&address_of(&scratch.name)).await.expect("the store answers");
+  store
+    .execute(
+      format!(r#"UPDATE "voice_syntheses" SET "state" = 'failed' WHERE "id" = {}"#, first["id"]).as_str(),
+    )
+    .await
+    .expect("the synthesis is failed");
+  store.close().await.expect("the store connection closes");
+
+  let (status, renewed) = call(&engine, "POST", "/syntheses", Some(line("After the failure."))).await;
+
+  assert_eq!(status, StatusCode::CREATED, "{renewed}");
+  assert_ne!(renewed["id"], first["id"]);
+
+  // Two at once take in one between them.
+  let (one, two) = tokio::join!(
+    call(
+      &engine,
+      "POST",
+      "/syntheses",
+      Some(json!({ "voiceName": "voice-b", "text": "x", "spoken": SPOKEN, "key": "k2" }))
+    ),
+    call(
+      &engine,
+      "POST",
+      "/syntheses",
+      Some(json!({ "voiceName": "voice-b", "text": "x", "spoken": SPOKEN, "key": "k2" }))
+    ),
+  );
+
+  assert_eq!(one.1["id"], two.1["id"], "{} {}", one.1, two.1);
+  assert_eq!([one.0, two.0].iter().filter(|status| **status == StatusCode::CREATED).count(), 1);
+
+  let (status, refused) = call(
+    &engine,
+    "POST",
+    "/syntheses",
+    Some(json!({ "voiceName": "voice-b", "text": "x", "spoken": SPOKEN, "key": "  " })),
+  )
+  .await;
+
+  assert_eq!((status, refused["code"].as_str()), (StatusCode::BAD_REQUEST, Some("bad-request")));
+}
+
+#[tokio::test]
+async fn a_key_takes_a_briefing_in_once_and_a_plain_synthesis_key_is_a_conflict() {
+  let scratch = Scratch::new().await;
+  let engine = engine(&scratch, None).await;
+  let briefing = || {
+    json!({ "voiceName": "voice-b", "text": "The backup finished.", "spoken": SPOKEN, "chatId": ROOM,
+            "kind": "summary", "key": "research:9:ko" })
+  };
+  let (status, first) = call(&engine, "POST", "/briefings", Some(briefing())).await;
+
+  assert_eq!(status, StatusCode::CREATED, "{first}");
+
+  let (status, again) = call(&engine, "POST", "/briefings", Some(briefing())).await;
+
+  assert_eq!(status, StatusCode::OK, "{again}");
+  assert_eq!(again["id"], first["id"]);
+
+  let (status, _) = call(
+    &engine,
+    "POST",
+    "/syntheses",
+    Some(json!({ "voiceName": "voice-b", "text": "x", "spoken": SPOKEN, "key": "plain" })),
+  )
+  .await;
+
+  assert_eq!(status, StatusCode::CREATED);
+
+  let (status, refused) = call(
+    &engine,
+    "POST",
+    "/briefings",
+    Some(
+      json!({ "voiceName": "voice-b", "text": "x", "spoken": SPOKEN, "chatId": ROOM, "kind": "summary",
+                 "key": "plain" }),
+    ),
+  )
+  .await;
+
+  assert_eq!(
+    (status, refused["code"].as_str()),
+    (StatusCode::CONFLICT, Some("conflict")),
+    "{refused}"
   );
 }

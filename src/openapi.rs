@@ -311,6 +311,7 @@ pub fn openapi() -> Value {
         "unauthorized",
         "bad-request",
         "not-found",
+        "conflict",
         "retired-voice",
         "unknown-emotion",
         "unconverted-run",

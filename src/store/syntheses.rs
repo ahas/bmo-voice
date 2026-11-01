@@ -14,6 +14,7 @@ pub struct Row {
   pub spoken: Option<String>,
   pub language: Option<String>,
   pub emotion: Option<String>,
+  pub key: Option<String>,
   pub state: SynthesisState,
   pub duration_ms: Option<i64>,
   pub created_at: i64,
@@ -28,6 +29,7 @@ impl Row {
       text: self.text.clone(),
       spoken: self.spoken.clone(),
       emotion: self.emotion.clone(),
+      key: self.key.clone(),
       state: self.state,
       waiting_on: None,
       duration_ms: self.duration_ms,
@@ -48,13 +50,24 @@ fn row_of(row: &QueryResult) -> Result<Row, StoreError> {
     spoken: row.try_get("", "spoken")?,
     language: row.try_get("", "language")?,
     emotion: row.try_get("", "emotion")?,
+    key: row.try_get("", "key")?,
     state,
     duration_ms: row.try_get("", "duration_ms")?,
     created_at: row.try_get("", "created_at")?,
   })
 }
 
-/// A synthesis taken in, waiting to be spoken: its written words and, where the caller gave them, its spoken words.
+/// What taking a synthesis in came to: a new row, or the row its key already names, which nothing new was taken in for.
+#[derive(Debug)]
+pub enum Taken {
+  New(i64),
+  Held(Box<Row>),
+}
+
+/// A synthesis taken in, waiting to be spoken: its written words and, where the caller gave them, its spoken words;
+/// or, where its key is held by a synthesis that has not failed, that synthesis, the table left as it stood
+/// (`docs/boundary-api.md`, 「Syntheses」).
+#[allow(clippy::too_many_arguments)]
 pub async fn insert(
   db: &DatabaseConnection,
   voice_name: &str,
@@ -62,33 +75,59 @@ pub async fn insert(
   spoken: Option<&str>,
   language: &str,
   emotion: Option<&str>,
+  key: Option<&str>,
   at: i64,
-) -> Result<i64, StoreError> {
+) -> Result<Taken, StoreError> {
   let row = one(
     db,
-    r#"INSERT INTO "voice_syntheses" ("voice_name", "text", "spoken", "language", "emotion", "state", "created_at")
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING "id""#,
+    r#"INSERT INTO "voice_syntheses" ("voice_name", "text", "spoken", "language", "emotion", "key", "state", "created_at")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT ("key") WHERE "key" IS NOT NULL AND "state" <> 'failed' DO NOTHING
+       RETURNING "id""#,
     vec![
       voice_name.into(),
       text.into(),
       spoken.map_or(Value::String(None), |spoken| spoken.into()),
       language.into(),
       emotion.map_or(Value::String(None), |emotion| emotion.into()),
+      key.map_or(Value::String(None), |key| key.into()),
       SynthesisState::Waiting.as_str().into(),
       at.into(),
     ],
   )
-  .await?
-  .ok_or_else(|| StoreError("the synthesis was not written".to_owned()))?;
+  .await?;
 
-  row.try_get("", "id").map_err(StoreError::from)
+  if let Some(row) = row {
+    return Ok(Taken::New(row.try_get("", "id").map_err(StoreError::from)?));
+  }
+
+  let key = key.ok_or_else(|| StoreError("the synthesis was not written".to_owned()))?;
+
+  keyed(db, key)
+    .await?
+    .map(|row| Taken::Held(Box::new(row)))
+    .ok_or_else(|| StoreError(format!("the key {key} was held, and then by no synthesis")))
+}
+
+/// The synthesis a key names that has not failed, or none.
+pub async fn keyed(db: &DatabaseConnection, key: &str) -> Result<Option<Row>, StoreError> {
+  one(
+    db,
+    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "key", "state", "duration_ms", "created_at"
+       FROM "voice_syntheses" WHERE "key" = $1 AND "state" <> 'failed' ORDER BY "id" DESC LIMIT 1"#,
+    vec![key.into()],
+  )
+  .await?
+  .as_ref()
+  .map(row_of)
+  .transpose()
 }
 
 /// One synthesis, or none where the table holds no such row.
 pub async fn get(db: &DatabaseConnection, id: i64) -> Result<Option<Row>, StoreError> {
   one(
     db,
-    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "state", "duration_ms", "created_at"
+    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "key", "state", "duration_ms", "created_at"
        FROM "voice_syntheses" WHERE "id" = $1"#,
     vec![id.into()],
   )
@@ -102,7 +141,7 @@ pub async fn get(db: &DatabaseConnection, id: i64) -> Result<Option<Row>, StoreE
 pub async fn unfinished(db: &DatabaseConnection) -> Result<Vec<Row>, StoreError> {
   all(
     db,
-    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "state", "duration_ms", "created_at"
+    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "key", "state", "duration_ms", "created_at"
        FROM "voice_syntheses" WHERE "state" IN ('waiting', 'speaking') ORDER BY "id""#,
     vec![],
   )
@@ -150,7 +189,7 @@ pub async fn of_voice(
 ) -> Result<Vec<Row>, StoreError> {
   all(
     db,
-    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "state", "duration_ms", "created_at"
+    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "key", "state", "duration_ms", "created_at"
        FROM "voice_syntheses"
        WHERE "voice_name" = $1 AND ($2 = 0 OR "id" < $2)
        ORDER BY "id" DESC LIMIT $3"#,

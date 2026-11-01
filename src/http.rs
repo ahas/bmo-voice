@@ -326,6 +326,15 @@ async fn create_synthesis(
   if asked.text.trim().is_empty() {
     return Err(Refused::bad_request("a synthesis speaks a text; this one is empty"));
   }
+
+  let key = checked_key(asked.key.as_deref())?;
+
+  if let Some(key) = key
+    && let Some(held) = store::syntheses::keyed(&served.context.db, key).await?
+  {
+    return Ok((StatusCode::OK, Json(held.synthesis())).into_response());
+  }
+
   let row = voices::voice(&served.context.db, &asked.voice_name)
     .await?
     .ok_or_else(|| Refused::not_found(format!("there is no voice {}", asked.voice_name)))?;
@@ -336,22 +345,31 @@ async fn create_synthesis(
   let language = line_language(asked.language.as_deref(), &row)?;
   let spoken = checked_spoken(asked.spoken.as_deref(), language)?;
   let at = crate::now_ms();
-  let id = store::syntheses::insert(
+  let id = match store::syntheses::insert(
     &served.context.db,
     &asked.voice_name,
     &asked.text,
     spoken.as_deref(),
     language.code(),
     asked.emotion.as_deref(),
+    key,
     at,
   )
-  .await?;
+  .await?
+  {
+    store::syntheses::Taken::New(id) => id,
+    // Another call with this key took its synthesis in in the moment between: that one is the answer.
+    store::syntheses::Taken::Held(held) => {
+      return Ok((StatusCode::OK, Json(held.synthesis())).into_response());
+    }
+  };
   let synthesis = Synthesis {
     id,
     voice_name: asked.voice_name.clone(),
     text: asked.text.clone(),
     spoken: spoken.clone(),
     emotion: asked.emotion.clone(),
+    key: key.map(str::to_owned),
     state: SynthesisState::Waiting,
     waiting_on: None,
     duration_ms: None,
@@ -385,6 +403,39 @@ async fn create_synthesis(
   ));
 
   Ok((StatusCode::CREATED, Json(synthesis)).into_response())
+}
+
+// The longest key a caller may name a line by.
+const MOST_KEY: usize = 200;
+
+// A caller's key for its line, held to its shape before anything is looked up or taken in: not blank, and at most
+// `MOST_KEY` characters (docs/boundary-api.md, 「Syntheses」).
+fn checked_key(key: Option<&str>) -> Result<Option<&str>, Refused> {
+  match key {
+    Some(key) if key.trim().is_empty() || key.chars().count() > MOST_KEY => {
+      Err(Refused::bad_request(format!("a key is not blank and is at most {MOST_KEY} characters")))
+    }
+    other => Ok(other),
+  }
+}
+
+// The briefing whose synthesis holds a key, answered 200; a key a synthesis that speaks no briefing holds is a
+// conflict. A briefing's row is written right after its synthesis's, so one another call is taking in this moment is
+// looked for a little while before the key is said to be a plain synthesis's.
+async fn held_briefing(served: &Served, held: &store::syntheses::Row) -> Result<Response, Refused> {
+  for _ in 0..20 {
+    if let Some(id) = store::briefings::of_synthesis(&served.context.db, held.id).await? {
+      return Ok((StatusCode::OK, Json(briefing_of(&served.context.db, id).await?)).into_response());
+    }
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+  }
+
+  Err(Refused::new(
+    StatusCode::CONFLICT,
+    "conflict",
+    format!("the key is held by synthesis {}, which speaks no briefing", held.id),
+  ))
 }
 
 // The language a line is said in: the one it names, else its voice's; a voice of a language the spoken words have
@@ -627,6 +678,14 @@ async fn create_briefing(
     return Err(Refused::bad_request("a full reading names the line it reads"));
   }
 
+  let key = checked_key(asked.key.as_deref())?;
+
+  if let Some(key) = key
+    && let Some(held) = store::syntheses::keyed(&served.context.db, key).await?
+  {
+    return held_briefing(&served, &held).await;
+  }
+
   let voice = voices::voice(&served.context.db, &asked.voice_name)
     .await?
     .ok_or_else(|| Refused::not_found(format!("there is no voice {}", asked.voice_name)))?;
@@ -640,16 +699,21 @@ async fn create_briefing(
   let script = spoken::finished_script(&spoken::spoken_script(&asked.text));
   let script = if script.trim().is_empty() { asked.text.trim().to_owned() } else { script };
   let at = crate::now_ms();
-  let synthesis_id = store::syntheses::insert(
+  let synthesis_id = match store::syntheses::insert(
     db,
     &asked.voice_name,
     &script,
     spoken_words.as_deref(),
     language.code(),
     asked.emotion.as_deref(),
+    key,
     at,
   )
-  .await?;
+  .await?
+  {
+    store::syntheses::Taken::New(id) => id,
+    store::syntheses::Taken::Held(held) => return held_briefing(&served, &held).await,
+  };
   let id = store::briefings::insert(
     db,
     &store::briefings::Taken {
