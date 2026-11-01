@@ -9,8 +9,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use axum::body::Body;
-use axum::extract::State;
-use axum::http::{Request, StatusCode};
+use axum::extract::{Path, State};
+use axum::http::{Request, StatusCode, Uri};
 use axum::routing::{delete, patch, post};
 use bmo_voice::context::Context;
 use bmo_voice::events::Events;
@@ -329,6 +329,7 @@ struct Asked {
   starts: Mutex<Vec<Value>>,
   prompts: Mutex<Vec<String>>,
   given_back: Mutex<Vec<Value>>,
+  ended: Mutex<Vec<String>>,
   answers: Mutex<Vec<String>>,
 }
 
@@ -355,22 +356,46 @@ async fn stand_in_agency(asked: Arc<Asked>) -> std::net::SocketAddr {
       "/sessions",
       post(|State(asked): State<Arc<Asked>>, axum::Json(start): axum::Json<Value>| async move {
         asked.starts.lock().unwrap().push(start);
-        (StatusCode::CREATED, axum::Json(json!({ "id": "apart-1" })))
+        (StatusCode::CREATED, axum::Json(json!({ "id": "search@apart:1" })))
       }),
     )
     .route(
       "/sessions/{session}/turns",
-      post(|State(asked): State<Arc<Asked>>, axum::Json(turn): axum::Json<Value>| async move {
-        asked
-          .prompts
-          .lock()
-          .unwrap()
-          .push(turn["prompt"].as_str().unwrap_or_default().to_owned());
-        let answer = asked.answers.lock().unwrap().remove(0);
-        (StatusCode::CREATED, axum::Json(json!({ "answer": answer })))
+      post(
+        |State(asked): State<Arc<Asked>>, uri: Uri, axum::Json(turn): axum::Json<Value>| async move {
+          // The session's id as agency reads it: its segment unescaped, so an escaped `@` or `:` names no session.
+          if uri.path() != "/sessions/search@apart:1/turns" {
+            let refused =
+              json!({ "code": "unknown-session", "error": format!("no session at {}", uri.path()) });
+
+            return (StatusCode::NOT_FOUND, axum::Json(refused));
+          }
+
+          // A work turn's parts as agency reads them: every one it requires, the room among them.
+          let parts = ["provider", "model", "mapping", "resume", "cwd", "name", "title", "chat", "workKey"];
+
+          if let Some(missing) = parts.iter().find(|part| turn.get(**part).is_none_or(Value::is_null)) {
+            let refused = json!({ "code": "bad-request", "error": format!("missing field `{missing}`") });
+
+            return (StatusCode::BAD_REQUEST, axum::Json(refused));
+          }
+          asked
+            .prompts
+            .lock()
+            .unwrap()
+            .push(turn["prompt"].as_str().unwrap_or_default().to_owned());
+          let answer = asked.answers.lock().unwrap().remove(0);
+          (StatusCode::CREATED, axum::Json(json!({ "answer": answer })))
+        },
+      ),
+    )
+    .route(
+      "/sessions/{session}",
+      delete(|State(asked): State<Arc<Asked>>, Path(session): Path<String>| async move {
+        asked.ended.lock().unwrap().push(session);
+        StatusCode::NO_CONTENT
       }),
     )
-    .route("/sessions/{session}", delete(|| async { StatusCode::NO_CONTENT }))
     .with_state(asked);
   let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("a port");
   let at = listener.local_addr().expect("its address");
@@ -437,7 +462,10 @@ async fn written_words_alone_are_derived_on_a_seat_the_agreed_readings_first_and
   assert_eq!(start["toolsAllowed"], json!([]));
   assert_eq!(start["model"], "deepseek-flash");
   assert!(start["systemPrompt"].as_str().is_some_and(|prompt| prompt.contains("spoken words")));
-  assert_eq!(asked.given_back.lock().unwrap().len(), 2, "every seat is given back");
+  assert_eq!(asked.seats.lock().unwrap().len(), 1, "one seat stands for the whole derivation");
+  assert_eq!(asked.starts.lock().unwrap().len(), 1, "and one session: every try is a turn in it");
+  assert_eq!(asked.given_back.lock().unwrap().len(), 1, "the seat is given back once the words stand");
+  assert_eq!(*asked.ended.lock().unwrap(), ["search@apart:1"], "and the session ended");
 
   let reading = |written: &str| format!(r#"SELECT "ko" FROM "voice_names" WHERE "written" = '{written}'"#);
   let qwen: String = store

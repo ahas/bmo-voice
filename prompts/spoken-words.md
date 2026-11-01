@@ -12,6 +12,8 @@ request gives, and nothing else.
 - Every foreign name, acronym, product name and model name stands in the language's own letters, as a speaker of
   the language reads it aloud. Judge each reading from its context: the same letters may be read one way as a word
   and another letter by letter.
+- A word of another language than the line's is written in the line's letters as a speaker of the line's language
+  says it, never left in its own letters.
 - An agreed reading the request lists is applied exactly as it stands, whatever you would have read. Read only what
   the list does not cover with your own judgement.
 - Every number, date, time, version, count and unit is written out in the words a reader says, in the language's

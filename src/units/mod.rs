@@ -104,7 +104,23 @@ impl Caller {
     })
   }
 
+  // The address of a path, each part one segment of it, escaped as a path segment escapes: a mark a segment may
+  // hold, such as the `@` and `:` of a session's id, stands as it is, since a unit reads its segments unescaped.
   fn url(&self, path: &[&str]) -> String {
+    if let Ok(mut url) = url::Url::parse(&self.address) {
+      let extended = match url.path_segments_mut() {
+        Ok(mut segments) => {
+          segments.pop_if_empty().extend(path);
+          true
+        }
+        Err(()) => false,
+      };
+
+      if extended {
+        return url.to_string();
+      }
+    }
+
     let mut url = self.address.clone();
 
     for part in path {

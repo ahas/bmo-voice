@@ -68,33 +68,69 @@ pub async fn derived(
   told: &mut (dyn FnMut(&str) + Send),
 ) -> String {
   let mut failed: Option<Unconverted> = None;
-  let mut tries: u64 = 0;
+  let mut held: Option<Held> = None;
+  let mut seats: u64 = 0;
 
   loop {
-    tries += 1;
     told("the spoken words are being derived");
 
     let missed = match context.units.agency.as_ref() {
       None => {
         Missed::Road("no agency is named in the settings, so no spoken words can be derived".to_owned())
       }
-      Some(agency) => match one_try(context, agency, id, tries, language, text, failed.as_ref()).await {
-        Ok(answer) => match answer.and_then(|answer| held(&answer, language).map(|()| answer)) {
-          Ok(answer) => {
-            keep_readings(context, language, &answer.readings).await;
-
-            return answer.spoken.trim().to_owned();
+      Some(agency) => {
+        if held.is_none() {
+          seats += 1;
+          match stand(context, agency, id, seats).await {
+            Ok(standing) => held = Some(standing),
+            Err(why) => {
+              told(&format!("the spoken words could not be derived: {why}; asked again"));
+              tokio::time::sleep(ASK_AGAIN).await;
+              continue;
+            }
           }
-          Err(Refusal::Unread(why)) => Missed::Answer(why),
-          Err(Refusal::Unconverted(found)) => {
-            let why = found.to_string();
+        }
 
-            failed = Some(found);
-            Missed::Answer(why)
+        let Some(standing) = held.as_ref() else {
+          continue;
+        };
+
+        match one_try(context, agency, standing, id, language, text, failed.as_ref()).await {
+          Ok(answer) => match answer.and_then(|answer| checked(&answer, language).map(|()| answer)) {
+            Ok(answer) => {
+              if let Some(standing) = held.take() {
+                release(agency, standing, "answered").await;
+              }
+
+              keep_readings(context, language, &answer.readings).await;
+
+              return answer.spoken.trim().to_owned();
+            }
+            Err(Refusal::Unread(why)) => Missed::Answer(why),
+            Err(Refusal::Unconverted(found)) => {
+              let why = found.to_string();
+
+              failed = Some(found);
+              Missed::Answer(why)
+            }
+          },
+          Err(why) => {
+            // A seat or a session agency no longer holds is given up, and the next try stands a new one.
+            if matches!(
+              why,
+              UnitError::Refused {
+                status: 404 | 409 | 410,
+                ..
+              }
+            ) && let Some(standing) = held.take()
+            {
+              release(agency, standing, "failed").await;
+            }
+
+            Missed::Road(format!("the turn did not answer: {why}"))
           }
-        },
-        Err(why) => Missed::Road(why),
-      },
+        }
+      }
     };
 
     match missed {
@@ -106,6 +142,12 @@ pub async fn derived(
   }
 }
 
+/// A seat let in and the session started on it, which every try of one line's derivation is a turn in.
+struct Held {
+  seat: Seat,
+  session: String,
+}
+
 // Why an answer was not taken.
 enum Refusal {
   Unread(String),
@@ -113,7 +155,7 @@ enum Refusal {
 }
 
 // Whether an answer's spoken words pass the check.
-fn held(answer: &Answer, language: Language) -> Result<(), Refusal> {
+fn checked(answer: &Answer, language: Language) -> Result<(), Refusal> {
   match unconverted(&answer.spoken, language) {
     Some(found) => Err(Refusal::Unconverted(found)),
     None => Ok(()),
@@ -198,35 +240,21 @@ async fn keep_readings(context: &Context, language: Language, chosen: &[Chosen])
   }
 }
 
-// One try on one seat: the seat asked and let in, the session started on it and its one turn asked, then the
-// session ended and the seat given back however the turn went. The answer where the model gave one, else why the
-// road failed.
-async fn one_try(
-  context: &Context,
-  agency: &Agency,
-  id: i64,
-  tries: u64,
-  language: Language,
-  text: &str,
-  failed: Option<&Unconverted>,
-) -> Result<Result<Answer, Refusal>, String> {
-  let agreed = agreed(context, language).await?;
+// A seat asked and let in and a session started and bound on it, the `n`th the line's derivation stands; a seat
+// whose session would not start is given back.
+async fn stand(context: &Context, agency: &Agency, id: i64, n: u64) -> Result<Held, String> {
   let spoken = &context.settings.spoken;
-  let work_key = format!("role:{}", spoken.role);
-  let key = format!("voice:synthesis:{id}:{tries}");
+  let key = format!("voice:synthesis:{id}:{n}");
   let ask = SeatAsk {
     request_key: key.clone(),
     owner: key,
     role: spoken.role.clone(),
     selection: "auto".to_owned(),
-    work_key: work_key.clone(),
+    work_key: format!("role:{}", spoken.role),
     provider: spoken.provider.clone(),
   };
   let seat = agency.ask_seat(&ask).await.map_err(|why| format!("no seat was given: {why}"))?;
-  let seat = match admitted(agency, seat).await {
-    Ok(seat) => seat,
-    Err(why) => return Err(format!("the seat was not let in: {why}")),
-  };
+  let seat = admitted(agency, seat).await.map_err(|why| format!("the seat was not let in: {why}"))?;
   let start = json!({
     "agent": spoken.line,
     "scope": "apart",
@@ -251,21 +279,36 @@ async fn one_try(
     eprintln!("voice: synthesis {id}'s seat was not bound to its session: {why}");
   }
 
-  let body = turn_body(&seat, id, &work_key, &turn_prompt(language, &agreed, text, failed));
-  let turned = agency.turn(&session, &body).await;
+  Ok(Held { seat, session })
+}
 
-  end(agency, &session).await;
+// A derivation's session ended and its seat given back with what it came to.
+async fn release(agency: &Agency, held: Held, outcome: &str) {
+  end(agency, &held.session).await;
 
-  let outcome = match &turned {
-    Ok(_) => "answered",
-    Err(_) => "failed",
-  };
-  let _ = agency.give_back(&seat.token, outcome, false).await;
+  let _ = agency.give_back(&held.seat.token, outcome, false).await;
+}
 
-  match turned {
-    Ok(written) => Ok(read_answer(&written)),
-    Err(why) => Err(format!("the turn did not answer: {why}")),
-  }
+// One try: one turn in the derivation's session. The answer where the model gave one, else agency's refusal or
+// silence.
+async fn one_try(
+  context: &Context,
+  agency: &Agency,
+  held: &Held,
+  id: i64,
+  language: Language,
+  text: &str,
+  failed: Option<&Unconverted>,
+) -> Result<Result<Answer, Refusal>, UnitError> {
+  let agreed = agreed(context, language).await.map_err(|why| UnitError::Unreached {
+    unit: "the voice's store",
+    why,
+  })?;
+  let work_key = format!("role:{}", context.settings.spoken.role);
+  let body = turn_body(&held.seat, id, &work_key, &turn_prompt(language, &agreed, text, failed));
+  let written = agency.turn(&held.session, &body).await?;
+
+  Ok(read_answer(&written))
 }
 
 // A seat waited on in its line until the pool lets it in.
@@ -301,13 +344,15 @@ fn turn_body(seat: &Seat, id: i64, work_key: &str, prompt: &str) -> Value {
     "cwd": "",
     "name": format!("voice-synthesis-{id}-spoken"),
     "title": "The spoken words of a line",
+    // The derivation stands under no room.
+    "chat": 0,
     "workKey": work_key,
     "hearsWords": false,
     "variables": {},
   })
 }
 
-// A session ended once its turn answered, a busy one asked again until it is gone; one agency would not end is left
+// A session ended once the spoken words stand, a busy one asked again until it is gone; one agency would not end is left
 // to agency, which ends every thrown-away session its process leaves.
 async fn end(agency: &Agency, session: &str) {
   loop {
@@ -346,7 +391,7 @@ pub mod testing {
       Refusal::Unconverted(found) => found.to_string(),
     })?;
 
-    match held(&answer, language) {
+    match checked(&answer, language) {
       Ok(()) => Ok(answer.spoken),
       Err(Refusal::Unconverted(found)) => Err(found.to_string()),
       Err(Refusal::Unread(why)) => Err(why),

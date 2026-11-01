@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.10.
+Fixed at 0.1.0-rev.11.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -146,10 +146,12 @@ server any other way.
 - **On a seat of agency's co-worker pool,** asked for the role `[spoken]` names in the settings,
   `transliterator` where they name none, with the provider they name where they name one. The role is a
   registration of agency's (its `docs/agent-roles.md`) and must stand there; the engine creates none.
-- **In a thrown-away session of one turn** on the runner line `[spoken]` names, `search` where it names none,
-  its instructions the engine's own (`prompts/spoken-words.md`) and no tool allowed. The turn hands the model
-  the line's language, the agreed readings, the written words, and, where the answer before failed the check,
-  the word it failed on. The session is ended and the seat given back once the turn answers.
+- **In one thrown-away session for the whole derivation,** on the runner line `[spoken]` names, `search` where it
+  names none, its instructions the engine's own (`prompts/spoken-words.md`) and no tool allowed, bound to the
+  seat. Each try is one turn in it, handing the model the line's language, the agreed readings, the written
+  words, and, where the answer before failed the check, the word it failed on. The session is ended and the seat
+  given back once the spoken words stand; a seat or a session agency no longer holds is given up and a new one
+  asked, and no try leaves a session of its own standing.
 - **The agreed readings come first, the model's judgement after:** every row of the voice name table
   (`docs/store.md`, `voice_names`) with a reading in the line's language is handed over as a reading to apply
   as it stands, and the model reads whatever else the words need with its own judgement.
@@ -317,11 +319,11 @@ and 「sessions」), for the spoken words a synthesis is derived (「How the eng
 
 | Call | Route | Used for |
 |---|---|---|
-| a seat | `POST /seat-requests` with `requestKey` and `owner` `voice:synthesis:<synthesisId>:<try>`, `role`, `selection` `auto`, `workKey` `role:<role>` and `provider` where the settings name one | the seat the derivation runs on, with the provider, model, effort and tier its role's key resolves to |
+| a seat | `POST /seat-requests` with `requestKey` and `owner` `voice:synthesis:<synthesisId>:<n>`, `n` counting the seats the line was asked, `role`, `selection` `auto`, `workKey` `role:<role>` and `provider` where the settings name one | the seat the derivation runs on, with the provider, model, effort and tier its role's key resolves to |
 | its admission and its end | `PATCH /seat-requests/{token}` | asked with no state until it is `active`; bound to the session with `bound`; given back with `finished` and its outcome, `cancel` where no turn ran |
 | a session | `POST /sessions` with `scope` `apart`, `line`, `systemPrompt`, `toolsAllowed` empty and the seat's provider and model | the derivation's thrown-away session |
-| its turn | `POST /sessions/{sessionId}/turns` | the one turn, answered once it ends; its answer is the model's |
-| its end | `DELETE /sessions/{sessionId}` | the session ended once its turn answered; one still busy is asked again |
+| its turns | `POST /sessions/{sessionId}/turns` with `prompt` and a work turn's parts: `provider` and `model` the seat's, `mapping` its `model`, `effort` and `tier`, `resume` `fresh`, `cwd` empty, `name`, `title`, `chat` 0 (the derivation stands under no room), `workKey` `role:<role>`, `hearsWords` false and `variables` empty | one try, answered once it ends; its answer is the model's |
+| its end | `DELETE /sessions/{sessionId}` | the session ended once the spoken words stand; one still busy is asked again |
 
 ### bmo-web
 
