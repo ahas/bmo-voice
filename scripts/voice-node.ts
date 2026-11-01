@@ -180,8 +180,8 @@ interface Engine {
 
 const engine = Bun.TOML.parse(readFileSync(engineFile, "utf8")) as Engine;
 
-// The least memory a voice node's card holds, in MiB: the server peaks at 11,550 MiB (docs/voice-plan.md, 「The
-// synthesiser」), so only a 12 GB card takes it.
+// The least memory a voice node's card holds, in MiB: the server peaks at about 11,100 MiB on a line and 11,800 MiB
+// on its longest piece (docs/voice-plan.md, 「The synthesiser」), so only a 12 GB card takes it.
 const leastCardMib = 12_000;
 
 // What one command carries of a base weight file to a node; a hub node takes a transfer this size whole.

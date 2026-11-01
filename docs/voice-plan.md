@@ -14,8 +14,8 @@ the voice nodes. What a caller does with the sound is the caller's.
   (「The voices」), and none of them is served: a synthesis or a briefing naming one is refused 422 `retired-voice`
   (`docs/boundary-api.md`, 「Errors」). The engine a voice must name to be spoken is the policy's `engine`
   (`policy/voice.toml`).
-- **What it costs:** the server's process peaks at 11,550 MiB while it speaks, about 10.3 GiB of it resident once
-  the model is loaded, so a voice node lends a 12 GB card whole for as long as the model is up; a smaller card
+- **What it costs:** the server's process peaks at about 11,100 MiB while it speaks a line, and up to 11,800 MiB for a
+  piece of about a thousand frames, about 10.3 GiB of it resident once the model is loaded, so a voice node lends a 12 GB card whole for as long as the model is up; a smaller card
   does not take it. On an RTX 4070 it makes about 25 frames a second, a little faster than real time: about 1.1
   seconds of sound for every second of speaking, once the frame step is compiled (「How the model is loaded」).
 - **What fits it in 12 GB** is the mouth's own way of loading the model (「How the model is loaded」).
@@ -211,6 +211,10 @@ the voice nodes. What a caller does with the sound is the caller's.
   builds them at, which would take 4 GiB of the card for lengths no piece reaches.
 - **The codec is cast to bf16 on the host and put on the card once,** so the card never holds a float32 copy beside
   it.
+- **The card's memory is mapped in segments that grow and shrink** (PyTorch's expandable segments), set by the mouth
+  before torch is first imported: what one pass frees is used again whole by the next rather than left in pieces
+  too small for it. A line peaks about 450 MiB lower than in fixed blocks, and a piece of about a thousand frames
+  still has its codec pass on the card.
 - **The frame step is compiled and replayed as one CUDA graph.** What makes one frame of a piece once its prompt is
   read, the slow model's token and the fast model's ten codebooks with the sampling among them, is fish-speech's own
   decode step, compiled by inductor at its fixed shapes the first time a piece is spoken after a start, then
@@ -379,7 +383,7 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **`GET /health`:** the checkpoint loaded, whether a line is being spoken, whether the model is on the card, the
   device, VRAM and host memory held, the card's free memory (asked of `nvidia-smi`, opening no CUDA context), whether
   other work holds the card lock (read from the kernel's lock table, never by taking it), whether the server holds
-  the card between lines, and whether it has room: 11.0 GiB free to put a loaded model up, 11.3 GiB for a first
+  the card between lines, and whether it has room: 10.7 GiB free to put a loaded model up, 11.0 GiB for a first
   load.
 - **`503`:** the card lock stayed held by other work for the whole of the line's wait; nothing was loaded or spoken.
 - **`500`:** the line failed while it was spoken. The answer names the failure's kind, its message and the frame of

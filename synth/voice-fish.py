@@ -58,6 +58,11 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
+# The card's memory in segments that grow and shrink, so what one pass frees is used again whole by the next
+# (docs/voice-plan.md, 「How the model is loaded」). It is read once, as torch first touches the card, so it is set
+# before torch is imported anywhere in this process.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
 # What the whole thing is kept under. It is the same number `synth/voice-encode.py` holds its ceiling at.
 PEAK = 0.95
 
@@ -121,13 +126,13 @@ MOST_STYLE = 300
 # The most characters of a refusal the asker hands on: room for a failure's kind, message and frame.
 MOST_ERROR = 600
 
-# What loading the model takes of the card: the server's process peaks at 11,550 MiB while a line is spoken on an
-# RTX 4070, its own CUDA context and the frame step's graph among them, so a card with less free than this cannot take
-# a load; the health says so (docs/voice-plan.md, 「What it answers」).
-LOAD_BYTES = int(11.3 * 1024**3)
+# What loading the model takes of the card: the server's process peaks at about 11,100 MiB while a line is spoken on
+# an RTX 4070, its own CUDA context and the frame step's graph among them, so a card with less free than this cannot
+# take a load; the health says so (docs/voice-plan.md, 「What it answers」).
+LOAD_BYTES = int(11.0 * 1024**3)
 
 # What putting the kept weights back on the card takes for one line, once the server's own CUDA context is there.
-UP_BYTES = int(11.0 * 1024**3)
+UP_BYTES = int(10.7 * 1024**3)
 
 # The node's shared GPU lock: every service that puts work on the node's card holds this one file under flock for
 # as long as its work is there, so the services take the card in turn rather than all at once.

@@ -3,7 +3,7 @@
 # docs/placement.md, 「A service declares itself」; docs/voice-plan.md, 「The voice nodes」). The adapter runs from
 # this folder and is the node scripts' own (docs/layout.md).
 service = "voice"
-card_mib = 11600
+card_mib = 11300
 priority = 40
 spread = "many"
 alone = false
