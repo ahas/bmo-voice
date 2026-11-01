@@ -315,12 +315,21 @@ async fn a_retired_voice_is_listed_as_such_and_never_spoken() {
   let (_, retired) = call(&engine, "GET", "/voices/voice-c", None).await;
   let (_, served) = call(&engine, "GET", "/voices/voice-b", None).await;
 
-  assert_eq!((retired["engine"].as_str(), retired["served"].as_bool()), (Some("voxcpm2"), Some(false)));
-  assert_eq!((served["engine"].as_str(), served["served"].as_bool()), (Some("fish-s2-pro"), Some(true)));
+  assert_eq!(
+    (retired["engine"].as_str(), retired["served"].as_bool()),
+    (Some("voxcpm2"), Some(false))
+  );
+  assert_eq!(
+    (served["engine"].as_str(), served["served"].as_bool()),
+    (Some("fish-s2-pro"), Some(true))
+  );
 
   for (path, body) in [
     ("/syntheses", json!({ "voiceName": "voice-c", "text": "A line." })),
-    ("/briefings", json!({ "voiceName": "voice-c", "text": "A line.", "chatId": ROOM, "kind": "summary" })),
+    (
+      "/briefings",
+      json!({ "voiceName": "voice-c", "text": "A line.", "chatId": ROOM, "kind": "summary" }),
+    ),
   ] {
     let (status, refused) = call(&engine, "POST", path, Some(body)).await;
 
