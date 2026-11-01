@@ -81,9 +81,16 @@ MOST_NEW_TOKENS = 2048
 # long line takes of the card」): a longer line is spoken in passes of whole sentences that each stay within this.
 MOST_PASS = 240
 
+# The most characters of any piece (docs/voice-plan.md, 「What a long line takes of the card」): what the codec can make
+# into sound in one pass beside the weights on a 12 GB card. A longer sentence is cut at its clauses.
+MOST_PIECE = 400
+
 # How a line is cut into sentences: at a full stop, a question or exclamation mark or an ellipsis before a space,
 # and at every line break.
 SENTENCE_END = re.compile(r"(?<=[.?!…])\s+|\n+")
+
+# How a sentence is cut into clauses: after a comma, a semicolon, a colon or a dash before a space.
+CLAUSE_END = re.compile(r"(?<=[,;:—–，、；：])\s+|(?<=\s-)\s+")
 
 # This many seconds of silence stand between two pieces of a line.
 SENTENCE_PAUSE = 0.3
@@ -213,14 +220,63 @@ def sentence_spans(text: str) -> list[tuple[int, int]]:
     return spans
 
 
+def gathered(spans: list[tuple[int, int]], most: int) -> list[tuple[int, int]]:
+    """The spans gathered in order into runs each as long as it can be within `most` characters, from the start of its
+    first span to the end of its last; a span longer than `most` is a run of its own."""
+    runs: list[tuple[int, int]] = []
+
+    for start, end in spans:
+        if runs and end - runs[-1][0] <= most:
+            runs[-1] = (runs[-1][0], end)
+        else:
+            runs.append((start, end))
+
+    return runs
+
+
+def clauses(sentence: str, most: int = MOST_PIECE) -> list[str]:
+    """The sentence as the parts it is spoken in: whole where it is within `most` characters, and otherwise its
+    clauses (`CLAUSE_END`) gathered in order into parts each as long as it can be within them. A clause longer than
+    `most` alone is cut at the last space within the limit, and one with no space in it at the limit. No word is left
+    out and none is cut where a space stands to cut at."""
+    if len(sentence) <= most:
+        return [sentence]
+
+    spans, start = [], 0
+
+    for gap in [*CLAUSE_END.finditer(sentence), None]:
+        end = len(sentence) if gap is None else gap.start()
+
+        if end > start:
+            spans.append((start, end))
+
+        start = end if gap is None else gap.end()
+
+    parts: list[str] = []
+
+    for start, end in gathered(spans, most):
+        rest = sentence[start:end]
+
+        while len(rest) > most:
+            cut = rest.rfind(" ", 1, most + 1)
+            cut = most if cut <= 0 else cut
+            parts.append(rest[:cut].rstrip())
+            rest = rest[cut:].lstrip()
+
+        if rest:
+            parts.append(rest)
+
+    return parts
+
+
 def sentences(text: str) -> list[str]:
-    """The line as the sentences a voice speaks it in when it speaks one at a time.
+    """The line as the sentences a voice speaks it in when it speaks one at a time, a sentence longer than
+    `MOST_PIECE` cut at its clauses (`clauses`).
 
     Two short sentences are not joined, because a piece of two already carries the growth a sentence
-    alone ends before; a long one is never cut, because a cut inside it would end its first half on
-    a sentence's closing fall.
+    alone ends before.
     """
-    return [text[start:end] for start, end in sentence_spans(text)]
+    return [part for start, end in sentence_spans(text) for part in clauses(text[start:end])]
 
 
 def passes(text: str) -> list[str]:
@@ -228,21 +284,13 @@ def passes(text: str) -> list[str]:
     whole line where it is within `MOST_PASS` characters, and otherwise its sentences gathered in
     order into passes each as long as it can be within them, cut out of the line as they stand.
 
-    A sentence longer than `MOST_PASS` is a pass of its own and is never cut, for the same reason
-    `sentences` never cuts one.
+    A sentence longer than `MOST_PASS` is a pass of its own, cut at its clauses where it is longer
+    than `MOST_PIECE` (`clauses`).
     """
     if len(text) <= MOST_PASS:
         return [text]
 
-    spans: list[tuple[int, int]] = []
-
-    for start, end in sentence_spans(text):
-        if spans and end - spans[-1][0] <= MOST_PASS:
-            spans[-1] = (spans[-1][0], end)
-        else:
-            spans.append((start, end))
-
-    return [text[start:end] for start, end in spans]
+    return [part for start, end in gathered(sentence_spans(text), MOST_PASS) for part in clauses(text[start:end])]
 
 
 def resampled(audio: np.ndarray, rate: int) -> np.ndarray:
@@ -463,7 +511,8 @@ class Mouth:
 
     def spoken(self, piece: str, say) -> list:
         """The piece as `say` speaks it, as one wav; or, where the card runs out of memory for it, its sentences
-        spoken one by one once the allocator's cache is emptied. A second shortfall is the line's failure."""
+        spoken one by one once the allocator's cache is emptied, each cut at its clauses into parts of half
+        `MOST_PIECE`. A second shortfall is the line's failure."""
         import gc
 
         import torch
@@ -473,11 +522,12 @@ class Mouth:
         except torch.cuda.OutOfMemoryError:
             pass
 
-        print("voice-fish: the card ran out of memory for a piece, so it is spoken again by its sentences", file=sys.stderr, flush=True)
+        print("voice-fish: the card ran out of memory for a piece, so it is spoken again by its clauses", file=sys.stderr, flush=True)
+        self.drop_caches()
         gc.collect()
         torch.cuda.empty_cache()
 
-        return [say(sentence) for sentence in sentences(piece)]
+        return [say(part) for start, end in sentence_spans(piece) for part in clauses(piece[start:end], MOST_PIECE // 2)]
 
     def piece(self, words: str, seed: int, carried: dict) -> np.ndarray:
         """One piece on the line's seed, asked with the line's first piece as its reference once that one is spoken:
@@ -495,20 +545,26 @@ class Mouth:
             torch.manual_seed(seed)
             asked = {} if reference is None else {"prompt_text": [reference[0]], "prompt_tokens": [reference[1]]}
             codes = []
-
-            for answer in generate_long(
+            answers = generate_long(
                 model=self.model, device="cuda", decode_one_token=decode_one_token_ar, text=words,
                 max_new_tokens=MOST_NEW_TOKENS, compile=False, **asked, **self.sampling,
-            ):
+            )
+
+            for answer in answers:
                 if answer.action == "sample" and answer.codes is not None:
                     codes.append(answer.codes)
                 elif answer.action == "next":
                     break
 
+            answers.close()
+
             if not codes:
                 raise RuntimeError("the model closed its turn before it spoke")
 
             made = torch.cat(codes, dim=1)
+            # The codec's pass grows with the piece; the caches the next piece makes again are let go first.
+            self.drop_caches()
+            torch.cuda.empty_cache()
             audio = self.codec.from_indices(made.to("cuda")[None])[0].squeeze().float().cpu().numpy()
 
             return made, audio

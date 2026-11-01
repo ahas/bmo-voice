@@ -285,7 +285,9 @@ It asks no model, takes no card turn and keeps nothing. A language other than `k
 - **A voice server takes its turn on the node's card through the card arbiter's own turn client,** installed
   on the node by the arbiter, and holds the card lock while it speaks.
 - **The card declaration** is `weights/voice.card.toml`: the service `voice`, standing on every node its placement
-  names (`spread` `many`), yielding the card by its turn, its adapter the node scripts' own. The master reads it from
+  names (`spread` `many`), not alone and at a priority below every service that stands alone on the GPU nodes, so it
+  joins the reservation of the node it is placed on (`docs/voice-plan.md`, 「Where they run」), yielding the card by
+  its turn, its adapter the node scripts' own. The master reads it from
   this repository's deploy tree (`docs/deploy.md`); no node is named in it.
 - **Which node speaks a line is the arbiter's master's to say.** Every synthesis asks the master a demand for
   one card of the service `voice`, naming no node, with the work key `voice:synthesis:<synthesisId>` and a

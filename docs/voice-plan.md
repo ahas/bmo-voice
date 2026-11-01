@@ -181,7 +181,8 @@ the voice nodes. What a caller does with the sound is the caller's.
   is spoken on it, so the same line, seed and settings give back the same samples every time.
 - **Whether a line is spoken a sentence at a time is the row's too:** `--sentences <name> on|off`. On, the line is
   cut at its sentences, each spoken on the row's seed with 0.3 seconds of silence between two; off, in passes of
-  whole sentences (「What a long line takes of the card」).
+  whole sentences. Either way a sentence too long for one piece is cut at its clauses (「What a long line takes of
+  the card」).
 - **How a piece ends and meets the next.** A piece is what one call to the model speaks. It ends where the model
   closes its turn, is levelled to the line's loudness (「What the sound carries」), and both its edges are faded over
   10 ms on a raised-cosine curve.
@@ -267,13 +268,15 @@ the voice nodes. What a caller does with the sound is the caller's.
   Lingering is on for the account, so the unit starts with the machine. The unit is named apart from the service's
   own `bmo-voice.service`, so the operations machine may be a voice node as well.
 - **`voice` stands on as many nodes as its placement names:** its declaration, `weights/voice.card.toml`, spreads it
-  over several (`spread` `many`), each node reserved for it and for whatever stands alone at its priority. The nodes
-  themselves are named only in the arbiter's placement, never here.
+  over several (`spread` `many`). It does not stand alone, and its priority, 40, is below every service that does on
+  the lab's GPU nodes, so it joins the reservation of whatever node it is placed on, named there after the services
+  that reserve it, and shares the card with them by its tier (「Which node speaks a line」). The nodes themselves are
+  named only in the arbiter's placement, never here.
 - **The list is the card arbiter's to change,** through the voice's adapter: `bmo-arbiter place voice --to <node>`
   and `bmo-arbiter remove voice --from <node>`. A node taken off keeps its server; putting it back is all it takes to
   speak there again. An empty list places `voice` nowhere, and a synthesis fails.
-- **A node reserved for another service is never a voice node:** the arbiter refuses it, and named on the list all
-  the same it is out of reach.
+- **A node whose reservation does not name `voice` is never a voice node:** named on the list all the same, it is
+  out of reach.
 - **Port 7432 on each node's loopback, and nowhere else.** Every call reaches it through the node's own shell, `ssh`
   for an ssh node and the hub's exec and file transfer for a hub node, as the node service's target gives it.
 - **What a node takes:** a card of 12 GB or more (「The synthesiser」); a smaller card cannot be a voice node.
@@ -360,8 +363,8 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 - **The model stays on the card between lines** until another occupant asks for the card; off it, it stands in
   pinned host memory, about 9 GiB of it, and goes back up from there over the bus rather than from the disk. The
-  key-value caches are scratch every piece writes before it reads, so they are not kept: they are let go as the model
-  goes down and made again, on the card, by the next piece.
+  key-value caches are scratch every piece writes before it reads, so they are not kept: they are let go as each
+  piece's codes are made into sound and as the model goes down, and made again, on the card, by the next piece.
 - **After each line** the server asks the arbiter whether the next line waiting still stands first; while it does,
   that line is spoken with the model still up. **With no line waiting the turn rests,** the model and the lock kept.
 - **It gives way the moment another occupant asks** or a claim begins: the model goes down into its host copies and
@@ -375,8 +378,17 @@ the voice nodes. What a caller does with the sound is the caller's.
 ### What a long line takes of the card
 
 - **A line is cut into pieces:** a row that speaks a sentence at a time speaks each sentence as one piece, and any
-  other row speaks a line in passes of whole sentences of up to 240 characters, 0.3 seconds apart; a sentence longer
-  than the limit is one pass all the same. A pass stays far inside the 2,048 tokens a piece may generate.
+  other row speaks a line in passes of whole sentences of up to 240 characters, 0.3 seconds apart.
+- **No piece is longer than 400 characters.** A sentence longer than that is cut at its clauses — after a comma, a
+  semicolon, a colon or a dash before a space — and its clauses gathered in order into parts each as long as it can
+  be within 400, each part one piece; a clause longer than 400 alone is cut at the last space within the limit. A
+  cut never leaves a word out and never falls inside one. The bound is what the codec takes of the card: it makes a
+  piece's sound from its codes in one pass, its memory growing with the piece's length, beside the 9.4 GiB the model
+  and the codec keep, and on a 4070 the sound of 800 tokens does not fit beside them and the caches; a piece runs
+  about 1.45 tokens a character, so 400 characters is under 600 tokens, and far inside the 2,048 a piece may
+  generate.
+- **The codec has the card to itself beside the weights.** The model's key-value caches, 453 MiB at the context
+  above, are let go and the allocator's cache emptied before a piece's codes are made into sound.
 - **Every piece carries the line's first piece, and only that one.** The first piece of a line is asked as a bare
   conversation, its text and nothing more. Every later piece is asked with the first piece as its reference: its
   words and the codes the model generated for them, in the place S2-Pro reads a reference from. The model ends a
@@ -387,8 +399,8 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **A piece that stops short is spoken again bare.** A piece whose voice is still loud in its last 30 ms, within
   30 dB of its loudest frame, with under 100 ms after its last loud frame, was ended by the model before its last
   syllable fell away; it is asked once more with no reference, on the same seed, and that one is kept.
-- **A piece the card runs out of memory for is spoken once more,** as its sentences one by one on an emptied cache;
-  only a second shortfall fails the line.
+- **A piece the card runs out of memory for is spoken once more,** as its sentences one by one on an emptied cache,
+  each cut at its clauses into parts of at most 200 characters; only a second shortfall fails the line.
 
 ## What the sound carries
 
