@@ -183,7 +183,11 @@ the voice nodes. What a caller does with the sound is the caller's.
   cut at its sentences, each spoken on the row's seed with 0.3 seconds of silence between two; off, in passes of
   whole sentences (「What a long line takes of the card」).
 - **How a piece ends and meets the next.** A piece is what one call to the model speaks. It ends where the model
-  closes its turn; both edges are faded over 10 ms on a raised-cosine curve.
+  closes its turn, is levelled to the line's loudness (「What the sound carries」), and both its edges are faded over
+  10 ms on a raised-cosine curve.
+- **A line is one voice from its first piece to its last.** Every piece after the first is spoken on from the one
+  before it (「What a long line takes of the card」), so the timbre, pitch and pace the first piece took carry through
+  the line rather than being drawn afresh at every sentence.
 - **No served voice takes a continuation prompt.** `--prompt` and `--prompt-en` are refused; the prompt columns
   stand only on the retired VoxCPM2 rows.
 - **A trained adapter joins by name:** `--add <name> --checkpoint <dir>` copies its folder's `voice.toml` and
@@ -347,12 +351,17 @@ the voice nodes. What a caller does with the sound is the caller's.
   the card between lines, and whether it has room: 10.7 GiB free to put a loaded model up, 11.0 GiB for a first
   load.
 - **`503`:** the card lock stayed held by other work for the whole of the line's wait; nothing was loaded or spoken.
+- **`500`:** the line failed while it was spoken. The answer names the failure's kind, its message and the frame of
+  the mouth's own code it was raised in, which the engine writes into the synthesis's failure; the node's journal
+  holds the whole traceback.
 - **A line's words are never logged** on the node.
 
 ### How it holds the card
 
 - **The model stays on the card between lines** until another occupant asks for the card; off it, it stands in
-  pinned host memory, about 9 GiB of it, and goes back up from there over the bus rather than from the disk.
+  pinned host memory, about 9 GiB of it, and goes back up from there over the bus rather than from the disk. The
+  key-value caches are scratch every piece writes before it reads, so they are not kept: they are let go as the model
+  goes down and made again, on the card, by the next piece.
 - **After each line** the server asks the arbiter whether the next line waiting still stands first; while it does,
   that line is spoken with the model still up. **With no line waiting the turn rests,** the model and the lock kept.
 - **It gives way the moment another occupant asks** or a claim begins: the model goes down into its host copies and
@@ -365,10 +374,15 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 ### What a long line takes of the card
 
-- **Every piece is a conversation of its own,** so what one takes of the context is its own text and the sound it
-  speaks: a row that speaks a sentence at a time speaks each sentence as one piece, and any other row speaks a line
-  in passes of whole sentences of up to 240 characters, 0.3 seconds apart; a sentence longer than the limit is one
-  pass all the same. A pass stays far inside the 2,048 tokens a piece may generate.
+- **A line is cut into pieces:** a row that speaks a sentence at a time speaks each sentence as one piece, and any
+  other row speaks a line in passes of whole sentences of up to 240 characters, 0.3 seconds apart; a sentence longer
+  than the limit is one pass all the same. A pass stays far inside the 2,048 tokens a piece may generate.
+- **Each piece carries the one before it, and only that one.** The first piece of a line is asked as a bare
+  conversation, its text and nothing more. Every later piece is asked with the piece before it as its reference:
+  that piece's words and the codes the model generated for them, in the place S2-Pro reads a reference from. Only
+  the piece before is carried, so the prompt holds one sentence's sound and stays inside the 1,024 tokens the
+  context leaves it; a piece whose predecessor would not fit there is spoken from no reference, and the one after it
+  carries it in turn. Every piece is spoken on the line's seed.
 - **A piece the card runs out of memory for is spoken once more,** as its sentences one by one on an emptied cache;
   only a second shortfall fails the line.
 
@@ -377,8 +391,11 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **Nothing is laid over the voice:** no band filter, bit reduction, noise or imitation, on any road. The one change
   is the rate: the codec speaks at 44.1 kHz and OGG/Opus is written at 48 kHz, so the mouth resamples the line once,
   band-limited, before it leaves.
-- **The mouth matches its output's peak to 0.95,** and **the encoder only ever lowers:** a sound over the ceiling is
-  scaled down whole rather than clipped, one under it written exactly as it arrived. Length is untouched.
+- **Every piece is levelled to one loudness** before the line is joined: its RMS over its voiced frames, those
+  within 40 dB of its loudest, is brought to −20 dBFS, so no sentence stands louder or quieter than the next.
+- **The mouth then matches the whole line's peak to 0.95,** one gain for all of it, and **the encoder only ever
+  lowers:** a sound over the ceiling is scaled down whole rather than clipped, one under it written exactly as it
+  arrived. Length is untouched.
 
 ## How a voice is measured
 

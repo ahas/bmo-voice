@@ -51,6 +51,7 @@ import tempfile
 import threading
 import time
 import tomllib
+import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -87,6 +88,12 @@ SENTENCE_END = re.compile(r"(?<=[.?!…])\s+|\n+")
 # This many seconds of silence stand between two pieces of a line.
 SENTENCE_PAUSE = 0.3
 
+# The loudness every piece of a line is brought to before the line is joined (docs/voice-plan.md, 「What the sound
+# carries」): its RMS over its voiced frames, those within `VOICED_DB` of its loudest frame, in dBFS.
+PIECE_RMS_DB = -20.0
+VOICED_DB = 40.0
+LEVEL_FRAME = 1024
+
 # How long each edge of a spoken piece is faded over, in seconds (docs/voice-plan.md, 「The voices」).
 EDGE_FADE = 0.01
 
@@ -96,6 +103,8 @@ MOST_TEXT = 4000
 MOST_BODY = 64 * 1024
 # A delivery instruction is a sentence, not a script: anything longer is a mistake in a row.
 MOST_STYLE = 300
+# The most characters of a refusal the asker hands on: room for a failure's kind, message and frame.
+MOST_ERROR = 600
 
 # What loading the model takes of the card: the server's process peaks at 11,295 MiB while a line is spoken on an
 # RTX 4070, its own CUDA context among them, so a card with less free than this cannot take a load; the health says
@@ -126,6 +135,15 @@ def card_free_bytes() -> int | None:
         return int(ran.stdout.strip().splitlines()[0]) * 1024 * 1024 if ran.returncode == 0 else None
     except (OSError, subprocess.TimeoutExpired, ValueError, IndexError):
         return None
+
+
+def failed_at(failure: BaseException) -> str:
+    """A failure as one line: its kind, its message, and the last frame of this file's own code it passed through,
+    which says where in the mouth it was met; the frames below it are the model's and stand in the node's journal."""
+    frames = [frame for frame in traceback.extract_tb(failure.__traceback__) if frame.filename == __file__]
+    where = f" (in {frames[-1].name}, line {frames[-1].lineno} of {Path(__file__).name})" if frames else ""
+
+    return f"{type(failure).__name__}: {failure}{where}"
 
 
 def delivery(style) -> str:
@@ -228,6 +246,26 @@ def resampled(audio: np.ndarray, rate: int) -> np.ndarray:
     import torchaudio
 
     return torchaudio.functional.resample(torch.from_numpy(audio), rate, RATE).numpy()
+
+
+def levelled(audio: np.ndarray) -> np.ndarray:
+    """The piece brought to `PIECE_RMS_DB`, its RMS taken over its voiced frames only, so the pauses and the edges
+    of a short sentence weigh nothing in it. A piece with no sound is left as it is."""
+    frames = len(audio) // LEVEL_FRAME
+
+    if frames == 0:
+        return audio
+
+    energy = np.sqrt(np.mean(audio[: frames * LEVEL_FRAME].reshape(frames, LEVEL_FRAME).astype(np.float64) ** 2, axis=1))
+    loudest = float(energy.max())
+
+    if loudest <= 0.0:
+        return audio
+
+    voiced = energy[energy >= loudest * 10 ** (-VOICED_DB / 20)]
+    rms = float(np.sqrt(np.mean(voiced**2)))
+
+    return (audio * (10 ** (PIECE_RMS_DB / 20) / rms)).astype(np.float32)
 
 
 def faded(audio: np.ndarray, rate: int) -> np.ndarray:
@@ -360,26 +398,38 @@ class Mouth:
         return codec.to("cuda")
 
     def speak(self, checkpoint: Path, text: str, seed: int, style: str = "", by_sentence: bool = False):
-        """The line in the voice those weights carry, peak-matched, at `RATE`: a sentence at a time where
-        asked (`sentences`), in passes the context holds otherwise (`passes`), each piece faded at both edges
-        (`faded`) and 0.3 seconds from the next. Every piece is spoken on the same seed, so the same line gives back
-        the same samples every time."""
-        self.ready(checkpoint)
-        rate = self.codec.sample_rate
+        """The line in the voice those weights carry, peak-matched, at `RATE` (`pieces`, joined 0.3 seconds apart)."""
+        pieces, rate = self.pieces(checkpoint, text, seed, style, by_sentence)
         pause = np.zeros(int(SENTENCE_PAUSE * rate), dtype=np.float32)
         joined: list[np.ndarray] = []
 
-        for piece in sentences(text) if by_sentence else passes(text):
-            for wav in self.spoken(piece, lambda words: self.piece(styled(style, words), seed)):
-                if joined:
-                    joined.append(pause)
+        for wav in pieces:
+            if joined:
+                joined.append(pause)
 
-                joined.append(faded(wav, rate))
+            joined.append(wav)
 
         audio = resampled(np.concatenate(joined), rate)
         peak = float(np.max(np.abs(audio))) or 1.0
 
         return (audio / peak * PEAK).astype(np.float32), RATE
+
+    def pieces(self, checkpoint: Path, text: str, seed: int, style: str = "", by_sentence: bool = False):
+        """The line's pieces at the codec's rate, each levelled (`levelled`) and faded at both edges (`faded`): a
+        sentence at a time where asked (`sentences`), in passes the context holds otherwise (`passes`). Each piece
+        after the first is spoken on from the one before it (`piece`), and every piece on the same seed, so the same
+        line gives back the same samples every time."""
+        self.ready(checkpoint)
+        rate = self.codec.sample_rate
+        # The piece before, as its words and the codes the model made for them; none before the first.
+        carried: dict = {"before": None}
+        out: list[np.ndarray] = []
+
+        for piece in sentences(text) if by_sentence else passes(text):
+            for wav in self.spoken(piece, lambda words: self.piece(styled(style, words), seed, carried)):
+                out.append(faded(levelled(wav), rate))
+
+        return out, rate
 
     def spoken(self, piece: str, say) -> list:
         """The piece as `say` speaks it, as one wav; or, where the card runs out of memory for it, its sentences
@@ -399,32 +449,46 @@ class Mouth:
 
         return [say(sentence) for sentence in sentences(piece)]
 
-    def piece(self, words: str, seed: int) -> np.ndarray:
-        """One piece asked of the model as a bare conversation, with no reference, on the line's seed, and its codes
-        decoded by the codec."""
+    def piece(self, words: str, seed: int, carried: dict) -> np.ndarray:
+        """One piece on the line's seed, asked with the piece before it as its reference where there is one: that
+        piece's words and its generated codes, which carry its timbre, pitch and pace into this one. Where the two
+        would not fit the prompt's share of the context the piece is asked bare. What this piece made is then carried
+        for the next, and its codes are decoded by the codec."""
         import torch
+        from fish_speech.models.text2semantic.errors import InvalidInputError
         from fish_speech.models.text2semantic.inference import decode_one_token_ar, generate_long
 
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        codes = []
+        def generated(before) -> list:
+            random.seed(seed)
+            np.random.seed(seed)
+            torch.manual_seed(seed)
+            reference = {} if before is None else {"prompt_text": [before[0]], "prompt_tokens": [before[1]]}
+            codes = []
 
-        with torch.inference_mode():
             for answer in generate_long(
                 model=self.model, device="cuda", decode_one_token=decode_one_token_ar, text=words,
-                max_new_tokens=MOST_NEW_TOKENS, compile=False, **self.sampling,
+                max_new_tokens=MOST_NEW_TOKENS, compile=False, **reference, **self.sampling,
             ):
                 if answer.action == "sample" and answer.codes is not None:
                     codes.append(answer.codes)
                 elif answer.action == "next":
                     break
 
+            return codes
+
+        with torch.inference_mode():
+            try:
+                codes = generated(carried["before"])
+            except InvalidInputError:
+                # The piece before and this one's text over the prompt's share: this one is asked bare.
+                codes = generated(None)
+
             if not codes:
                 raise RuntimeError("the model closed its turn before it spoke")
 
-            spoken = torch.cat(codes, dim=1).to("cuda")
-            audio = self.codec.from_indices(spoken[None])[0].squeeze()
+            spoken = torch.cat(codes, dim=1)
+            carried["before"] = (words, spoken.cpu())
+            audio = self.codec.from_indices(spoken.to("cuda")[None])[0].squeeze()
 
         return audio.float().cpu().numpy()
 
@@ -459,6 +523,7 @@ class Mouth:
         import torch
 
         if self.model is not None and self.on_card:
+            self.drop_caches()
             held = list(self.held())
             holding = {id(tensor) for tensor in held}
             self.kept = {key: kept for key, kept in self.kept.items() if key in holding}
@@ -484,6 +549,17 @@ class Mouth:
             ctypes.CDLL("libc.so.6").malloc_trim(0)
         except (OSError, AttributeError):
             pass  # not glibc: nothing to trim this way
+
+    def drop_caches(self) -> None:
+        """The key-value caches let go, so the next piece makes them again on the card. They are scratch every piece
+        writes before it reads, and they are made inside inference mode: a cache carried down into host memory and put
+        back up refuses the next piece's write into it ("Inference tensors do not track version counter")."""
+        for layer in (*self.model.layers, *self.model.fast_layers):
+            layer.attention.kv_cache = None
+
+        self.model.max_seq_len = -1
+        self.model.max_batch_size = -1
+        self.model._cache_setup_done = False
 
     def up(self) -> float:
         """The models put back on the card from their host copies; answers the seconds it took."""
@@ -1043,7 +1119,8 @@ def handler(service: Service):
                 return self.refuse(503, str(taken))
             except Exception as failure:  # the model's own failure, said without the line
                 print(f"voice-fish: speaking failed: {type(failure).__name__}: {failure}", file=sys.stderr, flush=True)
-                return self.refuse(500, f"speaking failed: {type(failure).__name__}")
+                traceback.print_exc(file=sys.stderr)
+                return self.refuse(500, f"speaking failed: {failed_at(failure)}")
 
             self.answer(200, wav, "audio/wav", headers)
 
@@ -1122,7 +1199,7 @@ def ask(args: argparse.Namespace) -> int:
         said["status"] = refusal.code
 
         try:
-            said["error"] = str(json.loads(refusal.read()).get("error", ""))[:200] or None
+            said["error"] = str(json.loads(refusal.read()).get("error", ""))[:MOST_ERROR] or None
         except ValueError:
             said["error"] = None
     except (TimeoutError, socket.timeout):
