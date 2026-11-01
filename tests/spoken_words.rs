@@ -220,7 +220,7 @@ fn an_answer_is_read_out_of_the_text_round_it_and_held_to_the_check() {
   let agreed = [("Nuxt".to_owned(), "넉스트".to_owned())];
   let prompt = testing::prompt(Language::Ko, &agreed, "Nuxt and Qwen", None);
 
-  assert!(prompt.contains("Korean"), "{prompt}");
+  assert!(prompt.contains("The line's language: Korean"), "{prompt}");
   assert!(prompt.contains("- Nuxt: 넉스트"), "{prompt}");
   assert!(prompt.contains("Nuxt and Qwen"), "{prompt}");
 }
@@ -266,6 +266,32 @@ async fn spoken_words_a_caller_gives_are_checked_and_refused_naming_the_word_nev
   assert_eq!(status, StatusCode::CREATED, "{made}");
   assert_eq!(made["text"], "Qwen is up.", "the written words are kept as given");
   assert_eq!(made["spoken"], "퀜이 섰습니다.");
+
+  let (status, made) = call(
+    &engine,
+    "POST",
+    "/syntheses",
+    Some(
+      json!({ "voiceName": "voice-a", "text": "Qwen is up.", "spoken": "Kwen is up.", "language": "en" }),
+    ),
+  )
+  .await;
+
+  assert_eq!(
+    status,
+    StatusCode::CREATED,
+    "an English line in a Korean voice is checked in English: {made}"
+  );
+
+  let (status, _) = call(
+    &engine,
+    "POST",
+    "/syntheses",
+    Some(json!({ "voiceName": "voice-a", "text": "Up.", "spoken": "Up.", "language": "fr" })),
+  )
+  .await;
+
+  assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
 // The derivation of a line with no agency named never ends, so the runtime is let go without waiting for it.

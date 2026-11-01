@@ -81,7 +81,7 @@ asking `Accept: application/json`.
 
 | Route | Body or query | Answer |
 |---|---|---|
-| `POST /syntheses` | `voiceName`, `text`, `spoken?`, `emotion?`, `style?`, `seed?` | 201, the synthesis |
+| `POST /syntheses` | `voiceName`, `text`, `spoken?`, `language?`, `emotion?`, `style?`, `seed?` | 201, the synthesis |
 | `GET /syntheses/{synthesisId}` | | one synthesis |
 | `GET /syntheses/{synthesisId}/sound` | | the sound, OGG/Opus, with `Range` |
 
@@ -115,7 +115,10 @@ server any other way.
 - **`text` is the written words:** what people read of the line, the caption, the reading a road folds under a
   voice note, a transcript. The engine keeps them as they were given, and a briefing's as the script its reading
   rules make of them (「Script readings」); nothing else changes them.
-- **`spoken` is the words the voice says:** the same words as a reader of the voice's language says them aloud.
+- **`language` is the language the line is said in,** `ko` or `en`, the voice's own where absent; any other is
+  answered 400 `bad-request`. A voice says a line of either language, and the spoken words are made and checked
+  in the line's.
+- **`spoken` is the words the voice says:** the same words as a reader of the line's language says them aloud.
   Every foreign name, acronym, product name and model name stands in that language's reading, every number,
   date, time and unit in the words a reader says, and a web address, a file path, code and markup are said in a
   few words for what they are or left out. Nothing else differs from the written words.
@@ -126,8 +129,8 @@ server any other way.
   engine derives them (「How the engine derives the spoken words」).
 - **The check:** before a line is spoken its spoken words are checked for what was left unconverted. It finds,
   and the engine never mends:
-  - a letter of another script than the voice's language writes: a Latin letter in a voice whose language is
-    Korean, a Hangul letter in one whose language is English;
+  - a letter of another script than the line's language writes: a Latin letter in a Korean line, a Hangul letter
+    in an English one;
   - a digit, in every voice;
   - the marks a web address, a path, code or markup is written with: a slash or a backslash, and any of
     `` ` `` `*` `_` `#` `|` `<` `>` `[` `]` `{` `}` `~` `=` `^` `@` `$` `%` `&` `+`, and a character of the
@@ -143,10 +146,10 @@ server any other way.
   registration of agency's (its `docs/agent-roles.md`) and must stand there; the engine creates none.
 - **In a thrown-away session of one turn** on the runner line `[spoken]` names, `search` where it names none,
   its instructions the engine's own (`prompts/spoken-words.md`) and no tool allowed. The turn hands the model
-  the voice's language, the agreed readings, the written words, and, where the answer before failed the check,
+  the line's language, the agreed readings, the written words, and, where the answer before failed the check,
   the word it failed on. The session is ended and the seat given back once the turn answers.
 - **The agreed readings come first, the model's judgement after:** every row of the voice name table
-  (`docs/store.md`, `voice_names`) with a reading in the voice's language is handed over as a reading to apply
+  (`docs/store.md`, `voice_names`) with a reading in the line's language is handed over as a reading to apply
   as it stands, and the model reads whatever else the words need with its own judgement.
 - **A reading the model chose is kept:** its answer names each name it read that the readings did not hold, and
   each is written into the voice name table, so the same spelling is read the same way next time. A spelling
@@ -161,7 +164,7 @@ server any other way.
 
 | Route | Body or query | Answer |
 |---|---|---|
-| `POST /briefings` | `voiceName`, `text`, `spoken?`, `chatId`, `messageId?`, `kind`, `title?`, `emotion?`, `plays?` | 201, the briefing |
+| `POST /briefings` | `voiceName`, `text`, `spoken?`, `language?`, `chatId`, `messageId?`, `kind`, `title?`, `emotion?`, `plays?` | 201, the briefing |
 | `GET /briefings` | `chatId?`, `messageId?`, `kind?`, `awaitsLine?`, `after`, `limit` | a page of briefings, newest first |
 | `GET /briefings/{briefingId}` | | one briefing |
 | `POST /briefings/{briefingId}/line` | `messageId`, a number or null | the briefing |

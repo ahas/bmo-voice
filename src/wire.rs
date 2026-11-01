@@ -157,6 +157,9 @@ pub struct NewSynthesis {
   /// The words the voice says, checked before they are spoken; derived from `text` where absent.
   #[serde(default)]
   pub spoken: Option<String>,
+  /// The language the line is said in, `ko` or `en`; the voice's own where absent.
+  #[serde(default)]
+  pub language: Option<String>,
   /// One of the voice's emotions; the voice's own where absent.
   #[serde(default)]
   pub emotion: Option<String>,
@@ -311,6 +314,9 @@ pub struct NewBriefing {
   /// The words the voice says, checked before they are spoken; derived from the script where absent.
   #[serde(default)]
   pub spoken: Option<String>,
+  /// The language the line is said in, `ko` or `en`; the voice's own where absent.
+  #[serde(default)]
+  pub language: Option<String>,
   pub chat_id: i64,
   /// The line it speaks; a summary may leave it out and await its line, a full reading names it.
   #[serde(default)]

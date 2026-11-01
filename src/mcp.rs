@@ -134,6 +134,9 @@ struct Speaking {
   /// The words the voice says, checked before they are spoken; derived from `text` where absent.
   #[serde(default)]
   spoken: Option<String>,
+  /// The language the line is said in, `ko` or `en`; the voice's own where absent.
+  #[serde(default)]
+  language: Option<String>,
   #[serde(default)]
   emotion: Option<String>,
   #[serde(default)]
@@ -175,6 +178,7 @@ pub fn tools() -> Vec<VoiceTool> {
           voice_name: asked.voice_name,
           text: asked.text,
           spoken: asked.spoken,
+          language: asked.language,
           emotion: asked.emotion,
           style: asked.style,
           seed: asked.seed,

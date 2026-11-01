@@ -176,6 +176,7 @@ async fn brief(
       voice_name: voice,
       text: words.text,
       spoken: words.spoken,
+      language: None,
       chat_id: chat,
       message_id: message,
       kind,

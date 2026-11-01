@@ -328,7 +328,7 @@ async fn create_synthesis(
 
   known_emotion(asked.emotion.as_deref())?;
 
-  let language = voice_language(&row)?;
+  let language = line_language(asked.language.as_deref(), &row)?;
   let spoken = checked_spoken(asked.spoken.as_deref(), language)?;
   let at = crate::now_ms();
   let id = store::syntheses::insert(
@@ -386,8 +386,14 @@ async fn create_synthesis(
   Ok((StatusCode::CREATED, Json(synthesis)).into_response())
 }
 
-// The language a voice's spoken words are checked in; a voice of any other is no voice a line can be spoken in.
-fn voice_language(row: &voices::VoiceRow) -> Result<Language, Refused> {
+// The language a line is said in: the one it names, else its voice's; a voice of a language the spoken words have
+// no check for says only lines that name one.
+fn line_language(named: Option<&str>, row: &voices::VoiceRow) -> Result<Language, Refused> {
+  if let Some(named) = named {
+    return Language::parse(named)
+      .ok_or_else(|| Refused::bad_request(format!("there is no language {named}")));
+  }
+
   Language::parse(&row.language).ok_or_else(|| {
     Refused::failed(format!(
       "{} speaks {}, a language the spoken words have no check for",
@@ -608,7 +614,7 @@ async fn create_briefing(
   known_emotion(asked.emotion.as_deref())?;
 
   let db = &served.context.db;
-  let language = voice_language(&voice)?;
+  let language = line_language(asked.language.as_deref(), &voice)?;
   let spoken_words = checked_spoken(asked.spoken.as_deref(), language)?;
   let script = spoken::finished_script(&spoken::spoken_script(&asked.text));
   let script = if script.trim().is_empty() { asked.text.trim().to_owned() } else { script };

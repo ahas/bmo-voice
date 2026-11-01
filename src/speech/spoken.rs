@@ -58,7 +58,7 @@ impl Language {
   }
 }
 
-/// The spoken words of `text` in a voice of `language`, asked until they stand; `told` is handed an English sentence
+/// The spoken words of `text` said in `language`, asked until they stand; `told` is handed an English sentence
 /// each time how the derivation stands changes.
 pub async fn derived(
   context: &Context,
@@ -130,7 +130,7 @@ fn read_answer(written: &str) -> Result<Answer, Refusal> {
   serde_json::from_str(object).map_err(|why| Refusal::Unread(format!("the answer did not read: {why}")))
 }
 
-// The turn the model is asked: the voice's language, the agreed readings, the written words, and the word the last
+// The turn the model is asked: the line's language, the agreed readings, the written words, and the word the last
 // answer failed on where it failed.
 fn turn_prompt(
   language: Language,
@@ -138,7 +138,7 @@ fn turn_prompt(
   text: &str,
   failed: Option<&Unconverted>,
 ) -> String {
-  let mut prompt = format!("The voice's language: {}.\n\n", language.named());
+  let mut prompt = format!("The line's language: {}.\n\n", language.named());
 
   prompt.push_str("The agreed readings, each applied exactly as it stands:\n");
 

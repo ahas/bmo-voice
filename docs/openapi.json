@@ -926,6 +926,14 @@
             ],
             "default": null
           },
+          "language": {
+            "description": "The language the line is said in, `ko` or `en`; the voice's own where absent.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
           "emotion": {
             "type": [
               "string",
@@ -1216,6 +1224,14 @@
             "description": "The words the voice says, checked before they are spoken; derived from `text` where absent.",
             "default": null
           },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The language the line is said in, `ko` or `en`; the voice's own where absent.",
+            "default": null
+          },
           "emotion": {
             "type": [
               "string",
@@ -1351,6 +1367,14 @@
               "null"
             ],
             "description": "The words the voice says, checked before they are spoken; derived from the script where absent.",
+            "default": null
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The language the line is said in, `ko` or `en`; the voice's own where absent.",
             "default": null
           },
           "chatId": {
