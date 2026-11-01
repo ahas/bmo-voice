@@ -180,7 +180,7 @@ interface Engine {
 
 const engine = Bun.TOML.parse(readFileSync(engineFile, "utf8")) as Engine;
 
-// The least memory a voice node's card holds, in MiB: the server peaks at 11,295 MiB (docs/voice-plan.md, 「The
+// The least memory a voice node's card holds, in MiB: the server peaks at 11,550 MiB (docs/voice-plan.md, 「The
 // synthesiser」), so only a 12 GB card takes it.
 const leastCardMib = 12_000;
 
@@ -297,6 +297,9 @@ function unitText(): string {
     "Environment=PYTHONUNBUFFERED=1",
     // The model's progress bars say nothing a journal needs and bury the lines that do.
     "Environment=TQDM_DISABLE=1",
+    // What the mouth compiles is kept on the node's home disk, so a restart reads it back rather than compiling
+    // again (docs/voice-plan.md, 「How the model is loaded」).
+    `Environment=TORCHINDUCTOR_CACHE_DIR=%h/${VOICE_PLACE}/compiled`,
     "Restart=always",
     "RestartSec=5",
     "",

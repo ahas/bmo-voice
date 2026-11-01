@@ -14,9 +14,10 @@ the voice nodes. What a caller does with the sound is the caller's.
   (「The voices」), and none of them is served: a synthesis or a briefing naming one is refused 422 `retired-voice`
   (`docs/boundary-api.md`, 「Errors」). The engine a voice must name to be spoken is the policy's `engine`
   (`policy/voice.toml`).
-- **What it costs:** the server's process peaks at 11,295 MiB while it speaks, about 10.3 GiB of it resident once
+- **What it costs:** the server's process peaks at 11,550 MiB while it speaks, about 10.3 GiB of it resident once
   the model is loaded, so a voice node lends a 12 GB card whole for as long as the model is up; a smaller card
-  does not take it. It speaks slower than real time, about 0.55 seconds of sound for every second of speaking.
+  does not take it. On an RTX 4070 it makes about 25 frames a second, a little faster than real time: about 1.1
+  seconds of sound for every second of speaking, once the frame step is compiled (「How the model is loaded」).
 - **What fits it in 12 GB** is the mouth's own way of loading the model (「How the model is loaded」).
 - **The licence:** S2-Pro's weights, and every adapter trained on them, are under the Fish Audio Research
   License: research and non-commercial use only. A voice spoken for a paying service needs Fish Audio's own
@@ -178,7 +179,8 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **The instruction is the row's to change:** `scripts/voice-install.ts --style <name> '<words>'`. The mouth puts it
   in brackets before the words, where S2-Pro reads a tag it is given; it is never spoken aloud.
 - **The seed is the row's too:** `--seed <name> <n>`. A seed names one delivery of one line; every piece of the line
-  is spoken on it, so the same line, seed and settings give back the same samples every time.
+  is spoken on it, so the same line, seed and settings give back the same take every time on one server; a
+  server compiled apart may give another (「How the model is loaded」).
 - **Whether a line is spoken a sentence at a time is the row's too:** `--sentences <name> on|off`. On, the line is
   cut at its sentences, each spoken on the row's seed with 0.3 seconds of silence between two; off, in passes of
   whole sentences. Either way a sentence too long for one piece is cut at its clauses (「What a long line takes of
@@ -209,7 +211,30 @@ the voice nodes. What a caller does with the sound is the caller's.
   builds them at, which would take 4 GiB of the card for lengths no piece reaches.
 - **The codec is cast to bf16 on the host and put on the card once,** so the card never holds a float32 copy beside
   it.
-- **Nothing is compiled.**
+- **The frame step is compiled and replayed as one CUDA graph.** What makes one frame of a piece once its prompt is
+  read, the slow model's token and the fast model's ten codebooks with the sampling among them, is fish-speech's own
+  decode step, compiled by inductor at its fixed shapes the first time a piece is spoken after a start, then
+  captured as one CUDA graph and replayed frame after frame. The prompt's own pass is not compiled: its length is
+  the piece's.
+  - **Its shapes never change:** its attention reads the whole context, masked to what the piece has written.
+  - **Each kernel runs in the fastest configuration the node measured for it,** the measurements kept beside the
+    compiled kernels. Kernels measured apart do their arithmetic in another order, so a seed may give another take
+    of a line on another node or after a start: the voice and its intelligibility are the same, measured against
+    the step uncompiled (an ECAPA likeness of 0.94 to 0.98 and a character error rate within the uncompiled draws),
+    the take is not.
+  - **What it buys,** measured on a 4070 against the same step uncompiled: about 25 frames a second against 12.2, a
+    1,664-character line in 181 seconds against 352.
+  - **What it costs:** compiling takes two to three minutes the first time on a node and about half a minute
+    after a restart, which reads the compiled kernels back from `bmo-voice/compiled/` on the node's home disk (the
+    unit's `TORCHINDUCTOR_CACHE_DIR`). The first line after a start pays it, and the first after another voice is
+    loaded. The graph takes about 50 MiB of the card beside the model.
+  - **The graph reads the weights and the key-value caches where they stood when it was captured,** so it is let go
+    before either is let go or moved, as each piece's codes are made into sound and as the model goes down, and
+    captured again by the next frame, in under a second. What was compiled stays for the process's life, across
+    hand-overs and the lines of every thread, and is let go with the model when another voice is loaded.
+  - **A frame step that fails to compile is taken uncompiled** for the rest of the process, said once in the
+    journal, its attention on the card's fused kernels rather than the plain one fish-speech's generator asks for,
+    which uncompiled is about 3% faster.
 
 ## Where the weights live
 
@@ -354,7 +379,7 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **`GET /health`:** the checkpoint loaded, whether a line is being spoken, whether the model is on the card, the
   device, VRAM and host memory held, the card's free memory (asked of `nvidia-smi`, opening no CUDA context), whether
   other work holds the card lock (read from the kernel's lock table, never by taking it), whether the server holds
-  the card between lines, and whether it has room: 10.7 GiB free to put a loaded model up, 11.0 GiB for a first
+  the card between lines, and whether it has room: 11.0 GiB free to put a loaded model up, 11.3 GiB for a first
   load.
 - **`503`:** the card lock stayed held by other work for the whole of the line's wait; nothing was loaded or spoken.
 - **`500`:** the line failed while it was spoken. The answer names the failure's kind, its message and the frame of

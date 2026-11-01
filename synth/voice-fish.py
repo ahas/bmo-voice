@@ -121,13 +121,13 @@ MOST_STYLE = 300
 # The most characters of a refusal the asker hands on: room for a failure's kind, message and frame.
 MOST_ERROR = 600
 
-# What loading the model takes of the card: the server's process peaks at 11,295 MiB while a line is spoken on an
-# RTX 4070, its own CUDA context among them, so a card with less free than this cannot take a load; the health says
-# so (docs/voice-plan.md, 「What it answers」).
-LOAD_BYTES = int(11.0 * 1024**3)
+# What loading the model takes of the card: the server's process peaks at 11,550 MiB while a line is spoken on an
+# RTX 4070, its own CUDA context and the frame step's graph among them, so a card with less free than this cannot take
+# a load; the health says so (docs/voice-plan.md, 「What it answers」).
+LOAD_BYTES = int(11.3 * 1024**3)
 
 # What putting the kept weights back on the card takes for one line, once the server's own CUDA context is there.
-UP_BYTES = int(10.7 * 1024**3)
+UP_BYTES = int(11.0 * 1024**3)
 
 # The node's shared GPU lock: every service that puts work on the node's card holds this one file under flock for
 # as long as its work is there, so the services take the card in turn rather than all at once.
@@ -363,6 +363,122 @@ def faded(audio: np.ndarray, rate: int) -> np.ndarray:
     return audio
 
 
+class FrameStep:
+    """The step that makes one frame of a piece once its prompt is read: the slow model's token and the fast model's
+    codebooks, sampled as fish-speech's own decode step samples them, compiled by inductor at its fixed shapes and
+    replayed as one CUDA graph (docs/voice-plan.md, 「How the model is loaded」). It stands where fish-speech's
+    generator takes a decode step, and is called the way the generator calls one.
+
+    It takes no key-value length, so the generator asks it for none: its attention reads the whole context, masked to
+    what the piece has written, and its shapes never change with the piece. The graph reads the weights and the
+    key-value caches where they stood when it was captured, so it is let go (`forget`) before either is let go or
+    moved, and captured again by the next frame; the compiled kernels outlive every graph. The capture's own runs draw
+    from the card's generator, so its state is put back after them, and random numbers are drawn by the same calls as
+    uncompiled. A step that fails to compile or to be captured is
+    taken uncompiled for the rest of the process, the failure said once.
+    """
+
+    def __init__(self) -> None:
+        import torch
+        import torch._inductor.config
+        from fish_speech.models.text2semantic.inference import decode_one_token_ar
+        from torch.nn.attention import SDPBackend, sdpa_kernel
+
+        # Random numbers drawn by the same calls as uncompiled. Each kernel is launched in the fastest configuration
+        # the node measured for it, which fish-speech's module asks for as it is imported; the measurements are kept
+        # beside the compiled kernels, so a restart reads them back rather than measuring again.
+        torch._inductor.config.fallback_random = True
+
+        def frame(model, x, input_pos, temperature, top_p, top_k, semantic_logit_bias, previous_tokens):
+            return decode_one_token_ar(
+                model, x, input_pos, temperature, top_p, top_k, semantic_logit_bias, None, None, previous_tokens=previous_tokens,
+            )
+
+        def uncompiled(model, x, input_pos, temperature, top_p, top_k, semantic_logit_bias, audio_masks, audio_parts, previous_tokens):
+            # The generator asks for the plain attention kernel around every step; uncompiled, the fused ones are
+            # faster.
+            with sdpa_kernel([SDPBackend.FLASH_ATTENTION, SDPBackend.EFFICIENT_ATTENTION, SDPBackend.CUDNN_ATTENTION, SDPBackend.MATH]):
+                return decode_one_token_ar(
+                    model, x, input_pos, temperature, top_p, top_k, semantic_logit_bias, audio_masks, audio_parts, previous_tokens=previous_tokens,
+                )
+
+        self.uncompiled = uncompiled
+        self.compiled = torch.compile(frame, mode="default", fullgraph=True, dynamic=False)
+        self.broken = False
+        self.forget()
+
+    def forget(self) -> None:
+        """The graph let go, with the inputs it reads and the output it writes."""
+        self.graph = None
+        # The frame's own inputs, copied in before each replay, then the sampling's, copied where they change.
+        self.inputs: list | None = None
+        self.sampling: tuple | None = None
+        self.top_k: int | None = None
+        self.out = None
+
+    def __call__(self, model, x, input_pos, temperature, top_p, top_k, semantic_logit_bias, audio_masks, audio_parts, previous_tokens=None):
+        import torch
+
+        if self.broken or audio_parts is not None or previous_tokens is None:
+            return self.uncompiled(model, x, input_pos, temperature, top_p, top_k, semantic_logit_bias, audio_masks, audio_parts, previous_tokens)
+
+        if self.graph is None or top_k != self.top_k:
+            try:
+                self.capture(model, x, input_pos, temperature, top_p, top_k, semantic_logit_bias, previous_tokens)
+            except torch.cuda.OutOfMemoryError:
+                # The card's room, not the compiling: the piece's own shortfall, spoken again by its clauses.
+                self.forget()
+                raise
+            except Exception as failure:
+                print(f"voice-fish: the frame step could not be compiled, so it runs uncompiled: {type(failure).__name__}: {failure}", file=sys.stderr, flush=True)
+                self.broken = True
+                self.forget()
+
+                return self.uncompiled(model, x, input_pos, temperature, top_p, top_k, semantic_logit_bias, None, None, previous_tokens)
+
+        frame_x, frame_pos, frame_previous, *sampled = self.inputs
+        frame_x.copy_(x)
+        frame_pos.copy_(input_pos)
+        frame_previous.copy_(previous_tokens)
+
+        # The sampling's tensors stand the same for every frame of a piece, so they are copied in only where the
+        # generator hands in others; held here, none is freed and its identity taken by another.
+        if self.sampling is None or any(held is not given for held, given in zip(self.sampling, (temperature, top_p, semantic_logit_bias))):
+            for into, given in zip(sampled, (temperature, top_p, semantic_logit_bias)):
+                into.copy_(given)
+            self.sampling = (temperature, top_p, semantic_logit_bias)
+
+        self.graph.replay()
+
+        return self.out
+
+    def capture(self, model, x, input_pos, temperature, top_p, top_k, semantic_logit_bias, previous_tokens) -> None:
+        """The compiled frame captured as a graph on the inputs' own copies: compiled, where it is not yet, and run
+        twice on a side stream first, as a capture asks, then captured; the generator's state put back after."""
+        import torch
+
+        self.forget()
+        inputs = [tensor.clone() for tensor in (x, input_pos, previous_tokens, temperature, top_p, semantic_logit_bias)]
+        frame_x, frame_pos, frame_previous, frame_temperature, frame_top_p, frame_bias = inputs
+        drawn = torch.cuda.get_rng_state()
+        side = torch.cuda.Stream()
+        side.wait_stream(torch.cuda.current_stream())
+
+        with torch.cuda.stream(side):
+            for _ in range(2):
+                self.compiled(model, frame_x, frame_pos, frame_temperature, frame_top_p, top_k, frame_bias, frame_previous)
+
+        torch.cuda.current_stream().wait_stream(side)
+        graph = torch.cuda.CUDAGraph()
+
+        with torch.cuda.graph(graph):
+            out = self.compiled(model, frame_x, frame_pos, frame_temperature, frame_top_p, top_k, frame_bias, frame_previous)
+
+        torch.cuda.set_rng_state(drawn)
+        self.graph, self.inputs, self.out, self.top_k = graph, inputs, out, top_k
+        self.sampling = (temperature, top_p, semantic_logit_bias)
+
+
 class Mouth:
     """S2-Pro with one voice's adapter folded into its weights, loaded on the first line and again for another voice.
 
@@ -384,6 +500,8 @@ class Mouth:
         # beside its copy, so the identity is never reused while the entry stands.
         self.kept: dict[int, tuple] = {}
         self.on_card = False
+        # The frame step every piece is generated through (`FrameStep`), made with the first model.
+        self.step: FrameStep | None = None
 
     def ready(self, checkpoint: Path) -> float:
         """The model holding this voice's weights; answers the seconds it took to get there."""
@@ -394,6 +512,7 @@ class Mouth:
             self.release()
             self.model = self.slow(checkpoint / "lora.pt")
             self.codec = self.decoder()
+            self.step = FrameStep()
             self.sampling = {"temperature": float(said.get("temperature", 0.7)), "top_p": float(said.get("top_p", 0.7))}
             self.checkpoint = checkpoint
             self.on_card = True
@@ -537,7 +656,7 @@ class Mouth:
         the rest of the line."""
         import torch
         from fish_speech.models.text2semantic.errors import InvalidInputError
-        from fish_speech.models.text2semantic.inference import decode_one_token_ar, generate_long
+        from fish_speech.models.text2semantic.inference import generate_long
 
         def spoken(reference) -> tuple:
             random.seed(seed)
@@ -546,7 +665,7 @@ class Mouth:
             asked = {} if reference is None else {"prompt_text": [reference[0]], "prompt_tokens": [reference[1]]}
             codes = []
             answers = generate_long(
-                model=self.model, device="cuda", decode_one_token=decode_one_token_ar, text=words,
+                model=self.model, device="cuda", decode_one_token=self.step, text=words,
                 max_new_tokens=MOST_NEW_TOKENS, compile=False, **asked, **self.sampling,
             )
 
@@ -649,7 +768,11 @@ class Mouth:
     def drop_caches(self) -> None:
         """The key-value caches let go, so the next piece makes them again on the card. They are scratch every piece
         writes before it reads, and they are made inside inference mode: a cache carried down into host memory and put
-        back up refuses the next piece's write into it ("Inference tensors do not track version counter")."""
+        back up refuses the next piece's write into it ("Inference tensors do not track version counter"). The frame
+        step's graph, which reads them where they stand, is let go first."""
+        if self.step is not None:
+            self.step.forget()
+
         for layer in (*self.model.layers, *self.model.fast_layers):
             layer.attention.kv_cache = None
 
@@ -688,6 +811,13 @@ class Mouth:
         self.checkpoint = None
         self.kept = {}
         self.on_card = False
+
+        if self.step is not None:
+            # What was compiled for the models let go is let go with them; the kernels stay on the disk.
+            import torch._dynamo
+
+            self.step = None
+            torch._dynamo.reset()
 
         gc.collect()
 
