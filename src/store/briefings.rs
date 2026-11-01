@@ -146,6 +146,18 @@ pub async fn set_line(db: &DatabaseConnection, id: i64, message_id: Option<i64>)
   Ok(())
 }
 
+/// The briefing a synthesis speaks, by its id, or none where it speaks no briefing.
+pub async fn of_synthesis(db: &DatabaseConnection, synthesis_id: i64) -> Result<Option<i64>, StoreError> {
+  one(
+    db,
+    r#"SELECT "run_id" FROM "voice_briefings" WHERE "synthesis_id" = $1 LIMIT 1"#,
+    vec![synthesis_id.into()],
+  )
+  .await?
+  .map(|row| row.try_get("", "run_id").map_err(StoreError::from))
+  .transpose()
+}
+
 /// A briefing's end: when, and where it is done, how long its sound runs and where the sound is kept.
 pub async fn ended(
   db: &DatabaseConnection,

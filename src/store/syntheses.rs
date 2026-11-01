@@ -12,6 +12,7 @@ pub struct Row {
   pub voice_name: String,
   pub text: String,
   pub spoken: Option<String>,
+  pub language: Option<String>,
   pub emotion: Option<String>,
   pub state: SynthesisState,
   pub duration_ms: Option<i64>,
@@ -45,6 +46,7 @@ fn row_of(row: &QueryResult) -> Result<Row, StoreError> {
     voice_name: row.try_get("", "voice_name")?,
     text: row.try_get("", "text")?,
     spoken: row.try_get("", "spoken")?,
+    language: row.try_get("", "language")?,
     emotion: row.try_get("", "emotion")?,
     state,
     duration_ms: row.try_get("", "duration_ms")?,
@@ -58,17 +60,19 @@ pub async fn insert(
   voice_name: &str,
   text: &str,
   spoken: Option<&str>,
+  language: &str,
   emotion: Option<&str>,
   at: i64,
 ) -> Result<i64, StoreError> {
   let row = one(
     db,
-    r#"INSERT INTO "voice_syntheses" ("voice_name", "text", "spoken", "emotion", "state", "created_at")
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING "id""#,
+    r#"INSERT INTO "voice_syntheses" ("voice_name", "text", "spoken", "language", "emotion", "state", "created_at")
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING "id""#,
     vec![
       voice_name.into(),
       text.into(),
       spoken.map_or(Value::String(None), |spoken| spoken.into()),
+      language.into(),
       emotion.map_or(Value::String(None), |emotion| emotion.into()),
       SynthesisState::Waiting.as_str().into(),
       at.into(),
@@ -84,7 +88,7 @@ pub async fn insert(
 pub async fn get(db: &DatabaseConnection, id: i64) -> Result<Option<Row>, StoreError> {
   one(
     db,
-    r#"SELECT "id", "voice_name", "text", "spoken", "emotion", "state", "duration_ms", "created_at"
+    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "state", "duration_ms", "created_at"
        FROM "voice_syntheses" WHERE "id" = $1"#,
     vec![id.into()],
   )
@@ -92,6 +96,20 @@ pub async fn get(db: &DatabaseConnection, id: i64) -> Result<Option<Row>, StoreE
   .as_ref()
   .map(row_of)
   .transpose()
+}
+
+/// Every synthesis not yet ended, `waiting` or `speaking`, oldest first.
+pub async fn unfinished(db: &DatabaseConnection) -> Result<Vec<Row>, StoreError> {
+  all(
+    db,
+    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "state", "duration_ms", "created_at"
+       FROM "voice_syntheses" WHERE "state" IN ('waiting', 'speaking') ORDER BY "id""#,
+    vec![],
+  )
+  .await?
+  .iter()
+  .map(row_of)
+  .collect()
 }
 
 /// A synthesis's spoken words, once they stand.
@@ -132,7 +150,7 @@ pub async fn of_voice(
 ) -> Result<Vec<Row>, StoreError> {
   all(
     db,
-    r#"SELECT "id", "voice_name", "text", "spoken", "emotion", "state", "duration_ms", "created_at"
+    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "state", "duration_ms", "created_at"
        FROM "voice_syntheses"
        WHERE "voice_name" = $1 AND ($2 = 0 OR "id" < $2)
        ORDER BY "id" DESC LIMIT $3"#,

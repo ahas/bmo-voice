@@ -9,7 +9,7 @@ use crate::http::{Served, router};
 use crate::speech::{card, spoken};
 
 /// The service run: its settings read, its store migrated, the demands and seats an earlier process left given back,
-/// and its
+/// the lines it left unspoken taken up, and its
 /// routes served until it is stopped.
 pub async fn serve() -> Result<(), String> {
   let context = Context::open(8).await?;
@@ -34,6 +34,12 @@ pub async fn serve() -> Result<(), String> {
     events,
     token: token.map(Arc::new),
   };
+
+  match crate::http::take_up(Arc::clone(&served.context), served.events.clone()).await {
+    Ok(0) => {}
+    Ok(taken) => eprintln!("voice-server: took up {taken} lines an earlier process left unspoken"),
+    Err(why) => eprintln!("voice-server: the lines an earlier process left were not read: {why}"),
+  }
   let listener = tokio::net::TcpListener::bind(&served.context.settings.listen)
     .await
     .map_err(|why| format!("{} could not be listened on: {why}", served.context.settings.listen))?;

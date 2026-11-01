@@ -341,6 +341,7 @@ async fn create_synthesis(
     &asked.voice_name,
     &asked.text,
     spoken.as_deref(),
+    language.code(),
     asked.emotion.as_deref(),
     at,
   )
@@ -649,6 +650,7 @@ async fn create_briefing(
     &asked.voice_name,
     &script,
     spoken_words.as_deref(),
+    language.code(),
     asked.emotion.as_deref(),
     at,
   )
@@ -693,6 +695,58 @@ async fn create_briefing(
   });
 
   Ok((StatusCode::CREATED, Json(briefing)).into_response())
+}
+
+/// Every line a stopped process left unspoken taken up (docs/boundary-api.md, 「Syntheses」): each synthesis still
+/// `waiting` or `speaking` spoken again from its words in the language it was taken in with, a briefing's ended as
+/// its synthesis ends, and one whose voice is gone or not served failed. Answers how many were taken up.
+pub async fn take_up(context: Arc<Context>, events: Events) -> Result<usize, StoreError> {
+  let db = &context.db;
+  let mut taken = 0;
+
+  for row in store::syntheses::unfinished(db).await? {
+    let id = row.id;
+    let voice = voices::voice(db, &row.voice_name).await?.filter(|voice| served_voice(voice).is_ok());
+    let language = row.language.as_deref().and_then(Language::parse);
+    let language = language.or_else(|| voice.as_ref().and_then(|voice| Language::parse(&voice.language)));
+    let (Some(voice), Some(language)) = (voice, language) else {
+      let _ = store::syntheses::set_state(db, id, SynthesisState::Failed, None).await;
+      let _ = ended_synthesis(events.clone(), db.clone(), id).await;
+
+      if let Ok(Some(briefing)) = store::briefings::of_synthesis(db, id).await {
+        let _ = store::briefings::ended(db, briefing, crate::now_ms(), None).await;
+      }
+
+      eprintln!(
+        "voice: synthesis {id} left unspoken failed: its voice {} is gone or not served",
+        row.voice_name
+      );
+      continue;
+    };
+
+    let _ = store::syntheses::set_state(db, id, SynthesisState::Waiting, None).await;
+
+    let briefing = store::briefings::of_synthesis(db, id).await?;
+    let words = Words {
+      text: row.text,
+      spoken: row.spoken,
+      language,
+    };
+    let context = Arc::clone(&context);
+    let events = events.clone();
+
+    tokio::task::spawn_blocking(move || {
+      if let Ok(runtime) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
+        match briefing {
+          Some(briefing) => runtime.block_on(brief(context, events, briefing, id, voice, words)),
+          None => runtime.block_on(speak(context, events, id, voice, words)),
+        }
+      }
+    });
+    taken += 1;
+  }
+
+  Ok(taken)
 }
 
 // One briefing spoken as its synthesis is, and its end kept and told.

@@ -89,6 +89,11 @@ impl Drop for Scratch {
 /// The engine's routes on the scratch store with one served voice, its master out of reach so no line it takes in is
 /// ever spoken, and its agency the one `agency` names, or none.
 async fn engine(scratch: &Scratch, agency: Option<std::net::SocketAddr>) -> axum::Router {
+  router(served(scratch, agency).await)
+}
+
+/// What [`engine`] serves: its context and its event log, for a test that runs the service's own start steps.
+async fn served(scratch: &Scratch, agency: Option<std::net::SocketAddr>) -> Served {
   let master = "127.0.0.1:9";
   let agency =
     agency.map_or_else(String::new, |at| format!("\n[units.agency]\naddress = \"http://{at}\"\n"));
@@ -140,11 +145,11 @@ address = "http://127.0.0.1:9"
     waits: Default::default(),
   };
 
-  router(Served {
+  Served {
     context: Arc::new(context),
     events: Events::new(db),
     token: Some(Arc::new(TOKEN.to_owned())),
-  })
+  }
 }
 
 use sea_orm::ConnectionTrait;
@@ -535,4 +540,58 @@ address = "http://{at}"
   assert_eq!(given, 1);
   assert_eq!(asked.given_back.lock().unwrap()[0]["cancel"], true, "it never ran, so it is cancelled");
   assert!(!ledger.join("seat-left").exists(), "and it leaves the ledger");
+}
+
+// A line a stopped process left goes on: its derivation or its card waits however long it takes, so the runtime is let
+// go without waiting for what was taken up.
+#[test]
+fn the_lines_a_stopped_process_left_are_taken_up_as_the_next_starts() {
+  let runtime = tokio::runtime::Runtime::new().expect("a runtime");
+
+  runtime.block_on(takes_up_left_lines());
+  runtime.shutdown_background();
+}
+
+async fn takes_up_left_lines() {
+  let scratch = Scratch::new().await;
+  let served = served(&scratch, None).await;
+  let engine = router(Served {
+    context: Arc::clone(&served.context),
+    events: served.events.clone(),
+    token: served.token.clone(),
+  });
+  let mut store = PgConnection::connect(&address_of(&scratch.name)).await.expect("the store answers");
+
+  store
+    .execute(
+      r#"INSERT INTO "voice_syntheses" ("id", "voice_name", "text", "spoken", "language", "state", "created_at")
+         VALUES (900, 'voice-a', 'Qwen is up.', '퀜이 섰습니다.', 'ko', 'speaking', 0),
+                (901, 'voice-gone', 'Gone.', NULL, NULL, 'waiting', 0),
+                (902, 'voice-a', 'Qwen is up.', NULL, 'ko', 'waiting', 0)"#,
+    )
+    .await
+    .expect("the lines a process left are written");
+
+  let taken = bmo_voice::http::take_up(Arc::clone(&served.context), served.events.clone())
+    .await
+    .expect("the left lines are read");
+
+  assert_eq!(taken, 2, "the lines whose voice stands are taken up");
+
+  let spoken = read_until(&engine, 900, |read| read["state"] == "failed").await;
+
+  assert_eq!(spoken["spoken"], "퀜이 섰습니다.", "it is spoken from its own spoken words: {spoken}");
+
+  let (_, gone) = call(&engine, "GET", "/syntheses/901", None).await;
+
+  assert_eq!(gone["state"], "failed", "a line whose voice is gone fails: {gone}");
+
+  let deriving = read_until(&engine, 902, |read| {
+    read["waitingOn"].as_str().is_some_and(|on| on.contains("no agency is named"))
+  })
+  .await;
+
+  assert_eq!(deriving["state"], "waiting", "a line with no spoken words has them derived: {deriving}");
+
+  store.close().await.expect("the store connection closes");
 }

@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.12.
+Fixed at 0.1.0-rev.14.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -106,6 +106,11 @@ asking `Accept: application/json`.
   for this one synthesis.
 - **The sound** is answered only once the state is `done`; before that, and where a failed synthesis left
   none, 404 `not-found`. A sound is kept under the data root, never in the database.
+- **A line a stopped process left is taken up by the next.** As the service starts, every synthesis still
+  `waiting` or `speaking` is spoken again from its words, in the language it was taken in with, its spoken
+  words derived where none stand, and a briefing spoken by it is ended and told as its synthesis ends. One whose
+  voice no list holds any more, or whose voice is not served, fails. Nothing a caller took in is left `waiting`
+  with no process to speak it.
 - **One synthesis speaks one text.** There is no list route: a caller that wants to know a synthesis it
   started reads its member or listens to the stream.
 

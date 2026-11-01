@@ -5,6 +5,7 @@ mod m20261019_000001_tables;
 mod m20261020_000001_speech;
 mod m20261026_000001_briefings;
 mod m20261101_000001_spoken;
+mod m20261101_000002_language;
 
 use sea_orm_migration::prelude::*;
 
@@ -33,6 +34,7 @@ impl MigratorTrait for Migrator {
       Box::new(m20261020_000001_speech::Migration),
       Box::new(m20261026_000001_briefings::Migration),
       Box::new(m20261101_000001_spoken::Migration),
+      Box::new(m20261101_000002_language::Migration),
     ]
   }
 

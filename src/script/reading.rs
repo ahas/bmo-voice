@@ -21,6 +21,14 @@ pub enum Language {
 }
 
 impl Language {
+  /// The word that names the language.
+  pub fn code(self) -> &'static str {
+    match self {
+      Self::Ko => "ko",
+      Self::En => "en",
+    }
+  }
+
   /// The language a word names, or none.
   pub fn parse(word: &str) -> Option<Self> {
     match word {

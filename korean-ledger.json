@@ -8,5 +8,5 @@
   "synth/voice-cer.py": 9,
   "tests/briefings.rs": 1,
   "tests/import.rs": 2,
-  "tests/spoken_words.rs": 22
+  "tests/spoken_words.rs": 24
 }
