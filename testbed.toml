@@ -17,12 +17,17 @@ setup = [
 
 [check]
 # The sweeps that read the tree before anything runs: Korean in the code, the README's folder table and the
-# dependencies the manifests name. The ledger is the Korean allowed per code file.
-quick = ["korean", "layout", "dependencies", "cargo-profile"]
+# dependencies the manifests name, and the shared versions the manifests and the lock hold to. The ledger is the
+# Korean allowed per code file.
+quick = ["korean", "layout", "dependencies", "cargo-profile", "shared-versions"]
 korean_ledger = "korean-ledger.json"
 # The base libraries every unit may build on. The voice reaches every other unit through the routes and commands
 # `docs/boundary-api.md` states.
 base_libraries = ["bmo-chat", "bmo-chat-client", "bmo-ui", "bmo-text"]
+
+# The repository whose root holds the shared versions the manifests and the lock hold to.
+[check.shared_versions]
+repository = "bmo-chat"
 
 [[check.step]]
 id = "check"

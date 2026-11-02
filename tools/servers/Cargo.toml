@@ -18,7 +18,7 @@ test = false
 bmo-voice = { path = "../.." }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-tokio = { version = "1.47.0", features = ["macros", "rt"] }
+tokio.workspace = true
 
 [dev-dependencies]
 # The manifest and the deployment's declaration read in the tests.

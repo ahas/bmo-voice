@@ -14,6 +14,15 @@ edition = "2024"
 license = "MIT"
 publish = false
 
+# The registry crates every unit takes at one version and one feature set (bmo-chat's docs/conventions.md,
+# 「Shared versions」), copied from its shared-versions.toml.
+[workspace.dependencies]
+axum = { version = "0.8.9", features = ["macros", "multipart", "ws"] }
+hyper = { version = "1.12.0", features = ["client", "http1", "http2", "server"] }
+hyper-util = { version = "0.1.21", features = ["client", "client-legacy", "client-proxy", "client-proxy-system", "http1", "http2", "server", "service", "tokio"] }
+reqwest = { version = "0.13.5", features = ["json", "query", "stream"] }
+tokio = { version = "1.53.3", features = ["fs", "io-std", "io-util", "macros", "net", "process", "rt", "rt-multi-thread", "signal", "sync", "test-util", "time"] }
+
 [package]
 name = "bmo-voice"
 description = "The voice engine: trained voices, speech synthesis on the voice nodes, transcription, speaker encodings, script readings and the script studio."
@@ -78,7 +87,7 @@ tokio-util = { version = "0.7.16", features = ["io"] }
 # A request's origin and path read as URLs are.
 url = "2.5.8"
 # The service's routes.
-axum = { version = "0.8.4", default-features = false, features = ["http1", "json", "query", "tokio"] }
+axum.workspace = true
 base64 = "0.22.1"
 # A hub's token file, read as the dotenv file it is.
 dotenvy = "0.15.7"
@@ -88,10 +97,10 @@ bmo-text = { path = "../../base/text" }
 clap = { version = "4.5.40", features = ["derive"] }
 # The tool host's control socket, HTTP/1.1 over a Unix socket.
 http-body-util = "0.1.3"
-hyper = { version = "1.6.0", features = ["client", "http1"] }
-hyper-util = { version = "0.1.16", features = ["tokio"] }
+hyper.workspace = true
+hyper-util.workspace = true
 regex = "1.11.1"
-reqwest = { version = "0.13.5", default-features = false, features = ["json", "query", "stream", "multipart"] }
+reqwest.workspace = true
 # The harness plugin's MCP server.
 rmcp = { version = "3.5.1", default-features = false, features = ["server", "transport-io"] }
 # The JSON Schemas of the wire bodies, the tools' inputs and outputs, and the OpenAPI document.
@@ -114,7 +123,7 @@ strfmt = "0.2.4"
 rand = "0.9.2"
 # The voice's own database, and the script studio's review database.
 sqlx = { version = "0.8.6", default-features = false, features = ["postgres", "sqlite", "runtime-tokio"] }
-tokio = { version = "1.47.0", features = ["macros", "rt", "rt-multi-thread", "net", "time", "signal", "io-util", "process", "fs", "sync"] }
+tokio.workspace = true
 toml = { version = "0.8.23", default-features = false, features = ["parse"] }
 tower = { version = "0.5.2", default-features = false, features = ["util"] }
 # A kept sound served with the ranges a player asks for.
