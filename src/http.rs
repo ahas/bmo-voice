@@ -240,12 +240,19 @@ async fn events(
   let kept = served.events.since(after, Some(&kinds), None).await?;
   let replayed = kept.last().map_or(after, |event| event.id);
   let kinds = Arc::new(kinds);
+  let events = served.events.clone();
   let live = stream::unfold(live, move |mut live| {
     let kinds = Arc::clone(&kinds);
+    let events = events.clone();
 
     async move {
       loop {
-        match live.recv().await {
+        let heard = tokio::select! {
+          heard = live.recv() => heard,
+          () = events.stopped() => return None,
+        };
+
+        match heard {
           Ok(event) if event.id > replayed && wanted(kinds.as_ref(), &event) => {
             return Some((event, live));
           }
@@ -568,7 +575,6 @@ async fn speak(context: Arc<Context>, events: Events, id: i64, voice: voices::Vo
     voice: &voice,
     text: &text,
     out: &out,
-    cap_ms: POLICY.run_cap_for(&text),
     ask: &ask,
   };
   // Each stage is handed over as it changes and written here, since the speaking cannot wait on the store.

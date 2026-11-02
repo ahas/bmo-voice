@@ -13,7 +13,6 @@ build = 'cp voice-tool.py tool_protocol.py voice-fish.py voice-encode.py voice-t
 # The tests are deferred (README.md, 「Tests」); until they stand, the check reads every file the placement carries.
 check = 'python3 -m py_compile voice-tool.py tool_protocol.py voice-fish.py voice-encode.py voice-transcribe.py'
 run = ["python3", "voice-tool.py"]
-timeout = 60
 
 [[entry]]
 namespace = "voice"
@@ -21,7 +20,6 @@ name = "mouth"
 title = "Mouth"
 description = "Speak one line on this machine's card in a trained voice, standing in the card's line, and write it as OGG/Opus."
 input = "mouth.json"
-timeout = 600
 system = true
 
 [[entry]]
@@ -40,6 +38,5 @@ description = "Take spoken files down in one language, each with what was heard,
 input = "transcriber.json"
 output = "transcribed.json"
 hints = { read_only = true }
-timeout = 600
 system = true
 

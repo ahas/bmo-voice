@@ -8,14 +8,12 @@ import { releaseRoot, settings, synthFolder } from "./settings";
 
 import type { VoiceRow } from "./store";
 
-// What the scripts share with the service about speaking a line (docs/voice-plan.md): how long a line may take,
-// the line in front of this machine's card, the engine a served voice belongs to, and the voice's own entries
+// What the scripts share with the service about speaking a line (docs/voice-plan.md): the line in front of this
+// machine's card, the engine a served voice belongs to, and the voice's own entries
 // in `synth/`, which do the speaking, encoding and transcribing.
 
 // The voice's own policy values (`policy/voice.toml`).
 const policy = Bun.TOML.parse(readFileSync(join(releaseRoot, "policy/voice.toml"), "utf8")) as {
-  run_cap_ms: number;
-  run_ms_per_character: number;
   emotions: string[];
   engine: string;
 };
@@ -35,12 +33,6 @@ export function voiceEngine(folder: string): string {
   return String((Bun.TOML.parse(readFileSync(declaration, "utf8")) as { engine?: unknown }).engine ?? "");
 }
 
-// How long a line of these words may take before it is called off: the policy's run cap and its time for each
-// character (docs/voice-plan.md, 「What a long line takes of the card」).
-export function voiceCapMs(text: string): number {
-  return policy.run_cap_ms + [...text].length * policy.run_ms_per_character;
-}
-
 // The emotions a voice may be spoken with.
 export const voiceEmotions: readonly string[] = policy.emotions;
 
@@ -52,10 +44,6 @@ export async function readyVoiceLock(path: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true }).catch(async () => undefined);
   await Bun.write(path, "");
 }
-
-// How long a run stands in that line before it gives up its turn. Three ordinary lines ahead of you fit inside
-// this, and a wait longer than it means the card is wedged rather than busy.
-export const voiceQueueWaitMs = 5 * 60_000;
 
 // What flock exits with when a lock is somebody else's, kept clear of anything the process it guards exits with.
 export const voiceQueueExit = 75;
@@ -94,14 +82,6 @@ export function voiceMouthArguments(words: VoiceWords, out: string, voice: Voice
   };
 }
 
-// A line the card never took: another held it past the wait, and the synthesiser was never reached.
-export class VoiceTurnLost extends Error {
-  constructor(said: string) {
-    super(said);
-    this.name = "VoiceTurnLost";
-  }
-}
-
 // An entry's answer, as the call protocol has it.
 export interface ToolAnswer {
   content?: { type: string; text?: string }[];
@@ -109,12 +89,9 @@ export interface ToolAnswer {
   structuredContent?: unknown;
 }
 
-// How long an entry may take: the mouth and the transcriber stand in the card's line, the encoder does not.
-const ENTRY_TIMEOUT_MS: Record<string, number> = { mouth: 600_000, transcriber: 600_000, encoder: 60_000 };
-
-// One of the voice's entries run to its end, handed the call as the tool host hands it: the entry, its arguments,
-// and a record naming the data root, under whose voice folder the card's lock stands. Its answer is handed back
-// where it did the work; a refusal for want of a turn throws VoiceTurnLost, and any other failure an Error.
+// One of the voice's entries run to its end, however long that takes, handed the call as the tool host hands it: the
+// entry, its arguments, and a record naming the data root, under whose voice folder the card's lock stands. Its
+// answer is handed back where it did the work, and a failure throws an Error.
 export async function voiceEntry(entry: string, args: Record<string, unknown>): Promise<ToolAnswer> {
   const folder = synthFolder();
   const handed = {
@@ -129,7 +106,6 @@ export async function voiceEntry(entry: string, args: Record<string, unknown>): 
     stdin: new TextEncoder().encode(JSON.stringify(handed)),
     stdout: "pipe",
     stderr: "pipe",
-    timeout: ENTRY_TIMEOUT_MS[entry] ?? 60_000,
   });
   const [stdout, stderr, code] = await Promise.all([new Response(run.stdout).text(), new Response(run.stderr).text(), run.exited]);
   let answer: ToolAnswer;
@@ -143,8 +119,6 @@ export async function voiceEntry(entry: string, args: Record<string, unknown>): 
   if (answer.isError !== true) return answer;
 
   const said = (answer.content ?? []).map((piece) => piece.text ?? "").join("\n");
-
-  if (said.startsWith("no turn:")) throw new VoiceTurnLost(said);
 
   throw new Error(said.replace(/^ERROR: /, ""));
 }

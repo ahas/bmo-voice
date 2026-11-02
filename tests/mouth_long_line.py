@@ -69,7 +69,7 @@ class StoodInCard:
     holding = False
     resting = False
 
-    def take(self, wait: float, waited: float = 0.0) -> None:
+    def take(self, waited: float = 0.0) -> None:
         self.holding = True
 
     def keeps(self, next_waited: float) -> bool:
@@ -105,7 +105,7 @@ class LongLine(unittest.TestCase):
         (voice / "voice.toml").write_text(f'engine = "{fish.ENGINE}"\n', encoding="utf-8")
         (voice / "lora.pt").write_bytes(b"")
 
-        self.service = fish.Service(voices, voices, "a-token", StoodInCard(), card_wait=1.0)
+        self.service = fish.Service(voices, voices, "a-token", StoodInCard())
         self.service.mouth = StoodInMouth(voices)
         self.service.fits = lambda free: True
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), fish.handler(self.service))
@@ -128,7 +128,7 @@ class LongLine(unittest.TestCase):
             headers={"Authorization": "Bearer a-token", "Content-Type": "application/json"},
         )
 
-        with urllib.request.urlopen(asked, timeout=60) as answer:
+        with urllib.request.urlopen(asked) as answer:
             return answer.status, answer.read()
 
     def assert_one_sound_of_every_word(self, text: str, by_sentence: bool) -> None:

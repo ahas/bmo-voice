@@ -14,6 +14,8 @@ ExecStart=%h/.local/share/bmo-voice/deploy/bin/script-studio
 Environment=BMO_SCRIPT_PORT=3214
 Restart=on-failure
 RestartSec=3
+# The studio ends on the stop signal itself, so a stop waits for it and never kills it after a span.
+TimeoutStopSec=infinity
 
 [Install]
 WantedBy=default.target

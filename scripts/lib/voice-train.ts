@@ -64,7 +64,7 @@ export const probeCommand = [
   `printf 'server=%s\\n' "$(systemctl --user is-active ${SERVER_UNIT} 2>/dev/null)"`,
   `printf 'server_pid=%s\\n' "$(systemctl --user show -p MainPID --value ${SERVER_UNIT} 2>/dev/null)"`,
   `printf 'units=%s\\n' "$(systemctl --user list-units --plain --no-legend --state=active 'bmo-voice-*' 2>/dev/null | awk '{print $1}' | grep -vx '${SERVER_UNIT}' | paste -sd, -)"`,
-  `printf 'arbiter=%s\\n' "$(set -a; . "$HOME/${ARBITER_ENV}" 2>/dev/null; set +a; python3 -c 'import json, os, urllib.request; print(json.dumps(json.load(urllib.request.urlopen("http://127.0.0.1:%s/units" % os.environ.get("CARD_TURN_PORT", "${TURN_PORT}"), timeout=5))))' 2>/dev/null)"`,
+  `printf 'arbiter=%s\\n' "$(set -a; . "$HOME/${ARBITER_ENV}" 2>/dev/null; set +a; python3 -c 'import json, os, urllib.request; print(json.dumps(json.load(urllib.request.urlopen("http://127.0.0.1:%s/units" % os.environ.get("CARD_TURN_PORT", "${TURN_PORT}")))))' 2>/dev/null)"`,
 ].join("\n");
 
 export function parseProbe(text: string): CardProbe {
@@ -273,9 +273,6 @@ export interface StepEnd {
 
 const POLL_MS = 30_000;
 const WAIT_MS = 60_000;
-// How many looks in a row may fail to reach a node running a step before the runner gives up on it; the step runs on
-// regardless.
-const LOST_LOOKS = 60;
 
 function experimentDir(plan: Pick<StepPlan, "experiment">): string {
   return `${TRAIN_PLACE}/experiments/${plan.experiment}`;
@@ -384,11 +381,11 @@ async function start(plan: StepPlan, node: TrainNode, card: CardKind): Promise<v
   );
 }
 
-// The step's exit, once it has one; null where the unit ended without writing it.
+// The step's exit, once it has one; null where the unit ended without writing it. A node out of reach is looked at
+// again at the same pace, however long it stays so, since the step runs on there.
 async function waitOut(plan: StepPlan, node: TrainNode, deps: StepDeps): Promise<number | null> {
   const dir = `"$HOME"/${experimentDir(plan)}`;
   const look = `cat ${dir}/steps/${plan.step}.code 2>/dev/null; printf 'unit=%s\\n' "$(systemctl --user is-active ${stepUnit(plan.experiment, plan.step)})"`;
-  let lost = 0;
 
   for (;;) {
     await deps.sleep(deps.pollMs ?? POLL_MS);
@@ -397,12 +394,7 @@ async function waitOut(plan: StepPlan, node: TrainNode, deps: StepDeps): Promise
 
     try {
       text = (await node.shell.run(look)).stdout;
-      lost = 0;
-    } catch (error) {
-      lost += 1;
-      if (lost >= LOST_LOOKS) {
-        throw new NodeShellError(`${node.name} has not answered for ${lost} looks; the step may still be running there: ${String(error)}`);
-      }
+    } catch {
       continue;
     }
 

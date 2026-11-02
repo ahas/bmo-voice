@@ -49,8 +49,14 @@ pub async fn serve() -> Result<(), String> {
 
   eprintln!("voice-server: listening on {}", served.context.settings.listen);
 
+  let events = served.events.clone();
+
+  // Asked to stop, the service ends every event stream and then waits for the calls it is answering.
   axum::serve(listener, router(served))
-    .with_graceful_shutdown(asked_to_stop())
+    .with_graceful_shutdown(async move {
+      asked_to_stop().await;
+      events.stop();
+    })
     .await
     .map_err(|why| format!("the service stopped: {why}"))
 }

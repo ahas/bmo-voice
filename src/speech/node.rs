@@ -13,7 +13,6 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicI64, Ordering};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -49,11 +48,16 @@ const NOT_INSTALLED: i32 = 4;
 // The engine environment's interpreter under the node's place (`docs/voice-plan.md`, 「The environments」).
 const ENGINE_PYTHON: &str = "fish-speech/.venv/bin/python";
 
-// The longest one wait on the node lasts: a cut the clock asks for is heard within it.
+// The longest one wait on the node lasts, a piece well inside what a hub node lets one command run; the wait is
+// asked again until the asker lets go.
 const ASK_WAIT_SECONDS: i64 = 10;
 
-// How long a call is waited past its time without a clock, for the asker to write its end.
-const GRACE_MS: i64 = 5_000;
+// What every call sweeps from the node's call folder first: the files of a call whose asker has let go of its lock
+// and of which nothing has been written for an hour, and any file an hour old with no lock of its own beside it. A
+// call whose asker still holds its lock is never swept, however long it runs; a fresh call is passed over before its
+// lock is even tried, so the sweep never stands in the way of a call starting.
+const SWEEP: &str = r#"for l in "$d"/*.lock; do [ -e "$l" ] || continue; c="${l%.lock}"; [ -z "$(find "$d" -maxdepth 1 -name "${c##*/}.*" -mmin -60 -print -quit)" ] && flock -n "$l" true 2>/dev/null && rm -f "$c".*; done
+find "$d" -maxdepth 1 -type f ! -name "*.lock" -mmin +60 | while IFS= read -r f; do [ -e "${f%.*}.lock" ] || rm -f "$f"; done"#;
 
 // ssh reports its own failure to connect, log in or keep the channel as this; every other code is the command's.
 const SSH_FAILED: i32 = 255;
@@ -67,8 +71,6 @@ const SLICE_BYTES: u64 = 4 * 1024 * 1024;
 pub enum Failure {
   /// No connection: the node down, its hub or agent gone, the server not installed or not listening.
   Unreachable,
-  /// No answer within the call's wait.
-  Timeout,
   /// The server said no: a wrong token, a voice it does not hold.
   Refused,
   /// The server took the line and failed to speak it, or the node failed to start asking.
@@ -85,7 +87,6 @@ impl Failure {
   fn word(self) -> &'static str {
     match self {
       Self::Unreachable => "unreachable",
-      Self::Timeout => "timeout",
       Self::Refused => "refused",
       Self::Failed => "failed",
       Self::BadAnswer => "bad-answer",
@@ -363,25 +364,24 @@ fn on_node() -> String {
   format!(r#""$HOME/{PLACE}/{ENGINE_PYTHON}" "$HOME/{PLACE}/voice-fish.py""#)
 }
 
-// Starts the asker apart from the call and says where the call's files stand. The asker holds the call's lock
-// file from before this returns until it has written its end, so the moment it lets go is the moment its line is
-// there.
-fn start_command(id: &str, wait_seconds: i64) -> String {
+// Starts the asker apart from the call and says where the call's files stand. The call's lock is taken before any
+// of its files is written, and the asker holds it from before this returns until it has written its end, so the
+// moment it lets go is the moment its line is there.
+fn start_command(id: &str) -> String {
   let asker = on_node();
 
   [
     format!(r#"d="$HOME/{PLACE}/spoken""#),
     r#"mkdir -p "$d" && chmod 700 "$d" || exit 3"#.to_owned(),
-    r#"find "$d" -type f -mmin +60 ! -name "*.lock" -delete 2>/dev/null"#.to_owned(),
-    r#"find "$d" -type f -name "*.lock" -mmin +60 -exec flock -n {} rm -f {} \; 2>/dev/null"#.to_owned(),
+    SWEEP.to_owned(),
     format!(
       r#"[ -x "$HOME/{PLACE}/{ENGINE_PYTHON}" ] || {{ echo "the voice server is not installed on this node" >&2; exit {NOT_INSTALLED}; }}"#
     ),
     "umask 077".to_owned(),
-    format!(r#"cat > "$d/{id}.in" || exit 3"#),
     format!(r#"exec 9> "$d/{id}.lock" && flock -n 9 || exit 3"#),
+    format!(r#"cat > "$d/{id}.in" || exit 3"#),
     format!(
-      r#"setsid sh -c '{asker} --ask --port {PORT} --token-file "$HOME/{TOKEN}" --request "$1/$2.in" --wav "$1/$2.wav" --timeout "$3" > "$1/$2.out" 2> "$1/$2.err"; echo $? > "$1/$2.code"' sh "$d" {} {wait_seconds} < /dev/null > /dev/null 2>&1 &"#,
+      r#"setsid sh -c '{asker} --ask --port {PORT} --token-file "$HOME/{TOKEN}" --request "$1/$2.in" --wav "$1/$2.wav" > "$1/$2.out" 2> "$1/$2.err"; echo $? > "$1/$2.code"' sh "$d" {} < /dev/null > /dev/null 2>&1 &"#,
       shell_word(id)
     ),
     "exec 9>&-".to_owned(),
@@ -423,7 +423,6 @@ fn failure_of(asked: &Asked) -> NodeError {
 
   let Some(status) = asked.status else {
     let kind = match error.as_deref() {
-      Some(error) if error.starts_with("timeout") => Failure::Timeout,
       Some(error) if error.starts_with("token") => Failure::Refused,
       _ => Failure::Unreachable,
     };
@@ -431,8 +430,8 @@ fn failure_of(asked: &Asked) -> NodeError {
     return NodeError::new(kind, None, error);
   };
 
-  // The server's 503 is the node's card held by other work past the line's wait for it: the line did not get its
-  // turn, as when every node stays taken.
+  // The server's 503 is the node's card arbiter giving the voice no place on the card: the line did not get its
+  // turn there, and its demand is read again.
   let kind = match status {
     503 => Failure::Taken,
     500.. => Failure::Failed,
@@ -442,17 +441,10 @@ fn failure_of(asked: &Asked) -> NodeError {
   NodeError::new(kind, Some(status), error)
 }
 
-async fn ask_after(
-  shell: &NodeShell,
-  dir: &str,
-  id: &str,
-  given_up_at: &AtomicI64,
-  wait_seconds: i64,
-) -> Result<Asked, NodeError> {
+// Waits on the node, a piece at a time, until the asker has ended: what it wrote, or how it ended without it.
+async fn ask_after(shell: &NodeShell, dir: &str, id: &str, wait_seconds: i64) -> Result<Asked, NodeError> {
   loop {
-    let left = given_up_at.load(Ordering::SeqCst).saturating_sub(now_ms());
-    let seconds = wait_seconds.min((left + 999) / 1000).max(1);
-    let polled = shell.run(&await_command(dir, id, seconds), None).await.map_err(unreachable)?;
+    let polled = shell.run(&await_command(dir, id, wait_seconds), None).await.map_err(unreachable)?;
     let said = String::from_utf8_lossy(&polled.stdout).into_owned();
     let lines: Vec<&str> = said.split('\n').collect();
     let first = lines.first().map(|line| line.trim()).unwrap_or_default();
@@ -486,10 +478,6 @@ async fn ask_after(
         )),
       ));
     }
-
-    if given_up_at.load(Ordering::SeqCst) <= now_ms() {
-      return Err(NodeError::new(Failure::Timeout, None, None));
-    }
   }
 }
 
@@ -502,29 +490,13 @@ pub struct Spoken {
   pub checkpoint: String,
 }
 
-/// How one line is asked of a node: within `timeout_ms`, given up a grace past it, and the node's own asker
-/// waiting `node_wait_ms`.
-pub struct Call {
-  pub timeout_ms: i64,
-  pub node_wait_ms: Option<i64>,
-}
-
-// One line spoken on the node, as the wav it answered.
-async fn speak_on_node(
-  shell: &NodeShell,
-  request: &Value,
-  call: Call,
-) -> Result<(Vec<u8>, Spoken), NodeError> {
+// One line spoken on the node, as the wav it answered, waited for until the asker on the node has ended.
+async fn speak_on_node(shell: &NodeShell, request: &Value) -> Result<(Vec<u8>, Spoken), NodeError> {
   let id = format!("{:x}-{:08x}", now_ms(), rand::random::<u32>());
-  let wait_seconds = (call.node_wait_ms.unwrap_or(call.timeout_ms) + 999) / 1000;
-  let given_up_at = AtomicI64::new(now_ms() + call.timeout_ms + GRACE_MS);
   let dir = Mutex::new(None::<String>);
   let work = async {
     let input = request.to_string();
-    let begun = shell
-      .run(&start_command(&id, wait_seconds.max(1)), Some(input.as_bytes()))
-      .await
-      .map_err(unreachable)?;
+    let begun = shell.run(&start_command(&id), Some(input.as_bytes())).await.map_err(unreachable)?;
 
     if begun.code == Some(NOT_INSTALLED) {
       let said = begun.stderr.trim();
@@ -554,7 +526,7 @@ async fn speak_on_node(
 
     *dir.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(named.clone());
 
-    let asked = ask_after(shell, &named, &id, &given_up_at, ASK_WAIT_SECONDS).await?;
+    let asked = ask_after(shell, &named, &id, ASK_WAIT_SECONDS).await?;
 
     if asked.status != Some(200) {
       return Err(failure_of(&asked));
@@ -603,14 +575,11 @@ pub struct Health {
   pub card_taken: Option<bool>,
 }
 
-/// The node's server asked what it holds, with the asker's own short wait. A node that cannot be asked, or a
-/// server that does not answer, is out of reach.
+/// The node's server asked what it holds, its answer waited for. A node that cannot be asked, or a server that is
+/// not listening, is out of reach.
 pub async fn health(shell: &NodeShell) -> Result<Health, NodeError> {
   let ran = shell
-    .run(
-      &format!(r#"{} --ask --port {PORT} --token-file "$HOME/{TOKEN}" --timeout 5"#, on_node()),
-      None,
-    )
+    .run(&format!(r#"{} --ask --port {PORT} --token-file "$HOME/{TOKEN}""#, on_node()), None)
     .await
     .map_err(unreachable)?;
   let said = String::from_utf8_lossy(&ran.stdout).into_owned();
@@ -639,15 +608,14 @@ pub async fn health(shell: &NodeShell) -> Result<Health, NodeError> {
   }
 }
 
-/// One line to speak on the card the master grants: the voice, the words, where the sound goes, how long the
-/// speaking may take once the card is granted, and the demand asked for the card.
+/// One line to speak on the card the master grants: the voice, the words, where the sound goes, and the demand asked
+/// for the card.
 pub struct Speech<'a> {
   pub units: &'a Units,
   pub settings: &'a Settings,
   pub voice: &'a VoiceRow,
   pub text: &'a str,
   pub out: &'a Path,
-  pub cap_ms: i64,
   pub ask: &'a Ask,
 }
 
@@ -669,9 +637,9 @@ pub struct Heard {
 
 /// The line spoken on the node of the card the master grants and encoded here into `out`, with nothing laid over
 /// the voice (docs/voice-plan.md, 「Which node speaks a line」). The card is waited for however long its grant takes,
-/// each stage told as it changes; where the node's card stayed held by other work past the server's own wait, the
-/// demand is read again until its card is granted again and the line is asked once more. The demand is given back
-/// however the line ends.
+/// each stage told as it changes, and the speaking for however long the node takes; where the node's card arbiter
+/// gives the voice no place on the card, the demand is read again until its card is granted again and the line is
+/// asked once more. The demand is given back however the line ends.
 pub async fn speak_on_card(
   speech: Speech<'_>,
   told: &mut (dyn FnMut(Stage<'_>) + Send),
@@ -690,12 +658,8 @@ pub async fn speak_on_card(
 
     told(Stage::Speaking);
 
-    let call = Call {
-      timeout_ms: speech.cap_ms,
-      node_wait_ms: None,
-    };
     let spoken = match node_shell(speech.units, held.node.clone()).await {
-      Ok(shell) => speak_on_node(&shell, &request, call).await,
+      Ok(shell) => speak_on_node(&shell, &request).await,
       Err(error) => Err(error),
     };
 

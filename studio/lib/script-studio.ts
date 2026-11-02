@@ -35,9 +35,10 @@ function fault(code: keyof typeof FAULTS): ReviewFault {
 }
 
 // The review database has several writers, the server and the import script, so a writer waits for the lock rather
-// than failing, and the write-ahead log is kept from growing without bound.
+// than failing, as long as SQLite lets a wait for its lock be, and the write-ahead log is kept from growing without
+// bound.
 export function shareDatabase(db: Database): void {
-  db.run("PRAGMA busy_timeout = 10000");
+  db.run("PRAGMA busy_timeout = 2147483647");
   db.run(`PRAGMA journal_size_limit = ${32 * 1024 * 1024}`);
 }
 

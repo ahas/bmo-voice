@@ -1,11 +1,5 @@
 # The voice's own policy values (docs/boundary-api.md, 「The voice's policy」).
 
-# How long one line may take to speak, in milliseconds, from the grant of its card to its sound: the first for the
-# card's lock, the load and the first piece, and the second for every character of its spoken words
-# (docs/voice-plan.md, 「What a long line takes of the card」).
-run_cap_ms = 600000
-run_ms_per_character = 400
-
 # The emotions a voice may be asked to speak with, one for each face a listener draws. A synthesis naming
 # any other is refused.
 emotions = ["기본", "기쁨", "슬픔", "놀람", "화남", "졸림", "폭소", "걱정", "아픔", "안간힘"]

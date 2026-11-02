@@ -4,7 +4,7 @@
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use bmo_voice::client::VoiceClient;
 use bmo_voice::settings::Settings;
@@ -29,9 +29,6 @@ enum Word {
     files: Vec<String>,
     #[arg(long, default_value = "ko")]
     language: String,
-    /// The longest wait for the transcription to end, in seconds.
-    #[arg(long, default_value_t = 600)]
-    wait: i64,
     #[arg(long)]
     json: bool,
   },
@@ -64,9 +61,6 @@ enum Word {
     /// Whether a listener plays it by itself; the service's own answer where absent.
     #[arg(long)]
     plays: Option<bool>,
-    /// The longest wait for the briefing to be spoken, in seconds.
-    #[arg(long, default_value_t = 600)]
-    wait: i64,
     #[arg(long)]
     json: bool,
   },
@@ -97,9 +91,6 @@ enum Word {
   },
 }
 
-// How long the health is waited for before it counts as no answer.
-const HEALTH_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
-
 // How often a transcription or a briefing still going is looked at again.
 const LOOK_AGAIN: Duration = Duration::from_millis(500);
 
@@ -110,12 +101,11 @@ fn connect(settings: &Settings) -> Result<VoiceClient, String> {
   VoiceClient::new(&settings.address, token).map_err(|why| why.to_string())
 }
 
-// `bmo listen`: the files taken down in one language, waiting for the transcription to end.
+// `bmo listen`: the files taken down in one language, waiting for the transcription to end however long it takes.
 async fn listen(
   settings: &Settings,
   files: Vec<String>,
   language: String,
-  wait: i64,
   json: bool,
 ) -> Result<(), String> {
   let client = connect(settings)?;
@@ -123,12 +113,7 @@ async fn listen(
     .create_transcription(&NewTranscription { language, files })
     .await
     .map_err(|why| why.to_string())?;
-  let deadline = Instant::now() + Duration::from_secs(wait.max(1).unsigned_abs());
-
   while held.state == "waiting" || held.state == "running" {
-    if Instant::now() >= deadline {
-      return Err(format!("transcription {} did not end within {wait}s", held.id));
-    }
     tokio::time::sleep(LOOK_AGAIN).await;
     held = client.transcription(held.id).await.map_err(|why| why.to_string())?;
   }
@@ -152,7 +137,7 @@ struct Words {
   spoken: Option<String>,
 }
 
-// `bmo brief`: a line spoken for a room, waiting for the engine to speak it.
+// `bmo brief`: a line spoken for a room, waiting for the engine to speak it however long it takes.
 #[allow(clippy::too_many_arguments)]
 async fn brief(
   settings: &Settings,
@@ -164,7 +149,6 @@ async fn brief(
   emotion: Option<String>,
   message: Option<i64>,
   plays: Option<bool>,
-  wait: i64,
   json: bool,
 ) -> Result<(), String> {
   let Some(kind) = BriefingKind::parse(&kind) else {
@@ -187,12 +171,7 @@ async fn brief(
     })
     .await
     .map_err(|why| why.to_string())?;
-  let deadline = Instant::now() + Duration::from_secs(wait.max(1).unsigned_abs());
-
   while matches!(held.state, SynthesisState::Waiting | SynthesisState::Speaking) {
-    if Instant::now() >= deadline {
-      return Err(format!("briefing {} was not spoken within {wait}s", held.id));
-    }
     tokio::time::sleep(LOOK_AGAIN).await;
     held = client.briefing(held.id).await.map_err(|why| why.to_string())?;
   }
@@ -273,9 +252,8 @@ async fn main() -> ExitCode {
     Word::Listen {
       files,
       language,
-      wait,
       json,
-    } => listen(&settings, files, language, wait, json).await,
+    } => listen(&settings, files, language, json).await,
     Word::Brief {
       chat,
       voice,
@@ -286,21 +264,13 @@ async fn main() -> ExitCode {
       emotion,
       message,
       plays,
-      wait,
       json,
     } => {
       let words = Words { text, spoken };
 
-      brief(&settings, chat, voice, words, kind, title, emotion, message, plays, wait, json).await
+      brief(&settings, chat, voice, words, kind, title, emotion, message, plays, json).await
     }
-    Word::Health => {
-      let waited = tokio::time::timeout(HEALTH_WAIT, health(&settings)).await;
-
-      match waited {
-        Ok(answer) => answer,
-        Err(_) => Err(format!("{} did not answer within {}s", settings.address, HEALTH_WAIT.as_secs())),
-      }
-    }
+    Word::Health => health(&settings).await,
     Word::Mcp { address, token } => {
       let address = address.unwrap_or_else(|| settings.address.clone());
       let token = match token {

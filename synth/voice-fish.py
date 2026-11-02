@@ -30,9 +30,9 @@ usage: <engine venv>/bin/python synth/voice-fish.py --text '<words>' --out <path
        [--base <s2-pro folder>] [--style '<instruction>'] [--encoder-python <path>] [--wav <path.wav>] [--seed 0]
        [--sentences]
        <engine venv>/bin/python synth/voice-fish.py --serve --voices <dir> --base <s2-pro folder> --token-file <path>
-       [--host 127.0.0.1] [--port 7432] [--gpu-lock ~/.gpu.lock] [--gpu-wait 60]
+       [--host 127.0.0.1] [--port 7432] [--gpu-lock ~/.gpu.lock]
        <engine venv>/bin/python synth/voice-fish.py --ask --token-file <path> [--port 7432]
-       [--request <request.json> --wav <path.wav>] [--timeout 600]
+       [--request <request.json> --wav <path.wav>]
 """
 
 import argparse
@@ -44,7 +44,6 @@ import json
 import os
 import random
 import re
-import socket
 import subprocess
 import sys
 import tempfile
@@ -142,10 +141,6 @@ UP_BYTES = int(10.7 * 1024**3)
 # as long as its work is there, so the services take the card in turn rather than all at once.
 GPU_LOCK = "~/.gpu.lock"
 
-# How long a line waits for other work to let go of the card, in seconds; work that holds it longer is told to the
-# caller as the card taken.
-GPU_WAIT = 60.0
-
 
 def card_free_bytes() -> int | None:
     """The card's free memory as the driver counts it, every process on it included, or None where
@@ -154,10 +149,10 @@ def card_free_bytes() -> int | None:
     try:
         ran = subprocess.run(
             ["nvidia-smi", "--id=0", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True, text=True,
         )
         return int(ran.stdout.strip().splitlines()[0]) * 1024 * 1024 if ran.returncode == 0 else None
-    except (OSError, subprocess.TimeoutExpired, ValueError, IndexError):
+    except (OSError, ValueError, IndexError):
         return None
 
 
@@ -874,11 +869,10 @@ class Service:
     waiting the turn rests with the model on the card, until the arbiter says another wants the card
     (watch_card), and asks to come back once it has given way (docs/card.md, 「Resting」)."""
 
-    def __init__(self, voices: Path, base: Path, token: str, card: "Card", card_wait: float, room_every_s: float = 0.5) -> None:
+    def __init__(self, voices: Path, base: Path, token: str, card: "Card", room_every_s: float = 0.5) -> None:
         self.voices = voices
         self.token = token
         self.card = card
-        self.card_wait = card_wait
         # How often a card just taken is asked whether its memory takes the model yet.
         self.room_every_s = room_every_s
         self.mouth = Mouth(base)
@@ -921,15 +915,12 @@ class Service:
         doubt."""
         return free is None or free >= (UP_BYTES if self.mouth.model is not None else LOAD_BYTES)
 
-    def room(self, until: float) -> bool:
-        """The card just taken, waited on until its memory takes the model, `until` at the latest. A turn
+    def room(self) -> None:
+        """The card just taken, waited on until its memory takes the model, however long that takes. A turn
         is handed on the moment the holder before gives it back, and a holder can give it back while its
         process still stands on the card, so the turn alone never says the memory is free."""
         while not self.fits(card_free_bytes()):
-            if time.monotonic() >= until:
-                return False
             time.sleep(self.room_every_s)
-        return True
 
     def speak(self, request: dict) -> tuple[bytes, dict]:
         checkpoint = inside(self.voices, request.get("checkpoint"))
@@ -961,12 +952,11 @@ class Service:
             if self.card.resting and not self.card.resume(time.monotonic() - arrived):
                 # Another stands first for the card: the rest ends in giving way, and the line asks in line.
                 self.let_go()
-            fresh, until = not self.card.holding, time.monotonic() + self.card_wait
-            self.card.take(self.card_wait, time.monotonic() - arrived)
+            fresh = not self.card.holding
+            self.card.take(time.monotonic() - arrived)
 
-            if fresh and not self.room(until):
-                self.let_go()
-                raise CardTaken(f"the card's memory stayed taken for the whole of {self.card_wait:.0f}s")
+            if fresh:
+                self.room()
 
             try:
                 # A LoRA swap happens in the host copies, before the model goes up, so the next line is
@@ -1103,7 +1093,7 @@ class Service:
 
 
 class CardTaken(Exception):
-    """Other work held the node's shared GPU lock for the whole of a line's wait."""
+    """The node's card arbiter gives the voice no place on the card."""
 
 
 def card_turn():
@@ -1162,13 +1152,13 @@ class Card:
     def holding(self) -> bool:
         return self.handle is not None
 
-    def take(self, wait: float, waited: float = 0.0) -> None:
-        """The lock taken once other work lets go of it within `wait` seconds, for a line that has waited
-        `waited` already, and kept until `let_go`; taking it again while held does nothing.
+    def take(self, waited: float = 0.0) -> None:
+        """The lock taken once other work lets go of it, however long that takes, for a line that has
+        waited `waited` already, and kept until `let_go`; taking it again while held does nothing.
 
         Where the node keeps a hold queue, the line waits its turn in it, the arbiter holding its answer
         open until the card is handed on, and stands there by the line's arrival. Elsewhere the lock is
-        asked for without blocking, again and again, because a blocking flock cannot be given a deadline.
+        waited for as flock waits, until it is let go.
         """
         if self.handle is not None:
             return
@@ -1182,27 +1172,21 @@ class Card:
             from turn import hold
 
             try:
-                handle = hold(self.turn, self.path, until=time.monotonic() + wait, waited_s=waited)
+                handle = hold(self.turn, self.path, waited_s=waited)
             except PermissionError as refused:
                 raise CardTaken(str(refused)) from None
             if handle is None:
-                raise CardTaken(f"the card was not the voice's turn within {wait:.0f}s")
+                raise CardTaken("the turn client answered without the voice's turn")
             self.handle = handle
             return
 
         handle = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o644)
-        deadline = time.monotonic() + wait
 
-        while True:
-            try:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except BlockingIOError:
-                if time.monotonic() >= deadline:
-                    os.close(handle)
-                    raise CardTaken(f"other work held the card for the whole of {wait:.0f}s") from None
-
-                time.sleep(0.2)
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+        except BaseException:
+            os.close(handle)
+            raise
 
         self.handle = handle
 
@@ -1377,7 +1361,7 @@ def serve(args: argparse.Namespace) -> int:
         return 1
 
     card = Card(Path(args.gpu_lock).expanduser(), card_turn())
-    service = Service(Path(args.voices), Path(args.base).expanduser(), token, card, args.gpu_wait)
+    service = Service(Path(args.voices), Path(args.base).expanduser(), token, card)
     server = ThreadingHTTPServer((args.host, args.port), handler(service))
     threading.Thread(target=service.watch_card, daemon=True).start()
     print(f"voice-fish: serving on {args.host}:{args.port} · voices {args.voices} · card lock {card.path}", file=sys.stderr, flush=True)
@@ -1391,7 +1375,7 @@ def ask(args: argparse.Namespace) -> int:
 
     Every way the call can end is printed rather than raised, so the caller on the other side of the
     node's shell reads what happened from that line alone: a status where the server answered,
-    `unreachable`, `timeout` or `token` where it never did.
+    `unreachable` or `token` where it never did. The answer is waited for however long the server takes.
     """
     import urllib.error
     import urllib.request
@@ -1419,7 +1403,7 @@ def ask(args: argparse.Namespace) -> int:
         headers["Content-Type"] = "application/json"
 
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, data=body, headers=headers), timeout=args.timeout) as answer:
+        with urllib.request.urlopen(urllib.request.Request(url, data=body, headers=headers)) as answer:
             said["status"] = answer.status
             data = answer.read()
 
@@ -1438,11 +1422,8 @@ def ask(args: argparse.Namespace) -> int:
             said["error"] = str(json.loads(refusal.read()).get("error", ""))[:MOST_ERROR] or None
         except ValueError:
             said["error"] = None
-    except (TimeoutError, socket.timeout):
-        said["error"] = "timeout: the server did not answer in time"
     except urllib.error.URLError as unreached:
-        waited = isinstance(unreached.reason, (TimeoutError, socket.timeout))
-        said["error"] = "timeout: the server did not answer in time" if waited else f"unreachable: {unreached.reason}"
+        said["error"] = f"unreachable: {unreached.reason}"
     except ConnectionError as dropped:
         said["error"] = f"unreachable: {type(dropped).__name__}"
 
@@ -1506,10 +1487,8 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--ask", action="store_true")
     parser.add_argument("--request")
-    parser.add_argument("--timeout", type=float, default=600.0)
     parser.add_argument("--port", type=int, default=7432)
     parser.add_argument("--gpu-lock", default=GPU_LOCK)
-    parser.add_argument("--gpu-wait", type=float, default=GPU_WAIT)
     args = parser.parse_args()
 
     if args.serve:

@@ -143,13 +143,14 @@ pub struct Records {
 
 impl Records {
   /// The review database, made where none stands. It has several writers, the server and the import script, so a
-  /// writer waits for the lock rather than failing, and the write-ahead log is kept from growing without bound.
+  /// writer waits for the lock rather than failing, as long as SQLite lets a wait for its lock be, and the
+  /// write-ahead log is kept from growing without bound.
   pub async fn open(root: Root) -> Result<Records, sqlx::Error> {
     let options = SqliteConnectOptions::new()
       .filename(root.path.join("studio.db"))
       .create_if_missing(true)
       .journal_mode(SqliteJournalMode::Wal)
-      .busy_timeout(std::time::Duration::from_secs(10))
+      .busy_timeout(std::time::Duration::from_millis(i32::MAX.unsigned_abs().into()))
       .pragma("journal_size_limit", (32 * 1024 * 1024).to_string());
     let db = SqlitePoolOptions::new().max_connections(4).connect_with(options).await?;
 

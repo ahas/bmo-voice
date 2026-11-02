@@ -8,7 +8,6 @@ language = "rust"
 build = 'cargo build --release -p voice-servers-tool && cp "$BMO_CARGO_TARGET/release/voice-servers-tool" "$BMO_TOOL_OUT/"'
 check = 'bmo-testbed cargo test -p voice-servers-tool'
 run = ["voice-servers-tool"]
-timeout = 60
 
 [[entry]]
 namespace = "voice"

@@ -61,7 +61,8 @@ asking `Accept: application/json`.
   The last 1,000 events are kept; a resume from before them is answered 410 `gone`, and the reader reads
   the collections again.
 - **A page** is read with `after` and `limit`.
-- **A comment line every fifteen seconds** keeps a stream open.
+- **A comment line every fifteen seconds** keeps a stream open. Every stream ends as the service is asked to stop,
+  so a stop waits on no reader.
 
 ## Voices
 
@@ -105,8 +106,9 @@ asking `Accept: application/json`.
   that is not served is answered 422 `retired-voice`; an `emotion` outside the voice's is answered 422
   `unknown-emotion`. `style` and `seed` are laid over the voice's row for this one synthesis.
 - **A line taken in is spoken whatever its length.** Its voice server is handed the spoken words whole and speaks
-  them piece by piece into one sound (`docs/voice-plan.md`, 「What a long line takes of the card」), and the time it
-  is given grows with them (「The policy」); no line within the bounds above is refused or cut off for its length.
+  them piece by piece into one sound (`docs/voice-plan.md`, 「What a long line takes of the card」); no line within
+  the bounds above is refused or cut off for its length, and no clock ends its speaking: it ends when the voice
+  server answers with its sound or with a failure.
 - **The sound** is answered only once the state is `done`; before that, and where a failed synthesis left
   none, 404 `not-found`. A sound is kept under the data root, never in the database.
 - **A line a stopped process left is taken up by the next.** As the service starts, every synthesis still
@@ -313,9 +315,9 @@ It asks no model, takes no card turn and keeps nothing. A language other than `k
   synthesis stays `waiting`, its `waitingOn` saying why. A master that answers `404` for the demand, one
   restarted, is asked a new one. `voice` placed on no node (`no-place`) and any other refusal of the master's
   fail the synthesis at once, the demand it held given back.
-- **A card held from under the line:** where the node's server answers that other work held its card past its
-  own wait (503), the demand is read again until its card is granted again, and the line is asked of that
-  card's node once more; nothing bounds that either.
+- **A card the node's arbiter keeps from the line:** where the node's server answers that its card arbiter gives the
+  voice no place on the card (503), the demand is read again until its card is granted again, and the line is asked of
+  that card's node once more; nothing bounds that either.
 - **Every demand the engine holds stands in its ledger** (`docs/store.md`, 「The folder」) from its asking until
   the master answers its give-back, `204` or `404`, or answers `404` for it by its id; a give-back the master
   refuses leaves it there.
@@ -395,7 +397,8 @@ and 「sessions」), for the spoken words a synthesis is derived (「How the eng
   nodes stand in the voice node list and whether their servers answer, since the tool host runs it outside every
   harness. It is the folder `tools/servers/`, the crate `voice-servers-tool`, built into the release and placed
   before the flip for this service, with the capability its entry asks for allowed (`docs/deploy.md`).
-- **Its one entry** is `voice/servers`, asking for `room.tools`, read-only and taking no arguments. The executable
+- **Its one entry** is `voice/servers`, asking for `room.tools`, read-only and taking no arguments; the tool host
+  keeps no clock on a call, which ends when the engine has answered. The executable
   speaks the tool host's call protocol 1 itself: one request on standard input, one tool result of text on
   standard output.
 - **What it answers:** every page of `GET /voice-servers`, called through the engine's own client, as one line a
@@ -421,19 +424,17 @@ declares the nouns `listen` and `brief` when asked `nouns`, so the platform hand
 | Word | What it does |
 |---|---|
 | `nouns` | answers `listen` and `brief`, one a line |
-| `listen <file>…` | asks `POST /transcriptions` for the files in `--language` and waits, up to `--wait` seconds, for it to end; prints what was heard, or the transcription as JSON with `--json` |
-| `brief` | asks `POST /briefings` for a line spoken in `--voice` for the room `--chat`, of kind `--kind` (`summary` or `full`), with `--text`, and optional `--spoken`, `--title`, `--emotion`, `--message` and `--plays`; waits, up to `--wait` seconds, for the engine to speak it, then prints its id, or the briefing as JSON with `--json` |
-| `health` | asks the service the settings name for `GET /health`, with its token, and exits 0 where it answers ready, 1 otherwise |
+| `listen <file>…` | asks `POST /transcriptions` for the files in `--language` and waits for it to end, however long it takes; prints what was heard, or the transcription as JSON with `--json` |
+| `brief` | asks `POST /briefings` for a line spoken in `--voice` for the room `--chat`, of kind `--kind` (`summary` or `full`), with `--text`, and optional `--spoken`, `--title`, `--emotion`, `--message` and `--plays`; waits for the engine to speak it, however long it takes, then prints its id, or the briefing as JSON with `--json` |
+| `health` | asks the service the settings name for `GET /health`, with its token, and exits 0 where it answers ready, 1 where it answers otherwise or nothing listens; it waits for the answer however long it takes |
 | `mcp` | runs the harness plugin's MCP server; `--address` and `--token` name the engine |
 | `openapi` | prints `docs/openapi.json` as the repository keeps it |
 
 ## The policy
 
-`policy/voice.toml` holds the engine's own policy values, read once at start: `run_cap_ms` and
-`run_ms_per_character`, which together say how long one line may take to speak once its card is granted (the first,
-and the second for each character of its spoken words), `emotions`, the emotions a voice may be asked to speak
-with, and `engine`, the engine every served voice belongs to (`fish-s2-pro`). No route serves them; the voices list
-them, and a synthesis outside them is refused.
+`policy/voice.toml` holds the engine's own policy values, read once at start: `emotions`, the emotions a voice may be
+asked to speak with, and `engine`, the engine every served voice belongs to (`fish-s2-pro`). No route serves them; the
+voices list them, and a synthesis outside them is refused.
 
 ## Settings
 

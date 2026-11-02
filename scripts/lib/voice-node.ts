@@ -23,8 +23,6 @@ import type { VoiceRow } from "./store";
 export type VoiceNodeFailure =
   // No connection: the node down, its hub or agent gone, the server not installed or not listening.
   | "unreachable"
-  // No answer within the call's wait.
-  | "timeout"
   // The server said no: a wrong token, a voice it does not hold.
   | "refused"
   // The server took the line and failed to speak it, or the node failed to start asking.
@@ -221,14 +219,9 @@ export interface VoiceNodeSpoken {
 
 export interface VoiceNodeDeps {
   shell: NodeShell;
-  timeoutMs: number;
-  // How long the node's own asker may wait for its answer, which it cannot be told to lengthen once started: the
-  // call's time where none is given.
-  nodeWaitMs?: number;
-  // The longest one wait on the node for the asker to end lasts, well inside what a hub node lets a command run, and
-  // how long past the call's time it is still waited for, to write its end.
+  // The longest one wait on the node for the asker to end lasts, well inside what a hub node lets a command run; the
+  // wait is asked again until the asker lets go.
   askWaitSeconds?: number;
-  graceMs?: number;
 }
 
 // The start of a call's command exits with this where the server is not installed on the node.
@@ -247,21 +240,23 @@ interface Asked {
 }
 
 // Starts the asker apart from the call and says where the call's files stand. What the command reads on its
-// standing input is the request, written where only the account can read it. The asker holds the call's lock file
-// from before this returns until it has written its end, so the moment it lets go is the moment its line is there.
-function startCommand(id: string, waitSeconds: number): string {
+// standing input is the request, written where only the account can read it. The call's lock is taken before any of
+// its files is written, and the asker holds it from before this returns until it has written its end, so the moment
+// it lets go is the moment its line is there.
+function startCommand(id: string): string {
   return [
     `d="$HOME/${VOICE_PLACE}/spoken"`,
     `mkdir -p "$d" && chmod 700 "$d" || exit 3`,
-    // What a call that never finished left behind.
-    `find "$d" -type f -mmin +60 ! -name "*.lock" -delete 2>/dev/null`,
-    // A lock file goes only once nobody holds it, so a call still running keeps its own.
-    `find "$d" -type f -name "*.lock" -mmin +60 -exec flock -n {} rm -f {} \\; 2>/dev/null`,
+    // What a call left behind once its asker let go and nothing of it was written for an hour, and any hour-old file
+    // with no lock beside it. A call whose asker still holds its lock is never swept, however long it runs, and a
+    // fresh call is passed over before its lock is even tried.
+    `for l in "$d"/*.lock; do [ -e "$l" ] || continue; c="\${l%.lock}"; [ -z "$(find "$d" -maxdepth 1 -name "\${c##*/}.*" -mmin -60 -print -quit)" ] && flock -n "$l" true 2>/dev/null && rm -f "$c".*; done`,
+    `find "$d" -maxdepth 1 -type f ! -name "*.lock" -mmin +60 | while IFS= read -r f; do [ -e "\${f%.*}.lock" ] || rm -f "$f"; done`,
     `[ -x "$HOME/${VOICE_PLACE}/.venv/bin/python" ] || { echo "the voice server is not installed on this node" >&2; exit ${NOT_INSTALLED}; }`,
     `umask 077`,
-    `cat > "$d/${id}.in" || exit 3`,
     `exec 9> "$d/${id}.lock" && flock -n 9 || exit 3`,
-    `setsid sh -c '${voiceOnNode} --ask --port ${VOICE_PORT} --token-file "$HOME/${VOICE_TOKEN}" --request "$1/$2.in" --wav "$1/$2.wav" --timeout "$3" > "$1/$2.out" 2> "$1/$2.err"; echo $? > "$1/$2.code"' sh "$d" ${shellWord(id)} ${waitSeconds} < /dev/null > /dev/null 2>&1 &`,
+    `cat > "$d/${id}.in" || exit 3`,
+    `setsid sh -c '${voiceOnNode} --ask --port ${VOICE_PORT} --token-file "$HOME/${VOICE_TOKEN}" --request "$1/$2.in" --wav "$1/$2.wav" > "$1/$2.out" 2> "$1/$2.err"; echo $? > "$1/$2.code"' sh "$d" ${shellWord(id)} < /dev/null > /dev/null 2>&1 &`,
     // The asker keeps the lock on its own copy; this shell's goes now, whether or not it ends with the call.
     `exec 9>&-`,
     `printf '%s\\n' "$d"`,
@@ -286,23 +281,22 @@ function failureOf(asked: Asked): VoiceNodeError {
   const error = asked.error ?? null;
 
   if (asked.status === null) {
-    if (error?.startsWith("timeout") === true) return new VoiceNodeError("timeout", null, error);
     if (error?.startsWith("token") === true) return new VoiceNodeError("refused", null, error);
 
     return new VoiceNodeError("unreachable", null, error);
   }
 
-  // The server's 503 is the node's card held by other work past the line's wait for it: the line did not get its
-  // turn, as when every node stays taken.
+  // The server's 503 is the node's card arbiter giving the voice no place on the card: the line did not get its turn
+  // there.
   if (asked.status === 503) return new VoiceNodeError("taken", asked.status, error);
 
   return new VoiceNodeError(asked.status >= 500 ? "failed" : "refused", asked.status, error);
 }
 
-async function askAfter(shell: NodeShell, dir: string, id: string, leftMs: () => number, waitSeconds: number): Promise<Asked> {
+// Waits on the node, a piece at a time, until the asker has ended: what it wrote, or how it ended without it.
+async function askAfter(shell: NodeShell, dir: string, id: string, waitSeconds: number): Promise<Asked> {
   for (;;) {
-    const seconds = Math.max(1, Math.min(waitSeconds, Math.ceil(leftMs() / 1000)));
-    const polled = await shell.run(awaitCommand(dir, id, seconds));
+    const polled = await shell.run(awaitCommand(dir, id, waitSeconds));
     const lines = polled.stdout.split("\n");
     const done = /^done (\d+)$/.exec(lines[0]?.trim() ?? "");
 
@@ -325,24 +319,17 @@ async function askAfter(shell: NodeShell, dir: string, id: string, leftMs: () =>
 
       throw new VoiceNodeError("failed", null, `the asker on the node ended ${done[1]} without an answer${said === "" ? "" : `: ${said}`}`);
     }
-
-    if (leftMs() <= 0) {
-      throw new VoiceNodeError("timeout");
-    }
   }
 }
 
-// One line spoken on the node, as the wav it answered. The call is given up a grace past its time, for the asker to
-// write its end.
+// One line spoken on the node, as the wav it answered, waited for until the asker on the node has ended.
 export async function speakOnNode(request: VoiceNodeRequest, deps: VoiceNodeDeps): Promise<VoiceNodeSpoken> {
   const { shell } = deps;
   const id = `${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
-  const waitSeconds = Math.max(1, Math.ceil((deps.nodeWaitMs ?? deps.timeoutMs) / 1000));
-  const givenUpAt = Date.now() + deps.timeoutMs + (deps.graceMs ?? 5_000);
   let dir: string | null = null;
 
   try {
-    const started = await shell.run(startCommand(id, waitSeconds), JSON.stringify(request));
+    const started = await shell.run(startCommand(id), JSON.stringify(request));
 
     if (started.code === NOT_INSTALLED) {
       throw new VoiceNodeError("unreachable", null, started.stderr.trim() || "the voice server is not installed on this node");
@@ -354,7 +341,7 @@ export async function speakOnNode(request: VoiceNodeRequest, deps: VoiceNodeDeps
       throw new VoiceNodeError("failed", null, `the node did not start asking: ${started.stderr.trim().slice(-300)}`);
     }
 
-    const asked = await askAfter(shell, dir, id, () => givenUpAt - Date.now(), deps.askWaitSeconds ?? ASK_WAIT_SECONDS);
+    const asked = await askAfter(shell, dir, id, deps.askWaitSeconds ?? ASK_WAIT_SECONDS);
 
     if (asked.status !== 200) {
       throw failureOf(asked);
@@ -392,8 +379,6 @@ export interface NodeSpeech {
   voice: VoiceRow;
   text: string;
   out: string;
-  timeoutMs: number;
-  nodeWaitMs?: number;
   shell: NodeShell;
   askWaitSeconds?: number;
 }
@@ -404,8 +389,6 @@ export interface NodeSpeech {
 export async function speakThroughNode(speech: NodeSpeech): Promise<VoiceNodeSpoken> {
   const spoken = await speakOnNode(voiceNodeRequest(speech.voice, speech.text), {
     shell: speech.shell,
-    timeoutMs: speech.timeoutMs,
-    nodeWaitMs: speech.nodeWaitMs,
     ...(speech.askWaitSeconds === undefined ? {} : { askWaitSeconds: speech.askWaitSeconds }),
   });
   const wav = `${speech.out}.node.wav`;
@@ -441,13 +424,13 @@ export interface VoiceNodeHealth {
   [more: string]: unknown;
 }
 
-// The node's server asked what it holds, through the node's shell, with the asker's own short wait. A node that
-// cannot be asked, or a server that does not answer, throws as out of reach.
-export async function voiceNodeHealth(shell: NodeShell, waitSeconds = 5): Promise<VoiceNodeHealth> {
+// The node's server asked what it holds, through the node's shell, its answer waited for. A node that cannot be
+// asked, or a server that is not listening, throws as out of reach.
+export async function voiceNodeHealth(shell: NodeShell): Promise<VoiceNodeHealth> {
   let ran;
 
   try {
-    ran = await shell.run(`${voiceOnNode} --ask --port ${VOICE_PORT} --token-file "$HOME/${VOICE_TOKEN}" --timeout ${waitSeconds}`);
+    ran = await shell.run(`${voiceOnNode} --ask --port ${VOICE_PORT} --token-file "$HOME/${VOICE_TOKEN}"`);
   } catch (error) {
     throw new VoiceNodeError("unreachable", null, error instanceof Error ? error.message : String(error));
   }
@@ -520,8 +503,6 @@ export interface VoiceNodeChoice {
   // The checkpoint the line is spoken in, by its name under the voices root: a node that holds it loaded is taken
   // first.
   checkpoint: string;
-  // How long every node may stay taken before the run gives up its turn.
-  waitMs: number;
   pollMs?: number;
   shellOf(name: string): Promise<NodeShell>;
 }
@@ -530,7 +511,8 @@ export interface VoiceNodeChoice {
 // free one is not held by another run here, answers its health without speaking and has room on its card; among
 // the free, a warm one goes first and the list's order decides the rest. With none free, a node lacking room only
 // because other work holds its card's lock is taken the same way, so the line waits its turn in that node's own
-// line. Every node out of reach throws at once; every node taken or busy is asked again until the wait runs out.
+// line. Every node out of reach throws at once; while every node is taken or busy they are asked again until one is
+// free, however long that takes.
 export async function takeVoiceNode(choice: VoiceNodeChoice): Promise<VoiceNodeTaken> {
   const started = Date.now();
   const warm = choice.checkpoint.split("/").filter(Boolean).pop() ?? "";
@@ -579,10 +561,6 @@ export async function takeVoiceNode(choice: VoiceNodeChoice): Promise<VoiceNodeT
       throw new VoiceNodeError("unreachable", null, faults === "" ? "the voice node list is empty" : faults);
     }
 
-    if (Date.now() - started >= choice.waitMs) {
-      throw new VoiceNodeError("taken", null, `every voice node stayed taken for ${Math.round(choice.waitMs / 1000)}s`);
-    }
-
     await Bun.sleep(choice.pollMs ?? 2_000);
   }
 }
@@ -591,16 +569,11 @@ export interface FreeNodeSpeech {
   voice: VoiceRow;
   text: string;
   out: string;
-  // The whole of what the line may take, the wait for a node included, and the most of it the wait may have.
-  capMs: number;
-  waitMs: number;
-  // How long the node's own asker may wait (`VoiceNodeDeps`).
-  nodeWaitMs?: number;
 }
 
 // The line spoken on one node of the list and encoded here, with which node it was, how long the run waited for
-// it, and whether it waited its turn on a card other work held. A node whose card stayed taken past the server's
-// own wait is let go and the run asks again, within its wait for a node; the node is let go however the call ends.
+// it, and whether it waited its turn on a card other work held. A node whose arbiter gives the voice no place on its
+// card is let go and the run asks again; the node is let go however the call ends.
 export async function speakThroughFreeNode(speech: FreeNodeSpeech): Promise<VoiceNodeSpoken & { node: string; waitedMs: number; cardHeld: boolean }> {
   const started = Date.now();
   let cardHeld = false;
@@ -609,7 +582,6 @@ export async function speakThroughFreeNode(speech: FreeNodeSpeech): Promise<Voic
     const taken = await takeVoiceNode({
       names: await voiceNodeNames(),
       checkpoint: voiceNodeRequest(speech.voice, speech.text).checkpoint,
-      waitMs: Math.max(0, speech.waitMs - (Date.now() - started)),
       shellOf: (name) => voiceNodeShell(name),
     });
     const waitedMs = Date.now() - started;
@@ -621,14 +593,12 @@ export async function speakThroughFreeNode(speech: FreeNodeSpeech): Promise<Voic
         voice: speech.voice,
         text: speech.text,
         out: speech.out,
-        timeoutMs: Math.max(1_000, speech.capMs - waitedMs),
-        nodeWaitMs: speech.nodeWaitMs === undefined ? undefined : Math.max(1_000, speech.nodeWaitMs - waitedMs),
         shell: taken.shell,
       });
 
       return { ...spoken, node: taken.name, waitedMs, cardHeld };
     } catch (error) {
-      if (!(error instanceof VoiceNodeError && error.kind === "taken") || Date.now() - started >= speech.waitMs) {
+      if (!(error instanceof VoiceNodeError && error.kind === "taken")) {
         throw error;
       }
     } finally {

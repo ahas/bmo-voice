@@ -28,7 +28,6 @@ import { dirname, join } from "node:path";
 import { NodeShellError, nodeHome } from "./lib/node-shell";
 import { dataFile, nodeTokenPath, readTokenFile, releaseRoot, voicesFolder } from "./lib/settings";
 import { nowSeconds, store } from "./lib/store";
-import { voiceCapMs, voiceQueueWaitMs } from "./lib/voice";
 import {
   anyNodeShell,
   BASE_PLACE,
@@ -65,12 +64,10 @@ const engineFile = join(releaseRoot, "synth/engine.toml");
 const usage = "usage: bun scripts/voice-node.ts nodes | adapter <verb> --node <name> --placed <name,...> | setup|push|sync|health|speak [--node <name>]";
 
 const unit = "bmo-voice-server.service";
-// How long a freshly restarted server may take to answer. It loads no model until it is asked to speak, so this is
-// the interpreter starting and nothing more.
-const upWaitMs = 30_000;
-// Building the engine environment downloads torch and the engine's packages; this is the most it may take, and how
-// often the node is asked whether it is done.
-const setupWaitMs = 60 * 60_000;
+// How often a freshly restarted server is asked again whether it answers, until it does or its process has ended.
+const upPollMs = 1_000;
+// How often the node is asked whether building the engine environment, which downloads torch and the engine's
+// packages, is done.
 const setupPollMs = 5_000;
 // The machine's own certificate store. A node may stand behind a proxy that signs what it passes with a certificate
 // only that store trusts, so the downloads are made to trust it rather than the bundles uv and Python carry.
@@ -302,6 +299,8 @@ function unitText(): string {
     `Environment=TORCHINDUCTOR_CACHE_DIR=%h/${VOICE_PLACE}/compiled`,
     "Restart=always",
     "RestartSec=5",
+    // The server ends on the stop signal itself, so a stop waits for it and never kills it after a span.
+    "TimeoutStopSec=infinity",
     "",
     "[Install]",
     "WantedBy=default.target",
@@ -328,14 +327,18 @@ async function setup(node: VoiceNode): Promise<void> {
     `(cd fish-speech && UV_SYSTEM_CERTS=1 SSL_CERT_FILE=${systemCerts} ~/.local/bin/uv sync --frozen --python ${code.python} --extra ${code.extra} ${code.leave_out.map((name) => `--no-install-package ${name}`).join(" ")})`,
   ].join(" && ");
 
-  await onNode(node, `mkdir -p ~/${VOICE_PLACE} && cd ~/${VOICE_PLACE} && rm -f setup.code && (setsid sh -c '${steps}; echo $? > setup.code' > setup.log 2>&1 < /dev/null &)`);
+  // The build holds setup.lock from before this returns until it has written its exit, so a lock let go with no exit
+  // written is the build gone without one; a second setup waits on the lock for the first to end.
+  await onNode(node, `mkdir -p ~/${VOICE_PLACE} && cd ~/${VOICE_PLACE} && exec 9> setup.lock && flock 9 && rm -f setup.code && (setsid sh -c '${steps}; echo $? > setup.code' > setup.log 2>&1 < /dev/null &) && exec 9>&-`);
   say(node, `building on the node; its output is ~/${VOICE_PLACE}/setup.log there`);
   await placeBase(node);
 
-  const until = Date.now() + setupWaitMs;
-
   for (;;) {
-    const done = (await onNode(node, `cat ~/${VOICE_PLACE}/setup.code 2>/dev/null || true`)).trim();
+    const done = (await onNode(node, `cd ~/${VOICE_PLACE} && if [ -f setup.code ]; then cat setup.code; elif flock -n -s setup.lock true 2>/dev/null; then [ -f setup.code ] && cat setup.code || echo gone; fi`)).trim();
+
+    if (done === "gone") {
+      throw new NodeRefused(`building ended without writing its exit; ~/${VOICE_PLACE}/setup.log on the node says how far it got`);
+    }
 
     if (done !== "") {
       const tail = await onNode(node, `tail -n 15 ~/${VOICE_PLACE}/setup.log`);
@@ -349,10 +352,6 @@ async function setup(node: VoiceNode): Promise<void> {
       say(node, `the engine environment of fish-speech@${code.commit.slice(0, 8)} is on the node`);
 
       return;
-    }
-
-    if (Date.now() >= until) {
-      throw new NodeRefused(`building did not end within ${setupWaitMs / 60_000} minutes; ~/${VOICE_PLACE}/setup.log on the node says how far it got`);
     }
 
     await Bun.sleep(setupPollMs);
@@ -429,8 +428,11 @@ async function sync(node: VoiceNode): Promise<void> {
   await push(node);
 }
 
+// The server's health, said. Waiting, as after a restart, it is asked again until it answers, however long that
+// takes, and only the server's process ending ends the wait: its unit failed or stopped, or restarting it after a
+// crash. Otherwise one answer that is not there throws.
 async function health(node: VoiceNode, waiting = false): Promise<void> {
-  const until = Date.now() + (waiting ? upWaitMs : 0);
+  let restarts: string | null = null;
 
   for (;;) {
     try {
@@ -438,12 +440,25 @@ async function health(node: VoiceNode, waiting = false): Promise<void> {
 
       return;
     } catch (error) {
-      if (Date.now() >= until) {
-        throw new NodeRefused(`the server did not answer: ${error instanceof Error ? error.message : String(error)}`);
+      const why = error instanceof Error ? error.message : String(error);
+
+      if (!waiting) {
+        throw new NodeRefused(`the server did not answer: ${why}`);
       }
+
+      const shown = await onNode(node, `systemctl --user show -p ActiveState -p SubState -p NRestarts ${unit} || true`);
+      const state = new Map(shown.split("\n").filter((line) => line.includes("=")).map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1).trim()]));
+      const active = state.get("ActiveState") ?? "";
+      const crashed = state.get("SubState") === "auto-restart" || (restarts !== null && state.get("NRestarts") !== restarts);
+
+      if (active === "failed" || active === "inactive" || crashed) {
+        throw new NodeRefused(`the server's unit is ${crashed ? "restarting it after it ended" : active} and the server did not answer: ${why}`);
+      }
+
+      restarts ??= state.get("NRestarts") ?? null;
     }
 
-    await Bun.sleep(1_000);
+    await Bun.sleep(upPollMs);
   }
 }
 
@@ -513,7 +528,6 @@ async function speak(): Promise<void> {
       const taken = await takeVoiceNode({
         names: await voiceNodeNames(),
         checkpoint: request.checkpoint,
-        waitMs: voiceQueueWaitMs,
         shellOf: (name) => voiceNodeShell(name),
       });
 
@@ -521,7 +535,7 @@ async function speak(): Promise<void> {
       node = { name: taken.name, shell: taken.shell };
     }
 
-    const spoken = await speakOnNode(request, { shell: node.shell, timeoutMs: voiceCapMs(request.text) });
+    const spoken = await speakOnNode(request, { shell: node.shell });
 
     writeFileSync(wav, spoken.wav);
     say(node, `${spoken.seconds.toFixed(2)}s of ${spoken.checkpoint} spoken in ${spoken.speakSeconds.toFixed(2)}s (weights ${spoken.loadSeconds.toFixed(2)}s)`);
@@ -582,30 +596,39 @@ async function adapterAnswer(asked: string, node: string | null, placed: readonl
       await setup(at);
       await push(at);
       const started = Date.now();
-      let spoken;
-
-      try {
-        const checkLine = moveCheckLine();
-
-        spoken = await speakOnNode(await speakRequest(checkLine), { shell: at.shell, timeoutMs: voiceCapMs(checkLine) });
-      } catch (error) {
-        // Another occupant of the voice's tier using the card is never made to yield for the check line; the server
-        // answering its health on the card's device stands for it, and the node's first granted line is its first.
-        if (!(error instanceof VoiceNodeError) || error.kind !== "taken") {
-          throw error;
-        }
-
-        const device = String((await voiceNodeHealth(at.shell)).device ?? "cpu");
+      // Another occupant holding the card lock is never made to yield for the check line, which would wait for it
+      // however long it held the card: the server answering its health on the card's device stands for the line,
+      // and the node's first granted line is its first spoken one. So does a 503, the node's arbiter giving the
+      // voice no place on the card.
+      const standing = await voiceNodeHealth(at.shell);
+      const onDevice = (why: string): AdapterAnswer => {
+        const device = String(standing.device ?? "cpu");
 
         if (device === "cpu") {
-          throw new NodeRefused(`the server answers with no card to speak on, and the check line waited: ${error.message}`);
+          throw new NodeRefused(`the server answers with no card to speak on, and the check line waited: ${why}`);
         }
 
-        const waited = `the check line waited: the card is another's in use; the server answers on ${device}`;
+        const waited = `the check line waited: ${why}; the server answers on ${device}`;
 
         say(at, waited);
 
         return { ok: true, node, state: "running", detail: waited };
+      };
+
+      if (standing.cardTaken === true) {
+        return onDevice("the card is another's in use");
+      }
+
+      let spoken;
+
+      try {
+        spoken = await speakOnNode(await speakRequest(moveCheckLine()), { shell: at.shell });
+      } catch (error) {
+        if (!(error instanceof VoiceNodeError) || error.kind !== "taken") {
+          throw error;
+        }
+
+        return onDevice(error.message);
       }
 
       const tried = `${spoken.seconds.toFixed(2)}s of ${spoken.checkpoint} spoken in ${((Date.now() - started) / 1000).toFixed(1)}s`;

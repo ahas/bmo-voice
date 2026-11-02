@@ -470,7 +470,6 @@ async fn a_line_gives_its_card_back_however_it_ends_and_says_each_stage() {
       voice: &voice,
       text: "A short line.",
       out: &out,
-      cap_ms: 60_000,
       ask: &ask,
     },
     &mut |stage| {

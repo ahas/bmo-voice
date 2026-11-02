@@ -18,7 +18,9 @@ How a commit of this repository goes live. The testbed deploys it from the repos
   `bmo-voice.service`, the voice service, the one whose health the deployment waits on; and `bmo-script.service`, the
   script studio's server on port 3214, restarted by every deployment just before the voice service. Each starts only
   where the data root holds `env/voice.toml`. The voice service's unit allows it 65,536 open files, and the service
-  raises its own soft limit to its hard one as it starts, so a long line of waiting lines never runs it out.
+  raises its own soft limit to its hard one as it starts, so a long line of waiting lines never runs it out. A stop
+  waits for each process to end, and none is killed after a span: the voice service ends its event streams as it is
+  asked to stop and ends once the calls it is answering have their answers, and the studio ends on the signal itself.
 - **Health:** the deployment waits until `bmo-voice health` answers 0 (`docs/boundary-api.md`, 「The command
   line」) and the studio's API answers 401 without a session and its screen HTML.
 - **After health:** `scripts/voice-node.ts sync` brings every voice node up to date, pushing only where a node's stamp

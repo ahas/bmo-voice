@@ -7,12 +7,17 @@ pub mod hub;
 pub mod node;
 pub mod web;
 
+use std::time::Duration;
+
 use serde::de::DeserializeOwned;
 
 use crate::settings::{Settings, Unit};
 
 /// How many idle connections the one client keeps to each unit.
 const IDLE_PER_UNIT: usize = 8;
+
+/// How often the transport probes a connection to a unit that has gone quiet.
+const KEEP_ALIVE: Duration = Duration::from_secs(30);
 
 /// Every unit the voice calls, each at the address the settings name.
 #[derive(Clone, Debug)]
@@ -30,9 +35,11 @@ pub struct Units {
 impl Units {
   /// The units the settings name, called through one HTTP client.
   pub fn new(settings: &Settings) -> Result<Self, UnitError> {
-    // One client for every call, its idle connections to each unit kept to a bound.
+    // One client for every call, its idle connections to each unit kept to a bound. A call waits for its answer
+    // however long it takes; the transport's keep-alive probes tell a unit gone without closing the connection.
     let http = reqwest::Client::builder()
       .pool_max_idle_per_host(IDLE_PER_UNIT)
+      .tcp_keepalive(KEEP_ALIVE)
       .build()
       .map_err(|why| UnitError::Unreached {
         unit: "voice",

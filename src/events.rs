@@ -7,6 +7,7 @@ use std::sync::Arc;
 use serde::Serialize;
 use serde_json::Value;
 use tokio::sync::{Mutex, MutexGuard, broadcast};
+use tokio_util::sync::CancellationToken;
 
 use crate::store::{self, StoreError};
 use crate::wire::Event;
@@ -48,6 +49,8 @@ pub struct Events {
   live: broadcast::Sender<Event>,
   // Held from a write's start to its event's announcement, so live readers hear the numbers in order.
   writing: Arc<Mutex<()>>,
+  // Cancelled once the service is asked to stop, which ends every live reader's stream.
+  stopping: CancellationToken,
 }
 
 /// A write under way: its event is numbered, and announced once it is recorded.
@@ -88,7 +91,18 @@ impl Events {
       db,
       live: broadcast::channel(BACKLOG).0,
       writing: Arc::new(Mutex::new(())),
+      stopping: CancellationToken::new(),
     }
+  }
+
+  /// Ends every live reader's stream, as the service is asked to stop, so the stop waits on no reader.
+  pub fn stop(&self) {
+    self.stopping.cancel();
+  }
+
+  /// Done once the service is asked to stop.
+  pub async fn stopped(&self) {
+    self.stopping.cancelled().await;
   }
 
   /// Starts a write whose events are announced in number order.

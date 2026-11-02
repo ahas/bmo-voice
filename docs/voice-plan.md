@@ -66,8 +66,8 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **Callers queue** in front of one lock file, `voice/locks/voice-synth.lock`, so only one goes onto the card at a
   time. The lock stands in the `voice/mouth` entry, in front of the synthesiser and nowhere else, so no caller
   reaches the card without it.
-- **A caller's cap and stop reach the synthesiser:** a caller that gives up a call closes it, and the tool host ends
-  the call's process group, the synthesiser and its hold on the lock with it.
+- **A caller's stop reaches the synthesiser:** a caller that stops a call closes it, and the call's process group
+  ends, the synthesiser and its hold on the lock with it.
 - **A voice server queues for itself:** a line sent to it takes no lock here, and the server speaks one line at a
   time behind a lock of its own.
 
@@ -77,16 +77,16 @@ the voice nodes. What a caller does with the sound is the caller's.
   never shown to a session, called through the tool host's control socket.
   - **`voice/mouth`** speaks one line on this machine's card, where the engine environment stands: the words or a
     file holding them, where the sound goes and where its wav is kept where asked, and the voice row's checkpoint,
-    seed, delivery and sentence switch. It stands in the card's line itself, waiting five minutes
-    for the lock; a wait that runs out is answered as a turn not had, apart from a synthesiser that failed.
+    seed, delivery and sentence switch. It stands in the card's line itself, waiting for the lock
+    however long the lines ahead of it take.
   - **`voice/encoder`** writes a wav as OGG/Opus, in no line, since the card is not touched.
   - **`voice/transcriber`** takes spoken files down in one language, each answered with what was heard, in the
     order given.
 - **Its executable is `synth/voice-tool.py`,** on the system's `python3` and the standard library alone, placed
   with the mouth, the encoder and the transcriber it runs and the tool host's Python helper; each file it runs runs
   on the voice environment's interpreter.
-- **Timeouts:** a minute for a call, ten for the mouth and the transcriber, and the run cap for one synthesis
-  (「What a long line takes of the card」).
+- **No clock bounds a call:** the manifest declares no span and the tool host keeps none, so a call ends when its
+  work ends, fails, or its caller stops it.
 
 ## Encoding
 
@@ -287,7 +287,8 @@ the voice nodes. What a caller does with the sound is the caller's.
   path `--carry` names, wherever the node lacks a file or holds a different one; then the record's top-level files.
 - **The step runs apart,** as the transient user unit `bmo-voice-train-<experiment>-<step>`, its output in
   `steps/<step>.log` and its exit in `steps/<step>.code`; what `--bring` names comes back once it ends, and every step
-  leaves a line in the record's `steps.log`.
+  leaves a line in the record's `steps.log`. The runner looks at the step every half minute until it has an exit or
+  its unit has gone; a node that does not answer a look is looked at again, however long it stays out of reach.
 
 ## The voice nodes
 
@@ -296,7 +297,8 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **On every node of the voice node list,** `voice_nodes` (`docs/store.md`), as the user unit
   `bmo-voice-server.service` with the same voices directory, so any of them speaks a line exactly as another would.
   Lingering is on for the account, so the unit starts with the machine. The unit is named apart from the service's
-  own `bmo-voice.service`, so the operations machine may be a voice node as well.
+  own `bmo-voice.service`, so the operations machine may be a voice node as well. A stop of the unit waits for the
+  server to end, which it does on the signal itself, and never kills it after a span.
 - **`voice` stands on as many nodes as its placement names:** its declaration, `weights/voice.card.toml`, spreads it
   over several (`spread` `many`). It does not stand alone, and its priority, 40, is below every service that does on
   the lab's GPU nodes, so it joins the reservation of whatever node it is placed on, named there after the services
@@ -325,10 +327,11 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **Waiting for a card has no end but its grant:** in the line behind the demands asked before it, while every card
   of `voice` is in use or held by a claim or a lower tier, or while the master is not reached. The synthesis stays
   `waiting`, and its `waitingOn` says why.
-- **The speaking itself** is held to the synthesis's cap, counted from the grant.
-- **On the node** the server waits up to a minute for its turn, in the card arbiter's hold queue through the turn
-  client; past it, or where the card has no room once the turn came, it answers 503, and the run reads its demand
-  again until the card is granted again and asks the line of that card's node once more.
+- **No clock bounds the speaking:** it ends when the node answers with the line's sound or with a failure.
+- **On the node** the server waits for its turn however long that takes, in the card arbiter's hold queue through
+  the turn client, and once the turn has come, for the card's memory to take the model. Where the node's arbiter
+  gives the voice no place on the card it answers 503, and the run reads its demand again until the card is granted
+  again and asks the line of that card's node once more.
 - **A caller that gives up its call** ends the speaking the call had started; the synthesis ends `failed`.
 - **A granted node out of reach fails the run at once,** naming the node and what it met. It is not spoken on the
   operations machine's card instead: a line quietly spoken elsewhere would hide the fault.
@@ -340,20 +343,23 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **`setup`** builds the engine environment and places the base weights (「The environments」, 「Where the weights
   live」): it installs uv where missing, refuses a node whose driver runs no CUDA 12.9 or whose card holds less than
   12 GB, checks out `fish-speech` at its pinned commit and builds its environment apart on the node, its output in
-  `bmo-voice/setup.log`, and carries the weights the node lacks.
-- **`push`** copies the server file, the voices directory and the token, writes the unit, restarts
-  it, waits for it to answer, and leaves a stamp of what it brought, `bmo-voice/pushed`.
+  `bmo-voice/setup.log`, and carries the weights the node lacks. The build is waited for until it writes its exit,
+  or until its process has gone without one, which fails the setup; a second setup on the node waits for the first.
+- **`push`** copies the server file, the voices directory and the token, writes the unit, restarts it, waits until it
+  answers its health or its process has ended (its unit failed or stopped, or restarting it), and leaves a stamp of
+  what it brought, `bmo-voice/pushed`.
 - **`sync`** is push where it is due: only where a node's stamp differs from what a push would bring now. Every
   deployment runs it once the service answers (`docs/deploy.md`), so a change to the server or a newly installed
   voice reaches every node; a sync that pushes restarts that node's server.
 - **`health`** asks each server what it holds; **`speak --text '<words>' --wav <path>`** speaks one line in the
-  current voice or the one `--voice` names, on a free node where `--node` names none.
+  current voice or the one `--voice` names, on a free node where `--node` names none, asking the nodes again every two
+  seconds until one is free.
 - **`adapter`** answers the card arbiter (`docs/boundary-api.md`, 「The node scripts and the card adapter」):
   `install` puts the node last on the list, runs `setup` and `push` and speaks there the check line of
-  `data/ko/voice-node.toml`. On a node whose card another occupant of the voice's tier is using, the check line is
-  not the voice's turn within the server's wait and the arbiter never makes that occupant yield for it: there the
-  install stands on the server answering its health on the card's device with its weights checked, says that the
-  check line waited, and the first line the master grants on the node is its first spoken one. `uninstall` takes
+  `data/ko/voice-node.toml`. On a node whose card lock another occupant holds as the check line would be asked, the
+  arbiter never makes that occupant yield for it: there the install stands on the server answering its health on
+  the card's device with its weights checked, says that the check line waited, and the first line the master grants
+  on the node is its first spoken one. `uninstall` takes
   it off the list and stops and disables its unit, keeping its installation; `start`, `stop` and `health` act on its
   unit and server; `placed` reads the list.
 - **The unit** declares the server to the node's card arbiter as `BMO_CARD_SERVICE=voice`, and names the arbiter's
@@ -365,12 +371,14 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **The request goes in on the node's standard input,** never on a command line. The node writes it into `spoken/`
   and starts the asker apart, `voice-fish.py --ask`, which posts it to the server on loopback with the token and writes
   the answer's wav beside it with one line of JSON: the status, the reason, the headers.
-- **The operations machine hears of that line** by waiting on the asker's lock on the node, each wait bounded inside
-  what a hub node lets a command run, then fetches the wav a slice at a time, four MiB to a command, every byte
-  counted back, and removes every file of the call. Each call first sweeps away files more than an hour old.
+- **The operations machine hears of that line** by waiting on the asker's lock on the node, each wait a short piece
+  inside what a hub node lets a command run, asked again until the asker lets go, then fetches the wav a slice at a
+  time, four MiB to a command, every byte counted back, and removes every file of the call. Each call first sweeps
+  away the files a call left behind once its asker has let go of its lock and nothing of it has been written for an
+  hour; a call whose asker still holds its lock is never swept, however long it runs.
 - **Why apart:** a hub node stops a command after five minutes, and a long line from a cold server can take longer.
-- **How a failure is named:** unreachable (the shell, the hub or the server not there), a timeout (the cap passed),
-  refused (a wrong token, a voice the node does not hold), failed (the line not spoken), a bad answer (not a wav).
+- **How a failure is named:** unreachable (the shell, the hub or the server not there), refused (a wrong token, a
+  voice the node does not hold), failed (the line not spoken), a bad answer (not a wav).
 
 ### What it answers
 
@@ -387,7 +395,7 @@ the voice nodes. What a caller does with the sound is the caller's.
   other work holds the card lock (read from the kernel's lock table, never by taking it), whether the server holds
   the card between lines, and whether it has room: 10.7 GiB free to put a loaded model up, 11.0 GiB for a first
   load.
-- **`503`:** the card lock stayed held by other work for the whole of the line's wait; nothing was loaded or spoken.
+- **`503`:** the node's card arbiter gives the voice no place on the card; nothing was loaded or spoken.
 - **`500`:** the line failed while it was spoken. The answer names the failure's kind, its message and the frame of
   the mouth's own code it was raised in, which the engine writes into the synthesis's failure; the node's journal
   holds the whole traceback.
@@ -414,12 +422,9 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 - **No count of characters bounds a line.** The mouth speaks a line piece by piece, so what a line takes of the card
   is what its longest piece takes; what grows with the line is only the sound held in host memory until it leaves,
-  about 10 MiB a minute, and the time it takes. The engine bounds the line itself, at the 30,000 characters of
-  spoken words a synthesis holds (`docs/boundary-api.md`, 「Syntheses」), and hands it to one server whole.
-- **The run cap grows with the line:** the policy's `run_cap_ms` for the card's lock, the load and the first piece,
-  and `run_ms_per_character` for every character of the spoken words. A voice says about 7 characters a second of
-  Korean and 14 of English and speaks a little faster than real time, so a character takes about 130 ms of speaking
-  at most; 400 ms leaves room for every piece of a line to be spoken twice.
+  about 10 MiB a minute, and the time it takes, which no clock bounds. The engine bounds the line itself, at the
+  30,000 characters of spoken words a synthesis holds (`docs/boundary-api.md`, 「Syntheses」), and hands it to one
+  server whole.
 - **A line is cut into pieces:** a row that speaks a sentence at a time speaks each sentence as one piece, and any
   other row speaks a line in passes of whole sentences of up to 240 characters, 0.3 seconds apart.
 - **No piece is longer than 340 characters.** A sentence longer than that is cut at its clauses — after a comma, a

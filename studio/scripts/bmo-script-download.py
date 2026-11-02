@@ -77,8 +77,10 @@ def get(url, out, expected=None):
     tmp = pathlib.Path(str(out) + '.part')
     error = ''
     for attempt in range(4):
-        args = ['curl', '--fail', '--location', '--silent', '--show-error', '--connect-timeout', '30', '--max-time', '1800',
-                '--retry', '2', '-H', f'Referer: {CLOUD}', '-A', 'Mozilla/5.0', '-o', str(tmp)]
+        # No clock ends an attempt: it ends when the file is whole, the server refuses or drops it, or curl's own
+        # keep-alive probes find the server gone.
+        args = ['curl', '--fail', '--location', '--silent', '--show-error', '--retry', '2',
+                '-H', f'Referer: {CLOUD}', '-A', 'Mozilla/5.0', '-o', str(tmp)]
         if tmp.exists():
             args += ['--continue-at', '-']
         r = subprocess.run(args + [url], capture_output=True, text=True)

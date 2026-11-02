@@ -18,8 +18,9 @@ use crate::wire::{
 /// The query of a route that takes none.
 const NO_QUERY: [(&str, &str); 0] = [];
 
-/// How long one call waits for its answer.
-const PATIENCE: Duration = Duration::from_secs(60);
+/// How often the transport probes a connection that has gone quiet, so a service that is gone without closing it is
+/// told as unreached; a live service is waited for however long its answer takes.
+const KEEP_ALIVE: Duration = Duration::from_secs(30);
 
 /// Why a call came to no answer of the route's shape.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -56,7 +57,7 @@ impl VoiceClient {
   pub fn new(base: &str, token: Option<String>) -> Called<Self> {
     let base = Url::parse(base).map_err(|why| ClientFailure::Unreached(format!("{base}: {why}")))?;
     let http = reqwest::Client::builder()
-      .timeout(PATIENCE)
+      .tcp_keepalive(KEEP_ALIVE)
       .build()
       .map_err(|why| ClientFailure::Unreached(why.to_string()))?;
 

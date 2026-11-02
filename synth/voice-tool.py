@@ -22,12 +22,6 @@ VOICE_ENVIRONMENT = "bmo-voice/.venv/bin/python"
 # The engine environment the mouth speaks on (docs/voice-plan.md, 「The environments」), relative to the home.
 ENGINE_ENVIRONMENT = "bmo-voice/fish-speech/.venv/bin/python"
 
-# How long a line stands in front of the card before it gives up its turn, and what the lock exits with when it
-# does, kept clear of anything the synthesiser exits with (docs/voice-plan.md, 「One at a time on the
-# operations machine's card」).
-QUEUE_WAIT_S = 300
-QUEUE_EXIT = 75
-
 # How much of a failed run's standard error an answer carries.
 TAIL_LINES = 8
 
@@ -50,9 +44,10 @@ def failed(what, ran):
 
 
 def mouth(call):
-    """One line spoken on this machine's card, standing in the card's line: the one lock file under the data
+    """One line spoken on this machine's card, standing in the card's line for as long as the lines ahead of it
+    take (docs/voice-plan.md, 「One at a time on the operations machine's card」): the one lock file under the data
     root's voice folder, the one the voice's own runs stand in, with the synthesiser the very process the lock
-    runs, so a call ended at its timeout ends it."""
+    runs, so a call its caller stops ends it."""
     said = call.arguments
     if said.get("text_file") is None and said.get("text") is None:
         return tool_protocol.refusal("the mouth is handed the words, as text or as text_file")
@@ -61,7 +56,7 @@ def mouth(call):
     lock.parent.mkdir(parents=True, exist_ok=True)
     lock.touch()
 
-    line = ["flock", "--timeout", str(QUEUE_WAIT_S), "--conflict-exit-code", str(QUEUE_EXIT), "--no-fork", str(lock)]
+    line = ["flock", "--no-fork", str(lock)]
     line += [interpreter("BMO_VOX_PYTHON", ENGINE_ENVIRONMENT), str(HERE / "voice-fish.py")]
     line += ["--text-file", said["text_file"]] if said.get("text_file") is not None else ["--text", said["text"]]
     line += ["--out", said["out"]]
@@ -75,8 +70,6 @@ def mouth(call):
         line.append("--sentences")
 
     ran = run(line)
-    if ran.returncode == QUEUE_EXIT:
-        return tool_protocol.refusal("no turn: another line held the card past the wait, and this one was never spoken")
     if ran.returncode != 0:
         return failed("the synthesiser", ran)
     return tool_protocol.text(f"spoken into {said['out']}")

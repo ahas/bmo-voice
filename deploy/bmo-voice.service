@@ -14,7 +14,9 @@ WorkingDirectory=%h/.local/share/bmo-voice/deploy
 ExecStart=%h/.local/share/bmo-voice/deploy/bin/voice-server
 Restart=always
 RestartSec=2
-TimeoutStopSec=30
+# Asked to stop, the service ends its event streams and ends once its open calls have their answers, so a stop
+# waits for it and never kills it after a span.
+TimeoutStopSec=infinity
 # Every waiting line, the store's pool and the calls out hold files; the service raises its soft limit to this too.
 LimitNOFILE=65536
 

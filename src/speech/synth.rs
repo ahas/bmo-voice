@@ -5,7 +5,6 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::time::Duration;
 
 use serde_json::{Value, json};
 use tokio::io::AsyncWriteExt;
@@ -13,17 +12,8 @@ use tokio::io::AsyncWriteExt;
 use crate::settings::Settings;
 use crate::store::voices::VoiceRow;
 
-/// How long the mouth may take, its stand in the card's line included, and how long the encoder and the
-/// transcriber may.
-const MOUTH_TIMEOUT: Duration = Duration::from_secs(600);
-const ENCODER_TIMEOUT: Duration = Duration::from_secs(60);
-const TRANSCRIBER_TIMEOUT: Duration = Duration::from_secs(600);
-
 /// The voice's tool entry in the synth folder, which runs the mouth and the encoder.
 const TOOL_ENTRY: &str = "voice-tool.py";
-
-/// How the mouth's refusal begins when the wait ran out and the line was never spoken.
-const NO_TURN: &str = "no turn:";
 
 /// The pause after one line before the next may begin.
 pub const SUMMARY_PAUSE_MS: i64 = 600;
@@ -57,15 +47,6 @@ pub enum Words<'a> {
   Line(&'a str),
 }
 
-/// Why the voice's entry did not do what it was called for.
-#[derive(Debug, PartialEq, Eq)]
-pub enum Unspoken {
-  /// The turn on the card never came: another line held it past the wait, and the synthesiser was never reached.
-  NoTurn,
-  /// The entry failed, or the tool host did not answer: the reason as it was given.
-  Failed(String),
-}
-
 /// What the mouth is called with: the words, where the sound goes, and the voice's row.
 pub fn mouth_arguments(words: &Words<'_>, out: &Path, voice: &VoiceRow) -> Value {
   let mut arguments = json!({
@@ -87,16 +68,11 @@ pub fn mouth_arguments(words: &Words<'_>, out: &Path, voice: &VoiceRow) -> Value
   arguments
 }
 
-// One entry of the voice's own tool entry run to its end, handed the call as the tool host hands it: the entry,
-// its arguments, and a record naming the data root, under whose voice folder the card's lock stands. Dropping the
-// call before it answers ends the entry's process and whatever it runs, the synthesiser and its hold on the lock
-// with it.
-async fn call_entry(
-  settings: &Settings,
-  entry: &str,
-  arguments: Value,
-  timeout: Duration,
-) -> Result<Value, String> {
+// One entry of the voice's own tool entry run to its end, however long that takes, handed the call as the tool host
+// hands it: the entry, its arguments, and a record naming the data root, under whose voice folder the card's lock
+// stands. Dropping the call before it answers ends the entry's process and whatever it runs, the synthesiser and its
+// hold on the lock with it.
+async fn call_entry(settings: &Settings, entry: &str, arguments: Value) -> Result<Value, String> {
   let folder = settings.synth_folder().map_err(|why| why.to_string())?;
   let handed = json!({
     "protocol": 1,
@@ -123,9 +99,9 @@ async fn call_entry(
       .map_err(|why| format!("the voice's tool entry took no call: {why}"))?;
   }
 
-  let done = tokio::time::timeout(timeout, child.wait_with_output())
+  let done = child
+    .wait_with_output()
     .await
-    .map_err(|_| format!("the voice's {entry} entry did not answer within {}s", timeout.as_secs()))?
     .map_err(|why| format!("the voice's tool entry failed: {why}"))?;
 
   serde_json::from_slice(&done.stdout).map_err(|_| {
@@ -136,26 +112,21 @@ async fn call_entry(
   })
 }
 
-/// One line spoken on this machine's card by the voice's `voice/mouth` entry, which stands it in the card's line.
+/// One line spoken on this machine's card by the voice's `voice/mouth` entry, which stands it in the card's line for
+/// as long as the lines ahead of it take.
 pub async fn speak(
   words: &Words<'_>,
   out: &Path,
   voice: &VoiceRow,
   settings: &Settings,
-) -> Result<(), Unspoken> {
-  answered(call_entry(settings, "voice/mouth", mouth_arguments(words, out, voice), MOUTH_TIMEOUT).await)
+) -> Result<(), String> {
+  answered(call_entry(settings, "voice/mouth", mouth_arguments(words, out, voice)).await)
 }
 
 /// A wav a node spoke written out as OGG/Opus by the voice's `voice/encoder` entry. It stands in no line, since no
 /// model is loaded and the card is not touched.
 pub async fn encode(wav: &Path, out: &Path, settings: &Settings) -> Result<(), String> {
-  let called =
-    call_entry(settings, "voice/encoder", json!({ "from_wav": wav, "out": out }), ENCODER_TIMEOUT).await;
-
-  answered(called).map_err(|unspoken| match unspoken {
-    Unspoken::NoTurn => "the encoder never had its turn".to_owned(),
-    Unspoken::Failed(why) => why,
-  })
+  answered(call_entry(settings, "voice/encoder", json!({ "from_wav": wav, "out": out })).await)
 }
 
 // An answer's text, a piece a line.
@@ -168,21 +139,15 @@ fn said(answer: &Value) -> Vec<String> {
     .collect()
 }
 
-// What a call of the voice's entries came to: its refusal for want of a turn told apart from every other failure.
-fn answered(called: Result<Value, String>) -> Result<(), Unspoken> {
-  let answer = called.map_err(Unspoken::Failed)?;
+// What a call of the voice's entries came to: done, or its failure as the entry gave it.
+fn answered(called: Result<Value, String>) -> Result<(), String> {
+  let answer = called?;
 
   if answer["isError"] != true {
     return Ok(());
   }
 
-  let text = said(&answer).join("\n");
-
-  if text.starts_with(NO_TURN) {
-    return Err(Unspoken::NoTurn);
-  }
-
-  Err(Unspoken::Failed(text.trim_start_matches("ERROR: ").to_owned()))
+  Err(said(&answer).join("\n").trim_start_matches("ERROR: ").to_owned())
 }
 
 /// How long an Ogg/Opus sound runs, its pages read by the ogg crate: the last packet's granule position counts 48 kHz
@@ -211,13 +176,8 @@ pub fn ogg_opus_seconds(bytes: &[u8]) -> Option<f64> {
 
 /// Spoken files taken down in one language: what was heard, each file's words in the order given, one to a line.
 pub async fn transcribe(language: &str, files: &[String], settings: &Settings) -> Result<String, String> {
-  let answer = call_entry(
-    settings,
-    "voice/transcriber",
-    json!({ "language": language, "files": files }),
-    TRANSCRIBER_TIMEOUT,
-  )
-  .await?;
+  let answer =
+    call_entry(settings, "voice/transcriber", json!({ "language": language, "files": files })).await?;
 
   if answer["isError"] == true {
     return Err(said(&answer).join("\n").trim_start_matches("ERROR: ").to_owned());

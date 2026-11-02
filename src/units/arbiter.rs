@@ -19,10 +19,6 @@ use super::{Caller, UnitError};
 /// How often the master's demands are read while any line waits on one.
 pub const READ_EVERY: Duration = Duration::from_secs(1);
 
-// How long a call waits for its answer beyond the time it asks the master to hold it open: a connection that
-// answers nothing within it is the master not reached, and the call is made again.
-const CALL_SLACK: Duration = Duration::from_secs(15);
-
 /// The arbiter's master.
 #[derive(Clone, Debug)]
 pub struct Arbiter {
@@ -135,7 +131,7 @@ impl Arbiter {
 
   /// Every demand the master holds, read once.
   pub async fn demands(&self) -> Result<Vec<Demand>, UnitError> {
-    let request = self.caller.request(Method::GET, &["demands"]).timeout(CALL_SLACK);
+    let request = self.caller.request(Method::GET, &["demands"]);
     let page: Page = self.caller.json(request).await?;
 
     Ok(page.items)
@@ -224,14 +220,14 @@ impl Arbiter {
 
   /// A demand asked, answered as it stands: granted or waiting.
   pub async fn ask(&self, ask: &Ask) -> Result<Demand, UnitError> {
-    let request = self.caller.request(Method::POST, &["demands"]).json(ask).timeout(CALL_SLACK);
+    let request = self.caller.request(Method::POST, &["demands"]).json(ask);
 
     self.caller.json(request).await
   }
 
   /// A demand read as it stands; none where the master holds no such demand.
   pub async fn demand(&self, id: i64) -> Result<Option<Demand>, UnitError> {
-    let request = self.caller.request(Method::GET, &["demands", &id.to_string()]).timeout(CALL_SLACK);
+    let request = self.caller.request(Method::GET, &["demands", &id.to_string()]);
 
     match self.caller.json(request).await {
       Ok(demand) => Ok(Some(demand)),
@@ -242,7 +238,7 @@ impl Arbiter {
 
   /// A demand given back; one the master no longer holds is given back already.
   pub async fn give_back(&self, id: i64) -> Result<(), UnitError> {
-    let request = self.caller.request(Method::DELETE, &["demands", &id.to_string()]).timeout(CALL_SLACK);
+    let request = self.caller.request(Method::DELETE, &["demands", &id.to_string()]);
 
     match self.caller.send(request).await {
       Ok(_) | Err(UnitError::Refused { status: 404, .. }) => Ok(()),

@@ -24,7 +24,7 @@ fn words(value: &toml::Value) -> Vec<&str> {
   value.as_array().unwrap().iter().map(|word| word.as_str().unwrap()).collect()
 }
 
-// "the manifest names the tool for its folder, the crate's binary and a minute's timeout"
+// "the manifest names the tool for its folder and the crate's binary, with no span declared for a call"
 #[test]
 fn the_manifest_names_the_tool_for_its_folder_and_runs_the_crates_binary() {
   let manifest = toml_of(&folder().join("tool.toml"));
@@ -36,13 +36,14 @@ fn the_manifest_names_the_tool_for_its_folder_and_runs_the_crates_binary() {
   assert_eq!(manifest["tool"]["protocol"].as_integer(), Some(i64::from(PROTOCOL)));
   assert_eq!(text(&manifest, &["tool", "language"]), "rust");
   assert_eq!(words(&manifest["tool"]["run"]), [binary]);
-  assert_eq!(manifest["tool"]["timeout"].as_integer(), Some(60));
   assert!(text(&manifest, &["tool", "build"]).contains(&format!("-p {package} ")));
   assert!(text(&manifest, &["tool", "build"]).contains(&format!("/release/{binary}\"")));
   assert_eq!(text(&manifest, &["tool", "check"]), format!("bmo-testbed cargo test -p {package}"));
+  assert!(manifest["tool"].get("timeout").is_none());
 }
 
-// "its one entry is the one the executable answers, read-only, asking for the capability room.tools"
+// "its one entry is the one the executable answers, read-only, asking for the capability room.tools, with no span
+// declared for its call"
 #[test]
 fn its_one_entry_is_the_one_the_executable_answers() {
   let manifest = toml_of(&folder().join("tool.toml"));
@@ -54,6 +55,8 @@ fn its_one_entry_is_the_one_the_executable_answers() {
   assert_eq!(words(&entry["capabilities"]), ["room.tools"]);
   assert!(entry.get("grant").is_none());
   assert!(entry.get("system").is_none());
+  assert!(entry.get("timeout").is_none());
+  assert!(entry.get("unbounded").is_none());
   assert_eq!(entry["hints"]["read_only"].as_bool(), Some(true));
   assert!(!text(entry, &["description"]).is_empty());
   assert!(manifest.get("resources").is_none());

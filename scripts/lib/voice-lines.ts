@@ -384,8 +384,6 @@ export interface CodexChoice {
   effort: string;
 }
 
-const codexTimeoutMs = 900_000;
-
 export function codexCommand(threadId: string | null, schemaPath: string, choice: CodexChoice): string[] {
   const opened = threadId === null ? ["exec"] : ["exec", "resume", threadId];
 
@@ -462,31 +460,18 @@ export function readCodexEvents(stream: string): CodexTurn {
 
 // Codex reads an AGENTS.md where it starts and follows it, so it starts in a directory holding nothing, and the
 // prompt goes in on stdin with the door shut behind it.
+// The turn runs until Codex ends it, however long that takes.
 async function runCodex(command: string[], saying: string, cwd: string): Promise<CodexTurn> {
   const child = Bun.spawn(command, { cwd, stdin: new TextEncoder().encode(saying), stdout: "pipe", stderr: "pipe" });
-  let ranOut = false;
-  const timer = setTimeout(() => {
-    ranOut = true;
-    child.kill();
-  }, codexTimeoutMs);
+  const [out, said] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
+  const code = await child.exited;
+  const turn = readCodexEvents(out);
 
-  try {
-    const [out, said] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
-    const code = await child.exited;
-    const turn = readCodexEvents(out);
-
-    if (ranOut) {
-      turn.failure ??= `no answer within ${codexTimeoutMs / 1000}s, so it was cut off`;
-    }
-
-    if (turn.failure === null && turn.text === "" && code !== 0) {
-      turn.failure = said.trim() === "" ? `codex exited ${code}` : said.trim().slice(-2000);
-    }
-
-    return turn;
-  } finally {
-    clearTimeout(timer);
+  if (turn.failure === null && turn.text === "" && code !== 0) {
+    turn.failure = said.trim() === "" ? `codex exited ${code}` : said.trim().slice(-2000);
   }
+
+  return turn;
 }
 
 // --- A run -------------------------------------------------------------------------------------------
