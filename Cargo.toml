@@ -21,6 +21,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
+# One test target, the harness at tests/main.rs (bmo-chat's docs/conventions.md, 「Rust builds」).
+autotests = false
 
 [lib]
 name = "bmo_voice"
@@ -40,6 +42,10 @@ path = "src/bin/bmo-voice.rs"
 [[bin]]
 name = "script-studio"
 path = "src/bin/script-studio.rs"
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
 
 [dependencies]
 async-trait = "0.1.92"
@@ -121,6 +127,11 @@ urlencoding = "2.1.3"
 [profile.dev]
 debug = "line-tables-only"
 split-debuginfo = "unpacked"
+incremental = false
+
+[profile.test]
+debug = "line-tables-only"
+strip = "debuginfo"
 incremental = false
 
 [profile.release]

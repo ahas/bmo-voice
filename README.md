@@ -59,7 +59,7 @@ a neutral name, and `tests/personal_data.rs` holds the rule `docs/PERSONAL-DATA.
 ## Checking a change
 
 - `cargo check --workspace --all-targets`: the static check, of the crate and the hosted tools.
-- `cargo test --test personal_data`: the repository-wide personal-data check.
+- `cargo test --test main personal_data::`: the repository-wide personal-data check.
 - `bunx tsc --noEmit` in `scripts/`: the scripts' static check.
 - `bunx nuxi typecheck` in `studio/client/`: the studio screen's static check.
 - `bunx tsc --noEmit` in `studio/` and `python3 -m py_compile studio/scripts/*.py`: the studio tools' static

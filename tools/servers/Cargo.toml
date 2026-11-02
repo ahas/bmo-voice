@@ -5,6 +5,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
+# One test target, the harness at tests/main.rs (bmo-chat's docs/conventions.md, 「Rust builds」).
+autotests = false
 
 [[bin]]
 name = "voice-servers-tool"
@@ -21,3 +23,7 @@ tokio = { version = "1.47.0", features = ["macros", "rt"] }
 [dev-dependencies]
 # The manifest and the deployment's declaration read in the tests.
 toml = { version = "0.8.23", default-features = false, features = ["parse"] }
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
