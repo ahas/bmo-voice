@@ -327,6 +327,8 @@ async fn create_synthesis(
     return Err(Refused::bad_request("a synthesis speaks a text; this one is empty"));
   }
 
+  within_bounds(&asked.text, asked.spoken.as_deref())?;
+
   let key = checked_key(asked.key.as_deref())?;
 
   if let Some(key) = key
@@ -417,6 +419,25 @@ fn checked_key(key: Option<&str>) -> Result<Option<&str>, Refused> {
     }
     other => Ok(other),
   }
+}
+
+// The most characters of written words a line is taken in with.
+const MOST_TEXT: usize = 10_000;
+
+// A line's written words and the spoken words a caller gave, held to the bounds every line taken in is spoken within
+// whatever its length (docs/boundary-api.md, 「Syntheses」).
+fn within_bounds(text: &str, spoken: Option<&str>) -> Result<(), Refused> {
+  if text.chars().count() > MOST_TEXT {
+    return Err(Refused::bad_request(format!("a text is at most {MOST_TEXT} characters")));
+  }
+
+  let most_spoken = crate::speech::spoken::MOST_SPOKEN;
+
+  if spoken.is_some_and(|words| words.chars().count() > most_spoken) {
+    return Err(Refused::bad_request(format!("spoken words are at most {most_spoken} characters")));
+  }
+
+  Ok(())
 }
 
 // The briefing whose synthesis holds a key, answered 200; a key a synthesis that speaks no briefing holds is a
@@ -547,7 +568,7 @@ async fn speak(context: Arc<Context>, events: Events, id: i64, voice: voices::Vo
     voice: &voice,
     text: &text,
     out: &out,
-    cap_ms: POLICY.run_cap_ms,
+    cap_ms: POLICY.run_cap_for(&text),
     ask: &ask,
   };
   // Each stage is handed over as it changes and written here, since the speaking cannot wait on the store.
@@ -673,6 +694,8 @@ async fn create_briefing(
   if asked.text.trim().is_empty() {
     return Err(Refused::bad_request("a briefing speaks a text; this one is empty"));
   }
+
+  within_bounds(&asked.text, asked.spoken.as_deref())?;
 
   if asked.kind == BriefingKind::Full && asked.message_id.is_none() {
     return Err(Refused::bad_request("a full reading names the line it reads"));

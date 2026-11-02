@@ -121,10 +121,10 @@ LOUD_DB = 20.0
 # How long each edge of a spoken piece is faded over, in seconds (docs/voice-plan.md, 「The voices」).
 EDGE_FADE = 0.01
 
-# The server's own limits. A line longer than this is not a briefing anybody asked for, and a body is read whole
-# into memory, so it is bounded before it is read.
-MOST_TEXT = 4000
-MOST_BODY = 64 * 1024
+# The server's own limit: a body is read whole into memory, so it is bounded before it is read. A line is spoken
+# whole however many characters it holds (docs/voice-plan.md, 「What a long line takes of the card」), and this holds
+# the longest spoken words the engine takes in, four bytes to a character and more, with room to spare.
+MOST_BODY = 1024 * 1024
 # A delivery instruction is a sentence, not a script: anything longer is a mistake in a row.
 MOST_STYLE = 300
 # The most characters of a refusal the asker hands on: room for a failure's kind, message and frame.
@@ -937,9 +937,6 @@ class Service:
 
         if checkpoint is None or not isinstance(text, str) or not text.strip():
             raise ValueError("a request names a voice folder under the voices root, and a text")
-
-        if len(text) > MOST_TEXT:
-            raise ValueError(f"a text is at most {MOST_TEXT} characters")
 
         style = delivery(request.get("style"))
         by_sentence = request.get("sentences", False)

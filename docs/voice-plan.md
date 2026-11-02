@@ -85,7 +85,8 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **Its executable is `synth/voice-tool.py`,** on the system's `python3` and the standard library alone, placed
   with the mouth, the encoder and the transcriber it runs and the tool host's Python helper; each file it runs runs
   on the voice environment's interpreter.
-- **Timeouts:** a minute for a call, ten for the mouth and the transcriber, and the run cap for one synthesis.
+- **Timeouts:** a minute for a call, ten for the mouth and the transcriber, and the run cap for one synthesis
+  (「What a long line takes of the card」).
 
 ## Encoding
 
@@ -377,9 +378,10 @@ the voice nodes. What a caller does with the sound is the caller's.
   copied to every node; it never goes into a database, a log, a command line or an environment variable.
 - **`POST /speak`:** a line and the voice as a name under the voices root, with `seed`, `style` and `sentences`. The
   answer is the spoken line as a 48 kHz 16-bit wav, peak-matched, with its length, load time, speaking time and
-  checkpoint in its headers. A path leaving the voices root, a voice the node does not hold, a voice whose
-  `voice.toml` names another engine, nothing to say, or a `style` carrying a bracket or longer than 300 characters is
-  refused before any model loads.
+  checkpoint in its headers. The line is spoken whole however many characters it holds; only the request's body is
+  bounded, at 1 MiB, read no further than that. A path leaving the voices root, a voice the node does not hold, a
+  voice whose `voice.toml` names another engine, nothing to say, or a `style` carrying a bracket or longer than 300
+  characters is refused before any model loads.
 - **`GET /health`:** the checkpoint loaded, whether a line is being spoken, whether the model is on the card, the
   device, VRAM and host memory held, the card's free memory (asked of `nvidia-smi`, opening no CUDA context), whether
   other work holds the card lock (read from the kernel's lock table, never by taking it), whether the server holds
@@ -410,6 +412,14 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 ### What a long line takes of the card
 
+- **No count of characters bounds a line.** The mouth speaks a line piece by piece, so what a line takes of the card
+  is what its longest piece takes; what grows with the line is only the sound held in host memory until it leaves,
+  about 10 MiB a minute, and the time it takes. The engine bounds the line itself, at the 30,000 characters of
+  spoken words a synthesis holds (`docs/boundary-api.md`, 「Syntheses」), and hands it to one server whole.
+- **The run cap grows with the line:** the policy's `run_cap_ms` for the card's lock, the load and the first piece,
+  and `run_ms_per_character` for every character of the spoken words. A voice says about 7 characters a second of
+  Korean and 14 of English and speaks a little faster than real time, so a character takes about 130 ms of speaking
+  at most; 400 ms leaves room for every piece of a line to be spoken twice.
 - **A line is cut into pieces:** a row that speaks a sentence at a time speaks each sentence as one piece, and any
   other row speaks a line in passes of whole sentences of up to 240 characters, 0.3 seconds apart.
 - **No piece is longer than 340 characters.** A sentence longer than that is cut at its clauses — after a comma, a

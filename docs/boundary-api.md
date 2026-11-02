@@ -99,11 +99,14 @@ asking `Accept: application/json`.
   it as busy. While it waits, `waitingOn` is an English sentence saying what on: the master's reason for its
   card (every card in use, a card held by a claim or a lower tier, the service starting), its place in the
   line, or the master not reached. It is null once the card is granted, and on a synthesis that ended.
-- **`text` must hold something to say.** A `spoken` given that holds nothing, or that fails the check, is answered
-  422 `unconverted-run` (「The spoken words」). A voice no list holds is answered 404 `not-found`; a voice that is
-  not served is answered 422 `retired-voice`; an `emotion` outside the voice's is answered 422 `unknown-emotion`.
-  `style` and `seed` are laid over the voice's row
-  for this one synthesis.
+- **`text` must hold something to say,** in at most 10,000 characters, and a `spoken` given holds at most 30,000;
+  either longer is answered 400 `bad-request`. A `spoken` given that holds nothing, or that fails the check, is
+  answered 422 `unconverted-run` (「The spoken words」). A voice no list holds is answered 404 `not-found`; a voice
+  that is not served is answered 422 `retired-voice`; an `emotion` outside the voice's is answered 422
+  `unknown-emotion`. `style` and `seed` are laid over the voice's row for this one synthesis.
+- **A line taken in is spoken whatever its length.** Its voice server is handed the spoken words whole and speaks
+  them piece by piece into one sound (`docs/voice-plan.md`, 「What a long line takes of the card」), and the time it
+  is given grows with them (「The policy」); no line within the bounds above is refused or cut off for its length.
 - **The sound** is answered only once the state is `done`; before that, and where a failed synthesis left
   none, 404 `not-found`. A sound is kept under the data root, never in the database.
 - **A line a stopped process left is taken up by the next.** As the service starts, every synthesis still
@@ -174,6 +177,8 @@ server any other way.
   from its head, so a seat left waiting by a process that is gone would hold every later line behind it. A seat
   waiting while agency is not reached is asked about again, never left for a new one; one agency no longer holds,
   or given back before it was let in, is dropped and a new one asked.
+- **Derived spoken words hold at most 30,000 characters,** the bound a caller's `spoken` is held to; a longer
+  answer does not stand and is asked again, as one that fails the check is.
 - **Nothing gives it up.** An answer that fails the check, one that does not read, a seat or a session agency
   refuses and agency not reached are each asked again five seconds later, however often; `waitingOn` says which
   it was and why, and the synthesis stays `waiting` until its spoken words stand. They are kept as its
@@ -202,9 +207,9 @@ server any other way.
   synthesis in the named voice, `spoken` its spoken words where the caller gave them and derived where it did
   not (「The spoken words」), spoken on the voice server of the card granted it. `text` is the script. Its `state` and
   `durationMs` are its synthesis's, and `synthesisId` names it, whose `waitingOn` says what a waiting one waits
-  on. `text` must hold something to say; a `spoken` that is empty or fails the check is 422 `unconverted-run`, a
-  voice no list holds is 404 `not-found`, a voice that is not served is 422 `retired-voice`, and an emotion outside
-  the policy's is 422 `unknown-emotion`.
+  on. `text` must hold something to say, within a synthesis's bounds (「Syntheses」); a `spoken` that is empty or
+  fails the check is 422 `unconverted-run`, a voice no list holds is 404 `not-found`, a voice that is not served is
+  422 `retired-voice`, and an emotion outside the policy's is 422 `unknown-emotion`.
 - **A key makes a briefing once,** as it does a synthesis (「Syntheses」): the key is its synthesis's, and a `POST`
   naming a key the synthesis of a briefing holds, not yet `failed`, is answered 200 with that briefing. A key a
   synthesis holds that speaks no briefing is answered 409 `conflict`.
@@ -424,10 +429,11 @@ declares the nouns `listen` and `brief` when asked `nouns`, so the platform hand
 
 ## The policy
 
-`policy/voice.toml` holds the engine's own policy values, read once at start: `run_cap_ms`, how long one
-line may take to speak once its card is granted, `emotions`, the emotions a voice may be asked to speak with, and
-`engine`, the engine every served voice belongs to (`fish-s2-pro`). No route serves them;
-the voices list them, and a synthesis outside them is refused.
+`policy/voice.toml` holds the engine's own policy values, read once at start: `run_cap_ms` and
+`run_ms_per_character`, which together say how long one line may take to speak once its card is granted (the first,
+and the second for each character of its spoken words), `emotions`, the emotions a voice may be asked to speak
+with, and `engine`, the engine every served voice belongs to (`fish-s2-pro`). No route serves them; the voices list
+them, and a synthesis outside them is refused.
 
 ## Settings
 

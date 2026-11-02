@@ -521,7 +521,7 @@ async function speak(): Promise<void> {
       node = { name: taken.name, shell: taken.shell };
     }
 
-    const spoken = await speakOnNode(request, { shell: node.shell, timeoutMs: voiceCapMs });
+    const spoken = await speakOnNode(request, { shell: node.shell, timeoutMs: voiceCapMs(request.text) });
 
     writeFileSync(wav, spoken.wav);
     say(node, `${spoken.seconds.toFixed(2)}s of ${spoken.checkpoint} spoken in ${spoken.speakSeconds.toFixed(2)}s (weights ${spoken.loadSeconds.toFixed(2)}s)`);
@@ -585,7 +585,9 @@ async function adapterAnswer(asked: string, node: string | null, placed: readonl
       let spoken;
 
       try {
-        spoken = await speakOnNode(await speakRequest(moveCheckLine()), { shell: at.shell, timeoutMs: voiceCapMs });
+        const checkLine = moveCheckLine();
+
+        spoken = await speakOnNode(await speakRequest(checkLine), { shell: at.shell, timeoutMs: voiceCapMs(checkLine) });
       } catch (error) {
         // Another occupant of the voice's tier using the card is never made to yield for the check line; the server
         // answering its health on the card's device stands for it, and the node's first granted line is its first.

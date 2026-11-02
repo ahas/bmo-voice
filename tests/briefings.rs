@@ -543,6 +543,43 @@ async fn a_key_takes_a_line_in_once_until_it_fails() {
 }
 
 #[tokio::test]
+async fn a_line_is_taken_in_within_its_bounds_and_refused_past_them() {
+  let scratch = Scratch::new().await;
+  let engine = engine(&scratch, None).await;
+  let words = |count: usize| "가".repeat(count);
+  let synthesis =
+    |text: String, spoken: String| json!({ "voiceName": "voice-b", "text": text, "spoken": spoken });
+  let briefing = |text: String, spoken: String| json!({ "voiceName": "voice-a", "text": text, "spoken": spoken, "chatId": ROOM, "kind": "summary" });
+
+  // At the bounds, a synthesis and a briefing are taken in.
+  let (status, taken) =
+    call(&engine, "POST", "/syntheses", Some(synthesis(words(10_000), words(30_000)))).await;
+
+  assert_eq!(status, StatusCode::CREATED, "{taken}");
+
+  let (status, taken) =
+    call(&engine, "POST", "/briefings", Some(briefing(words(10_000), words(30_000)))).await;
+
+  assert_eq!(status, StatusCode::CREATED, "{taken}");
+
+  // Past either, each is refused before anything is taken in.
+  for (path, body) in [
+    ("/syntheses", synthesis(words(10_001), SPOKEN.to_owned())),
+    ("/syntheses", synthesis("x".to_owned(), words(30_001))),
+    ("/briefings", briefing(words(10_001), SPOKEN.to_owned())),
+    ("/briefings", briefing("x".to_owned(), words(30_001))),
+  ] {
+    let (status, refused) = call(&engine, "POST", path, Some(body)).await;
+
+    assert_eq!(
+      (status, refused["code"].as_str()),
+      (StatusCode::BAD_REQUEST, Some("bad-request")),
+      "{path} {refused}"
+    );
+  }
+}
+
+#[tokio::test]
 async fn a_key_takes_a_briefing_in_once_and_a_plain_synthesis_key_is_a_conflict() {
   let scratch = Scratch::new().await;
   let engine = engine(&scratch, None).await;

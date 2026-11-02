@@ -20,6 +20,10 @@ use crate::units::agency::{Agency, Seat, SeatAsk};
 /// What the derivation's model is told, its system prompt.
 const INSTRUCTIONS: &str = include_str!("../../prompts/spoken-words.md");
 
+/// The most characters of spoken words a line holds, a caller's and a derived one's alike (docs/boundary-api.md,
+/// 「Syntheses」): the line a voice server is handed whole.
+pub const MOST_SPOKEN: usize = 30_000;
+
 /// How long a try that did not answer, or answered words that failed, waits before it is asked again.
 const ASK_AGAIN: Duration = Duration::from_secs(5);
 
@@ -155,8 +159,12 @@ enum Refusal {
   Unconverted(Unconverted),
 }
 
-// Whether an answer's spoken words pass the check.
+// Whether an answer's spoken words pass the check and stand within the bound every line is spoken within.
 fn checked(answer: &Answer, language: Language) -> Result<(), Refusal> {
+  if answer.spoken.trim().chars().count() > MOST_SPOKEN {
+    return Err(Refusal::Unread(format!("the spoken words run past {MOST_SPOKEN} characters")));
+  }
+
   match unconverted(&answer.spoken, language) {
     Some(found) => Err(Refusal::Unconverted(found)),
     None => Ok(()),

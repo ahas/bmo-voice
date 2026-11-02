@@ -217,6 +217,14 @@ fn an_answer_is_read_out_of_the_text_round_it_and_held_to_the_check() {
   assert!(latin.contains("\"Qwen\""), "{latin}");
   assert!(testing::answer("no object here", Language::Ko).is_err());
 
+  // Spoken words past the most a line holds do not stand, and are asked again; at the bound they stand.
+  let most = bmo_voice::speech::spoken::MOST_SPOKEN;
+  let at_most = json!({ "spoken": "가".repeat(most) }).to_string();
+  let past = json!({ "spoken": "가".repeat(most + 1) }).to_string();
+
+  assert_eq!(testing::answer(&at_most, Language::Ko).map(|words| words.chars().count()), Ok(most));
+  assert!(testing::answer(&past, Language::Ko).expect_err("too long").contains("30000 characters"));
+
   let agreed = [("Nuxt".to_owned(), "넉스트".to_owned())];
   let prompt = testing::prompt(Language::Ko, &agreed, "Nuxt and Qwen", None);
 

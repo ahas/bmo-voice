@@ -159,9 +159,9 @@ pub struct Synthesis {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NewSynthesis {
   pub voice_name: String,
-  /// The written words: what people read of the line.
+  /// The written words: what people read of the line, at most 10,000 characters.
   pub text: String,
-  /// The words the voice says, checked before they are spoken; derived from `text` where absent.
+  /// The words the voice says, at most 30,000 characters and checked; derived from `text` where absent.
   #[serde(default)]
   pub spoken: Option<String>,
   /// The language the line is said in, `ko` or `en`; the voice's own where absent.
@@ -319,9 +319,9 @@ pub struct Briefing {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NewBriefing {
   pub voice_name: String,
-  /// The written words, read into a script by the engine's reading rules.
+  /// The written words, at most 10,000 characters, read into a script by the engine's reading rules.
   pub text: String,
-  /// The words the voice says, checked before they are spoken; derived from the script where absent.
+  /// The words the voice says, at most 30,000 characters and checked; derived from the script where absent.
   #[serde(default)]
   pub spoken: Option<String>,
   /// The language the line is said in, `ko` or `en`; the voice's own where absent.

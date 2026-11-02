@@ -13,7 +13,12 @@ import type { VoiceRow } from "./store";
 // in `synth/`, which do the speaking, encoding and transcribing.
 
 // The voice's own policy values (`policy/voice.toml`).
-const policy = Bun.TOML.parse(readFileSync(join(releaseRoot, "policy/voice.toml"), "utf8")) as { run_cap_ms: number; emotions: string[]; engine: string };
+const policy = Bun.TOML.parse(readFileSync(join(releaseRoot, "policy/voice.toml"), "utf8")) as {
+  run_cap_ms: number;
+  run_ms_per_character: number;
+  emotions: string[];
+  engine: string;
+};
 
 // The engine every served voice belongs to (`policy/voice.toml`, docs/voice-plan.md 「The synthesiser」).
 export const servedEngine = policy.engine;
@@ -30,8 +35,11 @@ export function voiceEngine(folder: string): string {
   return String((Bun.TOML.parse(readFileSync(declaration, "utf8")) as { engine?: unknown }).engine ?? "");
 }
 
-// How long a line may take before it is called off.
-export const voiceCapMs: number = policy.run_cap_ms;
+// How long a line of these words may take before it is called off: the policy's run cap and its time for each
+// character (docs/voice-plan.md, 「What a long line takes of the card」).
+export function voiceCapMs(text: string): number {
+  return policy.run_cap_ms + [...text].length * policy.run_ms_per_character;
+}
 
 // The emotions a voice may be spoken with.
 export const voiceEmotions: readonly string[] = policy.emotions;

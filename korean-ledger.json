@@ -6,7 +6,9 @@
   "src/studio/review.rs": 2,
   "src/studio/subtitles.rs": 6,
   "synth/voice-cer.py": 9,
-  "tests/briefings.rs": 1,
+  "tests/briefings.rs": 2,
   "tests/import.rs": 2,
-  "tests/spoken_words.rs": 24
+  "tests/mouth_long_line.py": 1,
+  "tests/policy.rs": 3,
+  "tests/spoken_words.rs": 26
 }
