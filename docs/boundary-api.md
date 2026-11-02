@@ -170,10 +170,9 @@ server any other way.
   road of its own. The session is ended and the slot given back once the spoken words stand; a slot or a
   session agency no longer holds is given up and a new one asked, and no try leaves a session of its own
   standing.
-- **The slot is never bound to the session.** Agency finishes a bound slot whose child no systemd unit, pane
-  or open execution holds once ten minutes have passed since it was bound, and a session is none of those, so a
-  derivation that runs longer would lose its slot under it; an active slot left unbound is never taken for its
-  age, and the engine gives it back itself.
+- **Agency binds the slot to the session** as it starts it, so the slot stands for as long as the session does
+  and is given back with its end (agency's `docs/role-slots.md`, 「The line」); the engine binds nothing itself,
+  and its own give-back after the session's end finishes a slot agency may already have given back.
 - **The agreed readings come first, the model's judgement after:** every row of the voice name table
   (`docs/store.md`, `voice_names`) with a reading in the line's language is handed over as a reading to apply
   as it stands, and the model reads whatever else the words need with its own judgement.
@@ -182,12 +181,19 @@ server any other way.
   the table holds is never written over: the owner's correction of a row (`scripts/voice-names.ts --set`) wins
   from then on. A chosen reading that holds what the check finds is not kept.
 - **A slot waits in its role's line while the engine asks for its admission,** again every two seconds until it
-  is let in, with no bound on how long: the line lets in only a request whose owner is asking now.
-- **Every slot asked stands in the ledger** (`docs/store.md`, 「The folder」) until it is given back, and each one a
-  process left there is given back, cancelled, as the next process starts, so a slot a process that is gone left
-  waiting or let in holds no place of the role's cap. A slot waiting while agency is not reached is asked about
-  again, never left for a new one; one agency no longer holds, or given back before it was let in, is dropped and
-  a new one asked under a request key of its own, since a key once given back is spent.
+  is let in, with no bound on how long: the line lets in only a request whose owner is asking now. Each
+  admission answers the request's `state`: `waiting` or `reserved` is asked again, `active` is let in, and
+  `released` or `cancelled` is a request given back, whose `endedBy` and `outcome` say who gave it back and
+  why, and which is never asked about again.
+- **A slot's owner is its synthesis,** `voice:synthesis:<synthesisId>`, and its request key that owner and a
+  number drawn at random for the ask, so no key a given-back request spent is asked again, by this process or
+  the next. A slot waiting while agency is not reached is asked about again, never left for a new one; one
+  agency no longer holds, or given back before it was let in, is dropped and a new one asked under a key of
+  its own.
+- **Agency is the truth at start.** Before the lines an earlier process left unspoken are taken up, everything
+  the owner of each such synthesis holds is given back (`DELETE /slot-requests?owner=`): every slot it asked,
+  waiting or let in, and every session agency bound one of them to. A slot a process that is gone left holds
+  no place of the role's cap, and the engine keeps no list of the slots it holds.
 - **Derived spoken words hold at most 30,000 characters,** the bound a caller's `spoken` is held to; a longer
   answer does not stand and is asked again, as one that fails the check is.
 - **Nothing gives it up.** An answer that fails the check, one that does not read, a slot or a session agency
@@ -370,9 +376,10 @@ The co-worker pool and its role's sessions (its `docs/api.md`, 「slots, reserva
 
 | Call | Route | Used for |
 |---|---|---|
-| a slot | `POST /slot-requests` with `requestKey` and `owner` `voice:synthesis:<synthesisId>:<n>`, `n` counting the slots the line was asked, `role`, `source` `voice`, and `provider` and `model` where the settings name them | the slot the derivation runs on, with its token, its state and the provider, model and effort it is let in on |
-| its admission and its end | `PATCH /slot-requests/{token}` | asked with no state, again and again, until its `request` is `active`; given back with `finished` and its outcome, `cancel` where no turn ran, and every slot an earlier process left in the ledger given back cancelled as the service starts; never bound |
-| a session | `POST /sessions` with `scope` `role`, `slot` the slot's token, `line`, `systemPrompt`, `labels` naming the synthesis and `toolsAllowed` empty | the derivation's role's session, on the slot's role, provider, model and effort; `422` `slot-not-active` or `contradicts-slot` and `503` `line-not-carried` give the slot back and a new one is asked |
+| a slot | `POST /slot-requests` with `owner` `voice:synthesis:<synthesisId>`, `requestKey` `voice:synthesis:<synthesisId>:<drawn>`, a number drawn at random for the ask, `role`, `source` `voice`, and `provider` and `model` where the settings name them | the slot the derivation runs on, with its token, its state and the provider, model and effort it is let in on |
+| its admission and its end | `PATCH /slot-requests/{token}` | asked with no state, again and again while its `state` is `waiting` or `reserved`, until it is `active`; `released` or `cancelled`, with `endedBy` and `outcome`, ends the asking and a new slot is asked; given back with `finished` and its outcome, `cancel` where no turn ran; never bound by the engine |
+| everything a synthesis holds | `DELETE /slot-requests?owner=voice:synthesis:<synthesisId>` | asked as the service starts, for each synthesis an earlier process left unspoken, before it is taken up: its slots given back and the sessions bound to them ended |
+| a session | `POST /sessions` with `scope` `role`, `slot` the slot's token, `line`, `systemPrompt`, `labels` naming the synthesis and `toolsAllowed` empty | the derivation's role's session, on the slot's role, provider, model and effort, agency binding the slot to it; `422` `slot-not-active` or `contradicts-slot` and `503` `line-not-carried` give the slot back and a new one is asked |
 | its turns | `POST /sessions/{sessionId}/turns` with `prompt`, `resume` `fresh`, `name`, `title`, `chat` 0 (the derivation stands under no room), `hearsWords` false and `variables` empty | one try on the session's road, answered once it ends; its answer is the model's |
 | its end | `DELETE /sessions/{sessionId}` | the session ended once the spoken words stand; one still busy is asked again |
 

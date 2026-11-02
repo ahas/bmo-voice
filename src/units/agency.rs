@@ -1,7 +1,7 @@
 //! Agency, as its `docs/api.md` states it (「slots, reservations and places」, 「sessions」): a slot of its
-//! co-worker pool asked under a role, let in and given back, and the role's session started on it with its turns.
-//! No call carries a clock: a slot waits in its role's line while its owner asks, and a turn runs for as long as
-//! agency takes.
+//! co-worker pool asked under a role, let in and given back, everything an owner holds given back at once, and the
+//! role's session started on it with its turns. No call carries a clock: a slot waits in its role's line while its
+//! owner asks, and a turn runs for as long as agency takes.
 
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
@@ -30,13 +30,15 @@ pub struct SlotAsk {
   pub model: Option<String>,
 }
 
-/// A slot request as agency answers it, of what the engine reads: its token and its state. The road it is let in
-/// on is the session's to take.
+/// A slot request as agency answers it, of what the engine reads: its token, its state, and who gave it back and
+/// why where it was given back. The road it is let in on is the session's to take.
 #[derive(Clone, Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase")]
 pub struct Slot {
   pub token: String,
   pub state: String,
+  pub ended_by: Option<String>,
+  pub outcome: Option<String>,
 }
 
 impl Slot {
@@ -51,9 +53,28 @@ impl Slot {
   }
 }
 
+/// An admission's answer: the request where it is let in, and the request's state with who gave it back and why.
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Admission {
+  #[serde(default)]
   request: Option<Slot>,
+  #[serde(default)]
+  state: String,
+  #[serde(default)]
+  ended_by: Option<String>,
+  #[serde(default)]
+  outcome: Option<String>,
+}
+
+/// What an owner's release gave back.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Released {
+  pub cancelled: i64,
+  pub released: i64,
+  pub reservations: i64,
+  pub sessions_ended: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -73,12 +94,29 @@ impl Agency {
     self.caller.json(request).await
   }
 
-  /// A slot asked for its admission: the slot where the pool let it in, none while its turn has not come.
-  pub async fn admit(&self, token: &str) -> Result<Option<Slot>, UnitError> {
+  /// A slot asked for its admission: the slot the pool let in, else the slot in the state the answer names, with
+  /// who gave it back and why where it was given back.
+  pub async fn admit(&self, token: &str) -> Result<Slot, UnitError> {
     let request = self.caller.request(Method::PATCH, &["slot-requests", token]).json(&json!({}));
     let answered: Admission = self.caller.json(request).await?;
 
-    Ok(answered.request)
+    Ok(match answered.request {
+      Some(request) => request,
+      None => Slot {
+        token: token.to_owned(),
+        state: answered.state,
+        ended_by: answered.ended_by,
+        outcome: answered.outcome,
+      },
+    })
+  }
+
+  /// Everything an owner holds given back: each slot it asked, waiting or let in, and each session agency bound
+  /// one of them to, ended.
+  pub async fn release_owner(&self, owner: &str) -> Result<Released, UnitError> {
+    let request = self.caller.request(Method::DELETE, &["slot-requests"]).query(&[("owner", owner)]);
+
+    self.caller.json(request).await
   }
 
   /// A slot given back with what its work came to, cancelled where no turn ran on it.

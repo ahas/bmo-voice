@@ -4,7 +4,6 @@
 //! asked again, as is every refusal and every silence on the way, with no count and no clock; the readings the
 //! model chose for names the table did not hold are written into it.
 
-use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -77,7 +76,6 @@ pub async fn derived(
 ) -> String {
   let mut failed: Option<Unconverted> = None;
   let mut held: Option<Held> = None;
-  let mut slots: u64 = 0;
 
   loop {
     told("the spoken words are being derived");
@@ -88,8 +86,7 @@ pub async fn derived(
       }
       Some(agency) => {
         if held.is_none() {
-          slots += 1;
-          match stand(context, agency, id, slots).await {
+          match stand(context, agency, id).await {
             Ok(standing) => held = Some(standing),
             Err(why) => {
               told(&format!("the spoken words could not be derived: {why}; asked again"));
@@ -107,7 +104,7 @@ pub async fn derived(
           Ok(answer) => match answer.and_then(|answer| checked(&answer, language).map(|()| answer)) {
             Ok(answer) => {
               if let Some(standing) = held.take() {
-                release(context, agency, standing, "answered").await;
+                release(agency, standing, "answered").await;
               }
 
               keep_readings(context, language, &answer.readings).await;
@@ -132,7 +129,7 @@ pub async fn derived(
               }
             ) && let Some(standing) = held.take()
             {
-              release(context, agency, standing, "failed").await;
+              release(agency, standing, "failed").await;
             }
 
             Missed::Road(format!("the turn did not answer: {why}"))
@@ -252,30 +249,25 @@ async fn keep_readings(context: &Context, language: Language, chosen: &[Chosen])
   }
 }
 
-// A slot asked and let in and a role's session started on it, the `n`th the line's derivation stands; a slot whose
-// session would not start is given back. The slot is never bound to the session: agency finishes a bound slot whose
-// child no unit, pane or execution holds once it has been bound a while, and a session is none of those.
-async fn stand(context: &Context, agency: &Agency, id: i64, n: u64) -> Result<Held, String> {
+// A slot asked under the synthesis's owner and a key drawn for it, let in, and a role's session started on it,
+// which agency binds the slot to; a slot whose session would not start is given back.
+async fn stand(context: &Context, agency: &Agency, id: i64) -> Result<Held, String> {
   let spoken = &context.settings.spoken;
-  let key = format!("voice:synthesis:{id}:{n}");
+  let owner = owner(id);
   let ask = SlotAsk {
-    request_key: key.clone(),
-    owner: key,
+    request_key: format!("{owner}:{:016x}", rand::random::<u64>()),
+    owner,
     role: spoken.role.clone(),
     source: SOURCE.to_owned(),
     provider: spoken.provider.clone(),
     model: spoken.model.clone(),
   };
-  let ledger = context.settings.slots_folder();
   let slot = agency.ask_slot(&ask).await.map_err(|why| format!("no slot was given: {why}"))?;
-
-  keep(&ledger, &slot.token);
-
   let token = slot.token.clone();
   let slot = match admitted(agency, slot).await {
     Ok(slot) => slot,
     Err(why) => {
-      give_back(agency, &ledger, &token, "cancelled: not let in", true).await;
+      give_back(agency, &token, "cancelled: not let in", true).await;
 
       return Err(format!("the slot was not let in: {why}"));
     }
@@ -291,7 +283,7 @@ async fn stand(context: &Context, agency: &Agency, id: i64, n: u64) -> Result<He
   let session = match agency.start_session(&start).await {
     Ok(session) => session,
     Err(why) => {
-      give_back(agency, &ledger, &slot.token, "cancelled: no session", true).await;
+      give_back(agency, &slot.token, "cancelled: no session", true).await;
 
       return Err(format!("no session was started: {why}"));
     }
@@ -300,56 +292,46 @@ async fn stand(context: &Context, agency: &Agency, id: i64, n: u64) -> Result<He
   Ok(Held { slot, session })
 }
 
-// A derivation's session ended and its slot given back with what it came to.
-async fn release(context: &Context, agency: &Agency, held: Held, outcome: &str) {
+// A derivation's session ended, which gives back the slot agency bound to it, and the slot then finished with what
+// it came to.
+async fn release(agency: &Agency, held: Held, outcome: &str) {
   end(agency, &held.session).await;
-  give_back(agency, &context.settings.slots_folder(), &held.slot.token, outcome, false).await;
+  give_back(agency, &held.slot.token, outcome, false).await;
 }
 
-// A slot's file in the ledger. A token is agency's own word, so only its letters, figures and dashes name the file.
-fn entry(ledger: &Path, token: &str) -> PathBuf {
-  let name: String = token.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
-
-  ledger.join(name)
-}
-
-fn keep(ledger: &Path, token: &str) {
-  let written = std::fs::create_dir_all(ledger).and_then(|()| std::fs::write(entry(ledger, token), token));
-
-  if let Err(why) = written {
-    eprintln!("voice: the slot {token} was not written into the ledger: {why}");
-  }
-}
-
-// A slot given back and taken out of the ledger; one agency did not take back stays in it, for the next process.
-async fn give_back(agency: &Agency, ledger: &Path, token: &str, outcome: &str, cancel: bool) {
+// A slot given back; one agency did not take back is left to the owner's release as the next process starts.
+async fn give_back(agency: &Agency, token: &str, outcome: &str, cancel: bool) {
   match agency.give_back(token, outcome, cancel).await {
-    Ok(()) | Err(UnitError::Refused { status: 404, .. }) => {
-      let _ = std::fs::remove_file(entry(ledger, token));
-    }
+    Ok(()) | Err(UnitError::Refused { status: 404, .. }) => {}
     Err(why) => eprintln!("voice: the slot {token} was not given back: {why}"),
   }
 }
 
-/// Every slot an earlier process left in the ledger given back, cancelled; how many were.
-pub async fn give_back_left(agency: &Agency, ledger: &Path) -> usize {
-  let Ok(entries) = std::fs::read_dir(ledger) else {
-    return 0;
+/// The owner a synthesis's slots are asked under.
+fn owner(id: i64) -> String {
+  format!("voice:synthesis:{id}")
+}
+
+/// Everything the syntheses an earlier process left unspoken hold of agency given back by their owners, before
+/// any of them is taken up (docs/boundary-api.md, 「How the engine derives the spoken words」); how many slots
+/// were.
+pub async fn give_back_left(agency: &Agency, db: &sea_orm::DatabaseConnection) -> usize {
+  let left = match crate::store::syntheses::unfinished(db).await {
+    Ok(left) => left,
+    Err(why) => {
+      eprintln!("voice: the syntheses an earlier process left were not read: {why}");
+
+      return 0;
+    }
   };
   let mut given = 0;
 
-  for path in entries.filter_map(Result::ok).map(|one| one.path()) {
-    let Ok(token) = std::fs::read_to_string(&path) else {
-      continue;
-    };
-    let token = token.trim();
+  for row in left {
+    let owner = owner(row.id);
 
-    match agency.give_back(token, "cancelled: left by an earlier voice process", true).await {
-      Ok(()) | Err(UnitError::Refused { status: 404, .. }) => {
-        let _ = std::fs::remove_file(&path);
-        given += 1;
-      }
-      Err(why) => eprintln!("voice: the slot {token} left in the ledger was not given back: {why}"),
+    match agency.release_owner(&owner).await {
+      Ok(released) => given += (released.cancelled + released.released) as usize,
+      Err(why) => eprintln!("voice: what {owner} held of agency was not given back: {why}"),
     }
   }
 
@@ -378,15 +360,18 @@ async fn one_try(
 }
 
 // A slot waited on in its role's line, its admission asked again and again until the pool lets it in: the line lets
-// in only a request whose owner is asking now.
+// in only a request whose owner is asking now. One the admission answers given back is asked about no more.
 async fn admitted(agency: &Agency, mut slot: Slot) -> Result<Slot, UnitError> {
   while !slot.admitted() {
     if slot.ended() {
+      let by = slot.ended_by.as_deref().unwrap_or("agency");
+      let why = slot.outcome.as_deref().map(|outcome| format!(": {outcome}")).unwrap_or_default();
+
       return Err(UnitError::Refused {
         unit: "agency",
         status: 409,
         code: None,
-        error: format!("slot {} was given back before it was let in", slot.token),
+        error: format!("slot {} was {} by {by} before it was let in{why}", slot.token, slot.state),
       });
     }
 
@@ -394,8 +379,7 @@ async fn admitted(agency: &Agency, mut slot: Slot) -> Result<Slot, UnitError> {
 
     // Agency not reached is asked again about the same slot, which keeps its place in the line.
     match agency.admit(&slot.token).await {
-      Ok(Some(now)) => slot = now,
-      Ok(None) => {}
+      Ok(now) => slot = now,
       Err(
         UnitError::Unreached { .. }
         | UnitError::Refused {

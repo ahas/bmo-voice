@@ -344,6 +344,7 @@ struct Asked {
   starts: Mutex<Vec<Value>>,
   prompts: Mutex<Vec<String>>,
   given_back: Mutex<Vec<Value>>,
+  owners_released: Mutex<Vec<String>>,
   ended: Mutex<Vec<String>>,
   answers: Mutex<Vec<String>>,
 }
@@ -377,7 +378,18 @@ async fn stand_in_agency(asked: Arc<Asked>) -> std::net::SocketAddr {
 
         asked.slots.lock().unwrap().push(ask);
         (StatusCode::CREATED, axum::Json(slot_of("waiting")))
-      }),
+      })
+      // An owner's release: everything the owner holds given back.
+      .delete(
+        |State(asked): State<Arc<Asked>>,
+         axum::extract::Query(query): axum::extract::Query<std::collections::BTreeMap<String, String>>| async move {
+          let owner = query.get("owner").cloned().unwrap_or_default();
+          let held = asked.slots.lock().unwrap().iter().filter(|ask| ask["owner"] == owner.as_str()).count();
+
+          asked.owners_released.lock().unwrap().push(owner);
+          axum::Json(json!({ "cancelled": held, "released": 0, "reservations": 0, "sessionsEnded": [] }))
+        },
+      ),
     )
     .route(
       "/slot-requests/{token}",
@@ -393,12 +405,14 @@ async fn stand_in_agency(asked: Arc<Asked>) -> std::net::SocketAddr {
           }
           // Its admission: its turn comes on the owner's second ask.
           None => {
-            let request = match asked.admissions.fetch_add(1, Ordering::SeqCst) {
-              0 => Value::Null,
-              _ => slot_of("active"),
+            let (request, state) = match asked.admissions.fetch_add(1, Ordering::SeqCst) {
+              0 => (Value::Null, "waiting"),
+              _ => (slot_of("active"), "active"),
             };
 
-            axum::Json(json!({ "request": request, "demand": null }))
+            axum::Json(
+              json!({ "request": request, "state": state, "endedBy": null, "outcome": null, "demand": null }),
+            )
           }
         }
       }),
@@ -532,7 +546,14 @@ async fn written_words_alone_are_derived_on_a_slot_the_agreed_readings_first_and
 
   assert_eq!(slot["role"], "transliterator");
   assert_eq!(slot["source"], "voice");
-  assert_eq!(slot["requestKey"], format!("voice:synthesis:{id}:1"));
+  assert_eq!(slot["owner"], format!("voice:synthesis:{id}"), "a slot's owner is its synthesis");
+  assert!(
+    slot["requestKey"]
+      .as_str()
+      .and_then(|key| key.strip_prefix(&format!("voice:synthesis:{id}:")))
+      .is_some_and(|drawn| drawn.len() == 16 && drawn.chars().all(|c| c.is_ascii_hexdigit())),
+    "its request key is its owner and a number drawn for the ask: {slot}"
+  );
   assert!(
     slot.get("provider").is_none() && slot.get("model").is_none(),
     "the role's order picks the road: {slot}"
@@ -541,13 +562,9 @@ async fn written_words_alone_are_derived_on_a_slot_the_agreed_readings_first_and
     asked.admissions.load(Ordering::SeqCst) >= 2,
     "a waiting slot's admission is asked again"
   );
-  assert!(asked.bound.lock().unwrap().is_empty(), "the slot is never bound");
-
-  let ledger = scratch.root.join("voice").join("slots");
-
   assert!(
-    std::fs::read_dir(&ledger).map_or(true, |mut left| left.next().is_none()),
-    "a slot given back leaves the ledger"
+    asked.bound.lock().unwrap().is_empty(),
+    "the engine binds no slot: agency binds it at the start"
   );
 
   let start = asked.starts.lock().unwrap()[0].clone();
@@ -577,52 +594,34 @@ async fn written_words_alone_are_derived_on_a_slot_the_agreed_readings_first_and
 }
 
 #[tokio::test]
-async fn a_slot_an_earlier_process_left_in_the_ledger_is_given_back_cancelled() {
+async fn what_the_syntheses_an_earlier_process_left_hold_is_given_back_by_their_owners() {
   let scratch = Scratch::new().await;
   let asked = Arc::new(Asked::default());
-  let at = stand_in_agency(Arc::clone(&asked)).await;
-  let settings_path = scratch.root.join("env").join("left.toml");
+  let served = served(&scratch, Some(stand_in_agency(Arc::clone(&asked)).await)).await;
+  let mut store = PgConnection::connect(&address_of(&scratch.name)).await.expect("the store answers");
 
-  std::fs::write(
-    &settings_path,
-    format!(
-      r#"listen = "127.0.0.1:0"
-address = "http://127.0.0.1:0"
-token_file = "voice.token"
-database = "{}"
-data_root = "{}"
+  store
+    .execute(
+      r#"INSERT INTO "voice_syntheses" ("id", "voice_name", "text", "spoken", "language", "state", "created_at")
+         VALUES (910, 'voice-a', 'Left.', NULL, 'ko', 'waiting', 0),
+                (911, 'voice-a', 'Done.', '끝.', 'ko', 'done', 0)"#,
+    )
+    .await
+    .expect("the lines a process left are written");
+  asked.slots.lock().unwrap().push(json!({ "owner": "voice:synthesis:910" }));
 
-[units.node]
-address = "http://127.0.0.1:9"
+  let agency = served.context.units.agency.as_ref().expect("an agency is named");
+  let given = bmo_voice::speech::spoken::give_back_left(agency, &served.context.db).await;
 
-[units.arbiter]
-address = "http://127.0.0.1:9"
+  assert_eq!(given, 1, "the slot the left synthesis asked is given back");
+  assert_eq!(
+    *asked.owners_released.lock().unwrap(),
+    ["voice:synthesis:910"],
+    "only an unfinished synthesis's owner is asked to give back what it holds"
+  );
+  assert!(asked.given_back.lock().unwrap().is_empty(), "no slot is given back by its token");
 
-[units.web]
-address = "http://127.0.0.1:9"
-
-[units.agency]
-address = "http://{at}"
-"#,
-      address_of(&scratch.name),
-      scratch.root.display()
-    ),
-  )
-  .expect("the settings are written");
-
-  let settings = Settings::read(&settings_path).expect("the settings read");
-  let ledger = settings.slots_folder();
-
-  std::fs::create_dir_all(&ledger).expect("the ledger is made");
-  std::fs::write(ledger.join("slot-left"), "slot-left").expect("a left slot is written");
-
-  let units = Units::new(&settings).expect("the units are named");
-  let agency = units.agency.as_ref().expect("an agency is named");
-  let given = bmo_voice::speech::spoken::give_back_left(agency, &ledger).await;
-
-  assert_eq!(given, 1);
-  assert_eq!(asked.given_back.lock().unwrap()[0]["cancel"], true, "it never ran, so it is cancelled");
-  assert!(!ledger.join("slot-left").exists(), "and it leaves the ledger");
+  store.close().await.expect("the store connection closes");
 }
 
 #[tokio::test]

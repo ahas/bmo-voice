@@ -23,7 +23,7 @@ pub async fn serve() -> Result<(), String> {
   }
 
   if let Some(agency) = &context.units.agency {
-    let left = spoken::give_back_left(agency, &context.settings.slots_folder()).await;
+    let left = spoken::give_back_left(agency, &context.db).await;
 
     if left > 0 {
       eprintln!("voice-server: gave back {left} slots an earlier process left");
