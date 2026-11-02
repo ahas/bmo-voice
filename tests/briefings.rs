@@ -623,3 +623,23 @@ async fn a_key_takes_a_briefing_in_once_and_a_plain_synthesis_key_is_a_conflict(
     "{refused}"
   );
 }
+
+#[test]
+fn a_reader_naming_no_cursor_starts_a_page_at_the_oldest_kept_and_a_stream_at_the_newest() {
+  use bmo_voice::http::event_start;
+
+  assert_eq!(event_start(Some(41), false, Some(10), Some(50)), 41, "a cursor named is the start");
+  assert_eq!(event_start(Some(41), true, Some(10), Some(50)), 41);
+  assert_eq!(
+    event_start(None, true, Some(1200), Some(2199)),
+    1199,
+    "a page replays from the oldest kept"
+  );
+  assert_eq!(
+    event_start(None, false, Some(1200), Some(2199)),
+    2199,
+    "a stream carries the live ones only"
+  );
+  assert_eq!(event_start(None, true, None, None), 0, "nothing kept yet");
+  assert_eq!(event_start(None, false, None, None), 0);
+}

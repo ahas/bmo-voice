@@ -132,4 +132,9 @@ impl Events {
   pub async fn first(&self) -> Result<Option<i64>, StoreError> {
     store::events::first(&self.db).await
   }
+
+  /// The newest event number kept, or none where none is kept.
+  pub async fn last(&self) -> Result<Option<i64>, StoreError> {
+    store::events::last(&self.db).await
+  }
 }

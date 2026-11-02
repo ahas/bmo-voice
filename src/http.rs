@@ -196,6 +196,17 @@ fn wanted(kinds: &[String], event: &Event) -> bool {
 }
 
 /// `GET /events`: the stream, or a page of it to a reader asking for JSON.
+/// Where a reader of the events starts: at the cursor it named, else where none is needed — a page at the
+/// oldest event kept, a stream at the newest, so the stream carries the live events only. `first` and `last`
+/// are the oldest and newest event numbers kept, none where none is kept.
+pub fn event_start(named: Option<i64>, page: bool, first: Option<i64>, last: Option<i64>) -> i64 {
+  match named {
+    Some(after) => after,
+    None if page => first.map_or(0, |first| first - 1),
+    None => last.unwrap_or(0),
+  }
+}
+
 async fn events(
   State(served): State<Served>,
   read: Result<Query<EventQuery>, QueryRejection>,
@@ -207,15 +218,18 @@ async fn events(
     .get("last-event-id")
     .and_then(|value| value.to_str().ok())
     .and_then(|id| id.trim().parse::<i64>().ok());
-  let after = query.after.or(resumed).unwrap_or(0);
+  let named = query.after.or(resumed);
   let kinds = narrowing(&query);
   let wants_json = request
     .headers()
     .get(header::ACCEPT)
     .and_then(|value| value.to_str().ok())
     .is_some_and(|accept| accept.contains("application/json"));
+  let first = served.events.first().await?;
+  let last = served.events.last().await?;
+  let after = event_start(named, wants_json, first, last);
 
-  if let Some(first) = served.events.first().await?
+  if let (Some(after), Some(first)) = (named, first)
     && after < first - 1
   {
     return Err(Refused::new(

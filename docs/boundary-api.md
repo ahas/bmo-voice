@@ -58,8 +58,10 @@ asking `Accept: application/json`.
 - **A frame's `event` is the kind,** its `id` the event number, a signed 64-bit integer that only grows,
   and its `data` is `{"id", "kind", "at", "data"}`, the inner `data` being the member.
 - **A reader resumes** with `Last-Event-ID` or `?after=`, and narrows with `kinds`, a comma-separated list.
-  The last 1,000 events are kept; a resume from before them is answered 410 `gone`, and the reader reads
-  the collections again.
+  A stream asked with neither reads on from the newest event kept, the live ones only, and a page asked with
+  neither starts at the oldest kept. The last
+  1,000 events are kept; a resume from before them is answered 410 `gone`, and the reader reads the
+  collections again.
 - **A page** is read with `after` and `limit`.
 - **A comment line every fifteen seconds** keeps a stream open. Every stream ends as the service is asked to stop,
   so a stop waits on no reader.

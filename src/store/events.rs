@@ -73,6 +73,15 @@ pub async fn since(
     .collect()
 }
 
+/// The newest event number the table keeps, or none where it keeps none.
+pub async fn last(db: &sea_orm::DatabaseConnection) -> Result<Option<i64>, StoreError> {
+  one(db, r#"SELECT MAX("id") AS "last" FROM "voice_events""#, vec![])
+    .await?
+    .map(|row| row.try_get::<Option<i64>>("", "last").map_err(StoreError::from))
+    .transpose()
+    .map(Option::flatten)
+}
+
 /// The oldest event number the table keeps, or none where it keeps none.
 pub async fn first(db: &sea_orm::DatabaseConnection) -> Result<Option<i64>, StoreError> {
   one(db, r#"SELECT MIN("id") AS "first" FROM "voice_events""#, vec![])
