@@ -62,12 +62,14 @@ pub struct Settings {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct Spoken {
-  /// The agency role the seat is asked for.
+  /// The agency role the slot is asked for.
   pub role: String,
   /// The runner line the derivation's session goes out on.
   pub line: String,
-  /// The provider the seat is asked on, where the deployment names one.
+  /// The provider the slot is asked on, where the deployment names one; named together with `model`.
   pub provider: Option<String>,
+  /// The model the slot is asked on, where the deployment names one; named together with `provider`.
+  pub model: Option<String>,
 }
 
 impl Default for Spoken {
@@ -76,6 +78,7 @@ impl Default for Spoken {
       role: "transliterator".to_owned(),
       line: "search".to_owned(),
       provider: None,
+      model: None,
     }
   }
 }
@@ -115,8 +118,18 @@ impl Settings {
   /// The settings a file holds.
   pub fn read(path: &Path) -> Result<Self, Unread> {
     let text = std::fs::read_to_string(path).map_err(|why| Unread(format!("{}: {why}", path.display())))?;
+    let settings: Self =
+      toml::from_str(&text).map_err(|why| Unread(format!("{}: {why}", path.display())))?;
 
-    toml::from_str(&text).map_err(|why| Unread(format!("{}: {why}", path.display())))
+    // A slot's road names its provider and its model together, or neither, the role's order picking then.
+    if settings.spoken.provider.is_some() != settings.spoken.model.is_some() {
+      return Err(Unread(format!(
+        "{}: [spoken] names provider and model together, or neither",
+        path.display()
+      )));
+    }
+
+    Ok(settings)
   }
 
   /// Where the settings stand: the file the variable names, else `settings.toml` at the top of the release the
@@ -183,9 +196,9 @@ impl Settings {
     self.voice_folder().join("demands")
   }
 
-  /// The ledger of the seats of agency's co-worker pool the service holds, one file each.
-  pub fn seats_folder(&self) -> PathBuf {
-    self.voice_folder().join("seats")
+  /// The ledger of the slots of agency's co-worker pool the service holds, one file each.
+  pub fn slots_folder(&self) -> PathBuf {
+    self.voice_folder().join("slots")
   }
 
   /// The token the voice servers on the voice nodes check.

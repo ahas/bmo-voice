@@ -8,7 +8,7 @@ use crate::events::Events;
 use crate::http::{Served, router};
 use crate::speech::{card, node, spoken};
 
-/// The service run: its settings read, its store migrated, the demands and seats an earlier process left given back,
+/// The service run: its settings read, its store migrated, the demands and slots an earlier process left given back,
 /// the lines it left unspoken taken up, and its
 /// routes served until it is stopped.
 pub async fn serve() -> Result<(), String> {
@@ -23,10 +23,10 @@ pub async fn serve() -> Result<(), String> {
   }
 
   if let Some(agency) = &context.units.agency {
-    let left = spoken::give_back_left(agency, &context.settings.seats_folder()).await;
+    let left = spoken::give_back_left(agency, &context.settings.slots_folder()).await;
 
     if left > 0 {
-      eprintln!("voice-server: gave back {left} seats an earlier process left");
+      eprintln!("voice-server: gave back {left} slots an earlier process left");
     }
   }
 

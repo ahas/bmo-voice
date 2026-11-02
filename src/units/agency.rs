@@ -1,6 +1,7 @@
-//! Agency, as its `docs/api.md` states it (「pool, seat-requests, reservations and roles」, 「sessions」): a seat of
-//! its co-worker pool asked under a role, let in, bound to a thrown-away session and given back, and the session's
-//! one turn. No call carries a clock: a seat waits in its line and a turn runs for as long as agency takes.
+//! Agency, as its `docs/api.md` states it (「slots, reservations and places」, 「sessions」): a slot of its
+//! co-worker pool asked under a role, let in and given back, and the role's session started on it with its turns.
+//! No call carries a clock: a slot waits in its role's line while its owner asks, and a turn runs for as long as
+//! agency takes.
 
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
@@ -14,32 +15,31 @@ pub struct Agency {
   caller: Caller,
 }
 
-/// A seat asked of the co-worker pool.
+/// A slot asked of the co-worker pool: on the road its role's order picks, or on the provider and model named
+/// together.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SeatAsk {
+pub struct SlotAsk {
   pub request_key: String,
   pub owner: String,
   pub role: String,
-  pub selection: String,
-  pub work_key: String,
+  pub source: String,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub provider: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub model: Option<String>,
 }
 
-/// A seat as agency answers it: its token, its state, and the road its work key resolved to.
+/// A slot request as agency answers it, of what the engine reads: its token and its state. The road it is let in
+/// on is the session's to take.
 #[derive(Clone, Debug, Default, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
-pub struct Seat {
+#[serde(default)]
+pub struct Slot {
   pub token: String,
   pub state: String,
-  pub provider: String,
-  pub model: String,
-  pub effort: Option<String>,
-  pub tier: String,
 }
 
-impl Seat {
+impl Slot {
   /// Whether the pool has let it in.
   pub fn admitted(&self) -> bool {
     self.state == "active"
@@ -53,7 +53,7 @@ impl Seat {
 
 #[derive(Deserialize)]
 struct Admission {
-  request: Option<Seat>,
+  request: Option<Slot>,
 }
 
 #[derive(Deserialize)]
@@ -66,30 +66,22 @@ impl Agency {
     Self { caller }
   }
 
-  /// A seat asked, answered as it stands.
-  pub async fn ask_seat(&self, ask: &SeatAsk) -> Result<Seat, UnitError> {
-    let request = self.caller.request(Method::POST, &["seat-requests"]).json(ask);
+  /// A slot asked, answered as it stands.
+  pub async fn ask_slot(&self, ask: &SlotAsk) -> Result<Slot, UnitError> {
+    let request = self.caller.request(Method::POST, &["slot-requests"]).json(ask);
 
     self.caller.json(request).await
   }
 
-  /// A seat asked for its admission: the seat where the pool let it in, none while its turn has not come.
-  pub async fn admit(&self, token: &str) -> Result<Option<Seat>, UnitError> {
-    let request = self.caller.request(Method::PATCH, &["seat-requests", token]).json(&json!({}));
+  /// A slot asked for its admission: the slot where the pool let it in, none while its turn has not come.
+  pub async fn admit(&self, token: &str) -> Result<Option<Slot>, UnitError> {
+    let request = self.caller.request(Method::PATCH, &["slot-requests", token]).json(&json!({}));
     let answered: Admission = self.caller.json(request).await?;
 
     Ok(answered.request)
   }
 
-  /// A seat bound to the session it launched.
-  pub async fn bind(&self, token: &str, session: &str) -> Result<(), UnitError> {
-    let change = json!({ "state": "bound", "childId": session });
-    let request = self.caller.request(Method::PATCH, &["seat-requests", token]).json(&change);
-
-    self.caller.send(request).await.map(|_| ())
-  }
-
-  /// A seat given back with what its work came to, cancelled where no turn ran on it.
+  /// A slot given back with what its work came to, cancelled where no turn ran on it.
   pub async fn give_back(&self, token: &str, outcome: &str, cancel: bool) -> Result<(), UnitError> {
     let mut change = json!({ "state": "finished", "outcome": outcome });
 
@@ -97,12 +89,12 @@ impl Agency {
       change["cancel"] = json!(true);
     }
 
-    let request = self.caller.request(Method::PATCH, &["seat-requests", token]).json(&change);
+    let request = self.caller.request(Method::PATCH, &["slot-requests", token]).json(&change);
 
     self.caller.send(request).await.map(|_| ())
   }
 
-  /// A thrown-away session started: its id.
+  /// A role's session started on a slot: its id.
   pub async fn start_session(&self, start: &Value) -> Result<String, UnitError> {
     let request = self.caller.request(Method::POST, &["sessions"]).json(start);
     let started: Started = self.caller.json(request).await?;

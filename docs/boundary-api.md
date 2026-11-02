@@ -158,15 +158,22 @@ server any other way.
 
 ## How the engine derives the spoken words
 
-- **On a seat of agency's co-worker pool,** asked for the role `[spoken]` names in the settings,
-  `transliterator` where they name none, with the provider they name where they name one. The role is a
-  registration of agency's (its `docs/agent-roles.md`) and must stand there; the engine creates none.
-- **In one thrown-away session for the whole derivation,** on the runner line `[spoken]` names, `search` where it
-  names none, its instructions the engine's own (`prompts/spoken-words.md`) and no tool allowed, bound to the
-  seat. Each try is one turn in it, handing the model the line's language, the agreed readings, the written
-  words, and, where the answer before failed the check, the word it failed on. The session is ended and the seat
-  given back once the spoken words stand; a seat or a session agency no longer holds is given up and a new one
-  asked, and no try leaves a session of its own standing.
+- **On a slot of agency's co-worker pool,** asked for the role `[spoken]` names in the settings,
+  `transliterator` where they name none, on the road its role's order picks, or on the provider and model they
+  name where they name the two together. The role is a registration of agency's (its `docs/agent-roles.md`) and
+  must stand there; the engine creates none.
+- **In one role's session for the whole derivation,** started on the slot once it is let in, so the session
+  runs as the slot's role on the provider, model and effort the slot was let in on; on the runner line
+  `[spoken]` names, `search` where it names none, its instructions the engine's own (`prompts/spoken-words.md`)
+  and no tool allowed. Each try is one turn in it, handing the model the line's language, the agreed readings,
+  the written words, and, where the answer before failed the check, the word it failed on; a turn names no
+  road of its own. The session is ended and the slot given back once the spoken words stand; a slot or a
+  session agency no longer holds is given up and a new one asked, and no try leaves a session of its own
+  standing.
+- **The slot is never bound to the session.** Agency finishes a bound slot whose child no systemd unit, pane
+  or open execution holds once ten minutes have passed since it was bound, and a session is none of those, so a
+  derivation that runs longer would lose its slot under it; an active slot left unbound is never taken for its
+  age, and the engine gives it back itself.
 - **The agreed readings come first, the model's judgement after:** every row of the voice name table
   (`docs/store.md`, `voice_names`) with a reading in the line's language is handed over as a reading to apply
   as it stands, and the model reads whatever else the words need with its own judgement.
@@ -174,14 +181,16 @@ server any other way.
   each is written into the voice name table, so the same spelling is read the same way next time. A spelling
   the table holds is never written over: the owner's correction of a row (`scripts/voice-names.ts --set`) wins
   from then on. A chosen reading that holds what the check finds is not kept.
-- **Every seat asked stands in the ledger** (`docs/store.md`, 「The folder」) until it is given back, and each one a
-  process left there is given back, cancelled, as the next process starts: the pool lets its line in one at a time
-  from its head, so a seat left waiting by a process that is gone would hold every later line behind it. A seat
-  waiting while agency is not reached is asked about again, never left for a new one; one agency no longer holds,
-  or given back before it was let in, is dropped and a new one asked.
+- **A slot waits in its role's line while the engine asks for its admission,** again every two seconds until it
+  is let in, with no bound on how long: the line lets in only a request whose owner is asking now.
+- **Every slot asked stands in the ledger** (`docs/store.md`, 「The folder」) until it is given back, and each one a
+  process left there is given back, cancelled, as the next process starts, so a slot a process that is gone left
+  waiting or let in holds no place of the role's cap. A slot waiting while agency is not reached is asked about
+  again, never left for a new one; one agency no longer holds, or given back before it was let in, is dropped and
+  a new one asked under a request key of its own, since a key once given back is spent.
 - **Derived spoken words hold at most 30,000 characters,** the bound a caller's `spoken` is held to; a longer
   answer does not stand and is asked again, as one that fails the check is.
-- **Nothing gives it up.** An answer that fails the check, one that does not read, a seat or a session agency
+- **Nothing gives it up.** An answer that fails the check, one that does not read, a slot or a session agency
   refuses and agency not reached are each asked again five seconds later, however often; `waitingOn` says which
   it was and why, and the synthesis stays `waiting` until its spoken words stand. They are kept as its
   `spoken`, and its card is asked after.
@@ -356,15 +365,15 @@ The arbiter's master (its `docs/api.md`, 「Demands」).
 
 ### bmo-agency
 
-The co-worker pool and its thrown-away sessions (its `docs/api.md`, 「pool, seat-requests, reservations and roles」
-and 「sessions」), for the spoken words a synthesis is derived (「How the engine derives the spoken words」).
+The co-worker pool and its role's sessions (its `docs/api.md`, 「slots, reservations and places」 and
+「sessions」), for the spoken words a synthesis is derived (「How the engine derives the spoken words」).
 
 | Call | Route | Used for |
 |---|---|---|
-| a seat | `POST /seat-requests` with `requestKey` and `owner` `voice:synthesis:<synthesisId>:<n>`, `n` counting the seats the line was asked, `role`, `selection` `auto`, `workKey` `role:<role>` and `provider` where the settings name one | the seat the derivation runs on, with the provider, model, effort and tier its role's key resolves to |
-| its admission and its end | `PATCH /seat-requests/{token}` | asked with no state until it is `active`; bound to the session with `bound`; given back with `finished` and its outcome, `cancel` where no turn ran, and every seat an earlier process left in the ledger given back cancelled as the service starts |
-| a session | `POST /sessions` with `scope` `apart`, `line`, `systemPrompt`, `toolsAllowed` empty and the seat's provider and model | the derivation's thrown-away session |
-| its turns | `POST /sessions/{sessionId}/turns` with `prompt` and a work turn's parts: `provider` and `model` the seat's, `mapping` its `model`, `effort` and `tier`, `resume` `fresh`, `cwd` empty, `name`, `title`, `chat` 0 (the derivation stands under no room), `workKey` `role:<role>`, `hearsWords` false and `variables` empty | one try, answered once it ends; its answer is the model's |
+| a slot | `POST /slot-requests` with `requestKey` and `owner` `voice:synthesis:<synthesisId>:<n>`, `n` counting the slots the line was asked, `role`, `source` `voice`, and `provider` and `model` where the settings name them | the slot the derivation runs on, with its token, its state and the provider, model and effort it is let in on |
+| its admission and its end | `PATCH /slot-requests/{token}` | asked with no state, again and again, until its `request` is `active`; given back with `finished` and its outcome, `cancel` where no turn ran, and every slot an earlier process left in the ledger given back cancelled as the service starts; never bound |
+| a session | `POST /sessions` with `scope` `role`, `slot` the slot's token, `line`, `systemPrompt`, `labels` naming the synthesis and `toolsAllowed` empty | the derivation's role's session, on the slot's role, provider, model and effort; `422` `slot-not-active` or `contradicts-slot` and `503` `line-not-carried` give the slot back and a new one is asked |
+| its turns | `POST /sessions/{sessionId}/turns` with `prompt`, `resume` `fresh`, `name`, `title`, `chat` 0 (the derivation stands under no room), `hearsWords` false and `variables` empty | one try on the session's road, answered once it ends; its answer is the model's |
 | its end | `DELETE /sessions/{sessionId}` | the session ended once the spoken words stand; one still busy is asked again |
 
 ### bmo-web
@@ -454,7 +463,7 @@ tool」).
 | `[units.arbiter]` | `address` and `token_file?` of the arbiter's master, which grants every synthesis its card |
 | `[units.web]` | `address` and `token_file?` of the account service the script studio signs in against |
 | `[units.agency]` | optional, `address` and `token_file?` of agency, whose co-worker pool derives the spoken words; a line with no `spoken` waits, its `waitingOn` saying so, while none is named |
-| `[spoken]` | optional, how the spoken words are derived: `role`, the agency role the seat is asked for (`transliterator`), `line`, the runner line its session goes out on (`search`), and `provider?`, the provider the seat is asked on |
+| `[spoken]` | optional, how the spoken words are derived: `role`, the agency role the slot is asked for (`transliterator`), `line`, the runner line its session goes out on (`search`), and `provider?` and `model?`, the road the slot is asked on, named together or not at all, the role's order picking where they are not |
 | `[studio]` | optional, the script studio's deployment values (`docs/script-studio.md`, 「Access and service」) |
 
 Every token stands in its own file under the data root's `env/`, never in the settings, a log, a command

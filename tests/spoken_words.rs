@@ -1,6 +1,6 @@
 //! The spoken words (`docs/boundary-api.md`, 「The spoken words」, 「How the engine derives the spoken words」): a
 //! line's spoken words given by its caller are held to the check and refused naming the first word that fails, never
-//! mended; a line given its written words alone has them derived on a seat of agency's pool, the agreed readings
+//! mended; a line given its written words alone has them derived on a slot of agency's pool, the agreed readings
 //! handed over first, an answer that fails asked again naming the word, and the readings the model chose kept
 //! without writing over a row that stands; and with no agency named the line waits, saying so.
 
@@ -338,7 +338,9 @@ async fn waits_with_no_agency() {
 /// What the stand-in agency was asked, and the answers its turns give in order.
 #[derive(Default)]
 struct Asked {
-  seats: Mutex<Vec<Value>>,
+  slots: Mutex<Vec<Value>>,
+  admissions: AtomicU32,
+  bound: Mutex<Vec<Value>>,
   starts: Mutex<Vec<Value>>,
   prompts: Mutex<Vec<String>>,
   given_back: Mutex<Vec<Value>>,
@@ -346,30 +348,88 @@ struct Asked {
   answers: Mutex<Vec<String>>,
 }
 
+// A refusal as agency answers one.
+fn refused(status: StatusCode, code: &str, error: String) -> (StatusCode, axum::Json<Value>) {
+  (status, axum::Json(json!({ "code": code, "error": error })))
+}
+
+// The slot the stand-in lets in: the role's order's road.
+fn slot_of(state: &str) -> Value {
+  json!({ "token": "slot-1", "state": state, "role": "transliterator", "path": null, "provider": "deepseek",
+    "model": "deepseek-flash", "effort": "low", "heldFor": null })
+}
+
 async fn stand_in_agency(asked: Arc<Asked>) -> std::net::SocketAddr {
   let router = axum::Router::new()
     .route(
-      "/seat-requests",
+      "/slot-requests",
       post(|State(asked): State<Arc<Asked>>, axum::Json(ask): axum::Json<Value>| async move {
-        asked.seats.lock().unwrap().push(ask);
-        axum::Json(json!({ "token": "seat-1", "state": "active", "provider": "deepseek",
-          "model": "deepseek-flash", "effort": "low", "tier": "Light" }))
+        // A slot's ask as agency reads it: a request key, an owner and a role, and a road named whole or not at all.
+        if ["requestKey", "owner", "role"].iter().any(|part| !ask[*part].is_string()) {
+          return refused(StatusCode::BAD_REQUEST, "bad-request", format!("an ask lacks a part: {ask}"));
+        }
+
+        if ask.get("provider").is_some() != ask.get("model").is_some() {
+          let why = "A slot's road names its provider and its model together".to_owned();
+
+          return refused(StatusCode::BAD_REQUEST, "bad-request", why);
+        }
+
+        asked.slots.lock().unwrap().push(ask);
+        (StatusCode::CREATED, axum::Json(slot_of("waiting")))
       }),
     )
     .route(
-      "/seat-requests/{token}",
+      "/slot-requests/{token}",
       patch(|State(asked): State<Arc<Asked>>, axum::Json(change): axum::Json<Value>| async move {
-        if change["state"] == "finished" {
-          asked.given_back.lock().unwrap().push(change);
+        match change["state"].as_str() {
+          Some("finished") => {
+            asked.given_back.lock().unwrap().push(change);
+            axum::Json(json!({ "held": true, "stoodDown": false, "note": null }))
+          }
+          Some(_) => {
+            asked.bound.lock().unwrap().push(change);
+            axum::Json(slot_of("active"))
+          }
+          // Its admission: its turn comes on the owner's second ask.
+          None => {
+            let request = match asked.admissions.fetch_add(1, Ordering::SeqCst) {
+              0 => Value::Null,
+              _ => slot_of("active"),
+            };
+
+            axum::Json(json!({ "request": request, "demand": null }))
+          }
         }
-        axum::Json(json!({ "held": true, "stoodDown": false, "note": null }))
       }),
     )
     .route(
       "/sessions",
       post(|State(asked): State<Arc<Asked>>, axum::Json(start): axum::Json<Value>| async move {
+        // A role's start as agency reads it: on an active slot, naming no road of its own that is not the slot's.
+        if start["scope"] != "role" {
+          return refused(StatusCode::BAD_REQUEST, "bad-request", format!("not a role's start: {start}"));
+        }
+
+        if start["slot"] != "slot-1" || asked.admissions.load(Ordering::SeqCst) < 2 {
+          let why = format!("No active slot request holds the token {}", start["slot"]);
+
+          return refused(StatusCode::UNPROCESSABLE_ENTITY, "slot-not-active", why);
+        }
+
+        let slot = slot_of("active");
+
+        if let Some(field) = ["role", "provider", "model"]
+          .into_iter()
+          .find(|field| start.get(*field).is_some_and(|named| *named != slot[*field]))
+        {
+          let why = format!("The slot's {field} is not {}", start[field]);
+
+          return refused(StatusCode::UNPROCESSABLE_ENTITY, "contradicts-slot", why);
+        }
+
         asked.starts.lock().unwrap().push(start);
-        (StatusCode::CREATED, axum::Json(json!({ "id": "search@apart:1" })))
+        (StatusCode::CREATED, axum::Json(json!({ "id": "transliterator@run:1" })))
       }),
     )
     .route(
@@ -377,21 +437,26 @@ async fn stand_in_agency(asked: Arc<Asked>) -> std::net::SocketAddr {
       post(
         |State(asked): State<Arc<Asked>>, uri: Uri, axum::Json(turn): axum::Json<Value>| async move {
           // The session's id as agency reads it: its segment unescaped, so an escaped `@` or `:` names no session.
-          if uri.path() != "/sessions/search@apart:1/turns" {
-            let refused =
-              json!({ "code": "unknown-session", "error": format!("no session at {}", uri.path()) });
-
-            return (StatusCode::NOT_FOUND, axum::Json(refused));
+          if uri.path() != "/sessions/transliterator@run:1/turns" {
+            return refused(
+              StatusCode::NOT_FOUND,
+              "unknown-session",
+              format!("no session at {}", uri.path()),
+            );
           }
 
-          // A work turn's parts as agency reads them: every one it requires, the room among them.
-          let parts = ["provider", "model", "mapping", "resume", "cwd", "name", "title", "chat", "workKey"];
-
-          if let Some(missing) = parts.iter().find(|part| turn.get(**part).is_none_or(Value::is_null)) {
-            let refused = json!({ "code": "bad-request", "error": format!("missing field `{missing}`") });
-
-            return (StatusCode::BAD_REQUEST, axum::Json(refused));
+          // A role's session's turn names no road: its provider, model and effort are the session's.
+          if let Some(part) = ["provider", "model", "mapping", "workKey"]
+            .iter()
+            .find(|part| turn.get(**part).is_some())
+          {
+            return refused(StatusCode::BAD_REQUEST, "bad-request", format!("a turn names no `{part}`"));
           }
+
+          if !turn["prompt"].is_string() {
+            return refused(StatusCode::BAD_REQUEST, "bad-request", "missing field `prompt`".to_owned());
+          }
+
           asked
             .prompts
             .lock()
@@ -419,7 +484,7 @@ async fn stand_in_agency(asked: Arc<Asked>) -> std::net::SocketAddr {
 }
 
 #[tokio::test]
-async fn written_words_alone_are_derived_on_a_seat_the_agreed_readings_first_and_a_failed_answer_asked_again()
+async fn written_words_alone_are_derived_on_a_slot_the_agreed_readings_first_and_a_failed_answer_asked_again()
  {
   let scratch = Scratch::new().await;
   let asked = Arc::new(Asked::default());
@@ -463,29 +528,39 @@ async fn written_words_alone_are_derived_on_a_seat_the_agreed_readings_first_and
   assert!(prompts[0].contains("Nuxt and the Qwen model"), "{}", prompts[0]);
   assert!(prompts[1].contains("\"Qwen\"") && prompts[1].contains("Latin letter"), "{}", prompts[1]);
 
-  let seat = asked.seats.lock().unwrap()[0].clone();
+  let slot = asked.slots.lock().unwrap()[0].clone();
 
-  assert_eq!(seat["role"], "transliterator");
-  assert_eq!(seat["workKey"], "role:transliterator");
+  assert_eq!(slot["role"], "transliterator");
+  assert_eq!(slot["source"], "voice");
+  assert_eq!(slot["requestKey"], format!("voice:synthesis:{id}:1"));
+  assert!(
+    slot.get("provider").is_none() && slot.get("model").is_none(),
+    "the role's order picks the road: {slot}"
+  );
+  assert!(
+    asked.admissions.load(Ordering::SeqCst) >= 2,
+    "a waiting slot's admission is asked again"
+  );
+  assert!(asked.bound.lock().unwrap().is_empty(), "the slot is never bound");
 
-  let ledger = scratch.root.join("voice").join("seats");
+  let ledger = scratch.root.join("voice").join("slots");
 
   assert!(
     std::fs::read_dir(&ledger).map_or(true, |mut left| left.next().is_none()),
-    "a seat given back leaves the ledger"
+    "a slot given back leaves the ledger"
   );
 
   let start = asked.starts.lock().unwrap()[0].clone();
 
-  assert_eq!(start["scope"], "apart");
+  assert_eq!(start["scope"], "role");
+  assert_eq!(start["slot"], "slot-1");
   assert_eq!(start["line"], "search");
   assert_eq!(start["toolsAllowed"], json!([]));
-  assert_eq!(start["model"], "deepseek-flash");
   assert!(start["systemPrompt"].as_str().is_some_and(|prompt| prompt.contains("spoken words")));
-  assert_eq!(asked.seats.lock().unwrap().len(), 1, "one seat stands for the whole derivation");
+  assert_eq!(asked.slots.lock().unwrap().len(), 1, "one slot stands for the whole derivation");
   assert_eq!(asked.starts.lock().unwrap().len(), 1, "and one session: every try is a turn in it");
-  assert_eq!(asked.given_back.lock().unwrap().len(), 1, "the seat is given back once the words stand");
-  assert_eq!(*asked.ended.lock().unwrap(), ["search@apart:1"], "and the session ended");
+  assert_eq!(asked.given_back.lock().unwrap().len(), 1, "the slot is given back once the words stand");
+  assert_eq!(*asked.ended.lock().unwrap(), ["transliterator@run:1"], "and the session ended");
 
   let reading = |written: &str| format!(r#"SELECT "ko" FROM "voice_names" WHERE "written" = '{written}'"#);
   let qwen: String = store
@@ -502,7 +577,7 @@ async fn written_words_alone_are_derived_on_a_seat_the_agreed_readings_first_and
 }
 
 #[tokio::test]
-async fn a_seat_an_earlier_process_left_in_the_ledger_is_given_back_cancelled() {
+async fn a_slot_an_earlier_process_left_in_the_ledger_is_given_back_cancelled() {
   let scratch = Scratch::new().await;
   let asked = Arc::new(Asked::default());
   let at = stand_in_agency(Arc::clone(&asked)).await;
@@ -536,10 +611,10 @@ address = "http://{at}"
   .expect("the settings are written");
 
   let settings = Settings::read(&settings_path).expect("the settings read");
-  let ledger = settings.seats_folder();
+  let ledger = settings.slots_folder();
 
   std::fs::create_dir_all(&ledger).expect("the ledger is made");
-  std::fs::write(ledger.join("seat-left"), "seat-left").expect("a left seat is written");
+  std::fs::write(ledger.join("slot-left"), "slot-left").expect("a left slot is written");
 
   let units = Units::new(&settings).expect("the units are named");
   let agency = units.agency.as_ref().expect("an agency is named");
@@ -547,7 +622,56 @@ address = "http://{at}"
 
   assert_eq!(given, 1);
   assert_eq!(asked.given_back.lock().unwrap()[0]["cancel"], true, "it never ran, so it is cancelled");
-  assert!(!ledger.join("seat-left").exists(), "and it leaves the ledger");
+  assert!(!ledger.join("slot-left").exists(), "and it leaves the ledger");
+}
+
+#[tokio::test]
+async fn a_spoken_road_names_its_provider_and_its_model_together() {
+  let scratch = Scratch::new().await;
+  let base = format!(
+    r#"listen = "127.0.0.1:0"
+address = "http://127.0.0.1:0"
+token_file = "voice.token"
+database = "{}"
+data_root = "{}"
+
+[units.node]
+address = "http://127.0.0.1:9"
+
+[units.arbiter]
+address = "http://127.0.0.1:9"
+
+[units.web]
+address = "http://127.0.0.1:9"
+
+[spoken]
+"#,
+    address_of(&scratch.name),
+    scratch.root.display()
+  );
+  let read = |name: &str, road: &str| {
+    let path = scratch.root.join("env").join(name);
+
+    std::fs::write(&path, format!("{base}{road}")).expect("the settings are written");
+    Settings::read(&path)
+  };
+
+  let alone = read("alone.toml", "provider = \"deepseek\"\n");
+
+  assert!(
+    alone.as_ref().is_err_and(|why| why.0.contains("provider and model together")),
+    "a provider alone does not stand: {alone:?}"
+  );
+
+  let whole = read("whole.toml", "provider = \"deepseek\"\nmodel = \"deepseek-flash\"\n")
+    .expect("a whole road stands");
+
+  assert_eq!(whole.spoken.provider.as_deref(), Some("deepseek"));
+  assert_eq!(whole.spoken.model.as_deref(), Some("deepseek-flash"));
+
+  let neither = read("neither.toml", "").expect("no road stands, the role's order picking");
+
+  assert_eq!(neither.spoken.role, "transliterator");
 }
 
 // A line a stopped process left goes on: its derivation or its card waits however long it takes, so the runtime is let
