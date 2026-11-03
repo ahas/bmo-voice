@@ -44,10 +44,7 @@ class StoodInMouth(fish.Mouth):
         self.model = object()
         return 0.0
 
-    def up(self) -> float:
-        return 0.0
-
-    def down(self) -> None:
+    def release(self) -> None:
         pass
 
     def piece(self, words: str, seed: int, carried: dict) -> np.ndarray:

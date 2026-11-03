@@ -24,7 +24,7 @@ fn account_home() -> PathBuf {
   }
 }
 
-fn voice_python() -> PathBuf {
+pub(crate) fn voice_python() -> PathBuf {
   match std::env::var_os("BMO_VOICE_PYTHON") {
     Some(named) => PathBuf::from(named),
     None => account_home().join("bmo-voice/.venv/bin/python"),

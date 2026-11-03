@@ -202,7 +202,8 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 ### How the model is loaded
 
-- **On the first line,** not at start, from the base weights on the node (「Where the weights live」), in bf16.
+- **On the first line,** not at start, and again on the first after the server gave way (「How it holds the card」),
+  from the base weights on the node (「Where the weights live」), in bf16.
 - **The adapter is folded into the weights on the host,** before anything goes on the card: each linear it names
   gets its two matrices' product at the adapter's scale added to its weight, in fp32, written back in bf16. A line
   in another voice loads the base again.
@@ -230,13 +231,13 @@ the voice nodes. What a caller does with the sound is the caller's.
   - **What it buys,** measured on a 4070 against the same step uncompiled: about 25 frames a second against 12.2, a
     1,664-character line in 181 seconds against 352.
   - **What it costs:** compiling takes two to three minutes the first time on a node and about half a minute
-    after a restart, which reads the compiled kernels back from `bmo-voice/compiled/` on the node's home disk (the
-    unit's `TORCHINDUCTOR_CACHE_DIR`). The first line after a start pays it, and the first after another voice is
-    loaded. The graph takes about 50 MiB of the card beside the model.
+    after that, which reads the compiled kernels back from `bmo-voice/compiled/` on the node's home disk (the
+    unit's `TORCHINDUCTOR_CACHE_DIR`). The first line of every load pays it: after a start, after another voice is
+    asked for, and after the server gave way. The graph takes about 50 MiB of the card beside the model.
   - **The graph reads the weights and the key-value caches where they stood when it was captured,** so it is let go
-    before either is let go or moved, before a long piece's codec pass and as the model goes down, and captured
-    again by the next frame, in under a second. What was compiled stays for the process's life, across
-    hand-overs and the lines of every thread, and is let go with the model when another voice is loaded.
+    before either is let go, before a long piece's codec pass and as the model is let go, and captured again by the
+    next frame, in under a second. What was compiled stays across the lines of every thread for as long as the model
+    stands, and is let go with it.
   - **A frame step that fails to compile is taken uncompiled** for the rest of the process, said once in the
     journal, its attention on the card's fused kernels rather than the plain one fish-speech's generator asks for,
     which uncompiled is about 3% faster.
@@ -391,10 +392,9 @@ the voice nodes. What a caller does with the sound is the caller's.
   voice whose `voice.toml` names another engine, nothing to say, or a `style` carrying a bracket or longer than 300
   characters is refused before any model loads.
 - **`GET /health`:** the checkpoint loaded, whether a line is being spoken, whether the model is on the card, the
-  device, VRAM and host memory held, the card's free memory (asked of `nvidia-smi`, opening no CUDA context), whether
+  device and VRAM held, the card's free memory (asked of `nvidia-smi`, opening no CUDA context), whether
   other work holds the card lock (read from the kernel's lock table, never by taking it), whether the server holds
-  the card between lines, and whether it has room: 10.7 GiB free to put a loaded model up, 11.0 GiB for a first
-  load.
+  the card between lines, and whether it has room: 11.0 GiB free to load the model.
 - **`503`:** the node's card arbiter gives the voice no place on the card; nothing was loaded or spoken.
 - **`500`:** the line failed while it was spoken. The answer names the failure's kind, its message and the frame of
   the mouth's own code it was raised in, which the engine writes into the synthesis's failure; the node's journal
@@ -403,20 +403,25 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 ### How it holds the card
 
-- **The model stays on the card between lines** until another occupant asks for the card; off it, it stands in
-  pinned host memory, about 9 GiB of it, and goes back up from there over the bus rather than from the disk. The
-  key-value caches are scratch every piece writes before it reads, so they are never carried down: they stay on the
-  card from piece to piece while the model is up, are let go before a long piece's codec pass (「What a long line
-  takes of the card」) and as the model goes down, and are made again, on the card, by the next piece.
+- **The model stays on the card between lines** until another occupant asks for the card, and off the card it stands
+  nowhere: the server keeps no copy of it in host memory, pinned or not, so a card given away costs the node's memory
+  nothing beside the server's own process. The next line loads it from the disk (「How the model is loaded」). The
+  key-value caches are scratch every piece writes before it reads: they stay on the card from piece to piece while
+  the model stands, are let go before a long piece's codec pass (「What a long line takes of the card」) and with the
+  model, and are made again, on the card, by the next piece.
 - **After each line** the server asks the arbiter whether the next line waiting still stands first; while it does,
   that line is spoken with the model still up. **With no line waiting the turn rests,** the model and the lock kept.
-- **It gives way the moment another occupant asks** or a claim begins: the model goes down into its host copies and
-  the lock is let go, and the server asks to rest on the card again.
+- **It gives way the moment another occupant asks** or a claim begins: the model is let go whole, off the card and
+  out of host memory, the C heap trimmed, and the lock and the ticket are given back. With no model left
+  to rest on the card, the server asks for no ticket until its next line comes.
+- **A line being spoken is never given way under:** the model is let go only between lines, under the line's own lock,
+  once the line in hand has ended. A line that was waiting behind it when the card went elsewhere asks in line for
+  the card and loads the model when its turn comes.
 - **The card lock is `~/.gpu.lock`,** held under `flock` by every service that puts work on the card; it goes with
   the process, so a server that falls over never leaves the card locked.
-- **The model loads on the first line,** not at start (「How the model is loaded」), and a line in another voice loads
-  it again. A line comes back the same whichever way the model stood.
-- **A line that fails takes the model down,** and a load that failed half way is let go whole.
+- **The model loads on the first line,** not at start (「How the model is loaded」), on the first line after the server
+  gave way, and on a line in another voice. A line comes back the same whichever way the model stood.
+- **A line that fails lets the model go whole,** and so does a load that failed half way.
 
 ### What a long line takes of the card
 

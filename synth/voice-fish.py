@@ -13,8 +13,8 @@ It works three ways; the first two speak through the same `Mouth`, and the third
 - **As a server** (`--serve`): the voice server on each voice node (docs/voice-plan.md, 「The voice nodes」),
   listening on the node's loopback. It answers `POST /speak` with the spoken line as a wav and `GET /health` with
   what it holds. The card is shared under the node's shared GPU lock (`Card`): the model stays on the card between
-  lines until another occupant asks for it, and waits in page-locked host memory while it is off. Encoding stays on
-  the caller's side, where the encoder lives.
+  lines until another occupant asks for it, is let go whole as it gives way, and is loaded from the disk again by the
+  next line. Encoding stays on the caller's side, where the encoder lives.
 - **Asking** (`--ask`): the server's own client, run on the node beside it, which is how a call from the operations
   machine reaches a server nothing outside the node can reach. It posts the request file it is given and removes it,
   writes the wav the server answered, and prints one line of JSON: the status, the server's reason where it refused,
@@ -133,9 +133,6 @@ MOST_ERROR = 600
 # an RTX 4070, its own CUDA context and the frame step's graph among them, so a card with less free than this cannot
 # take a load; the health says so (docs/voice-plan.md, 「What it answers」).
 LOAD_BYTES = int(11.0 * 1024**3)
-
-# What putting the kept weights back on the card takes for one line, once the server's own CUDA context is there.
-UP_BYTES = int(10.7 * 1024**3)
 
 # The node's shared GPU lock: every service that puts work on the node's card holds this one file under flock for
 # as long as its work is there, so the services take the card in turn rather than all at once.
@@ -484,11 +481,11 @@ class FrameStep:
 
 
 class Mouth:
-    """S2-Pro with one voice's adapter folded into its weights, loaded on the first line and again for another voice.
+    """S2-Pro with one voice's adapter folded into its weights, loaded on the first line, on the first after it was let
+    go, and for another voice.
 
-    Loaded, the model can be put down (`down`): every tensor it and the codec hold moved into page-locked host memory
-    and the card given back, and put up again (`up`) for the next line at the speed of the bus rather than of the
-    disk. The model is the same objects throughout; only where their storage stands changes.
+    Loaded, the model stands on the card and nowhere else, and is let go whole (`release`): no copy of it is kept in
+    host memory, so giving the card away leaves the node's memory to the others, and the next line loads it again.
 
     torch and fish_speech are imported inside rather than at the top of the file because they are what makes starting
     slow, and neither the encode hand-off nor the server's own start needs them.
@@ -500,10 +497,6 @@ class Mouth:
         self.codec = None
         self.checkpoint: Path | None = None
         self.sampling = {"temperature": 0.7, "top_p": 0.7}
-        # Every tensor the models hold, with its host copy, by the tensor's identity; the tensor itself is kept
-        # beside its copy, so the identity is never reused while the entry stands.
-        self.kept: dict[int, tuple] = {}
-        self.on_card = False
         # The frame step every piece is generated through (`FrameStep`), made with the first model.
         self.step: FrameStep | None = None
 
@@ -519,7 +512,6 @@ class Mouth:
             self.step = FrameStep()
             self.sampling = {"temperature": float(said.get("temperature", 0.7)), "top_p": float(said.get("top_p", 0.7))}
             self.checkpoint = checkpoint
-            self.on_card = True
 
         return time.monotonic() - started
 
@@ -735,49 +727,9 @@ class Mouth:
                         seen.add(id(tensor))
                         yield tensor
 
-    def down(self) -> None:
-        """The models put in page-locked host memory and the card given back.
-
-        The first time a tensor is put down its host copy is made from the card; after that the copy already holds
-        what the card held, since speaking changes no weight. A tensor the models no longer hold is let go with its
-        copy, and one they hold for the first time is copied like any other. Whatever the allocator still caches is
-        emptied however the models stood, and the C heap is trimmed.
-        """
-        import torch
-
-        if self.model is not None and self.on_card:
-            self.drop_caches()
-            held = list(self.held())
-            holding = {id(tensor) for tensor in held}
-            self.kept = {key: kept for key, kept in self.kept.items() if key in holding}
-
-            for tensor in held:
-                if not tensor.is_cuda:
-                    continue
-
-                kept = self.kept.get(id(tensor))
-
-                if kept is None:
-                    kept = (tensor, torch.empty_like(tensor, device="cpu", pin_memory=True).copy_(tensor))
-                    self.kept[id(tensor)] = kept
-
-                tensor.data = kept[1]
-
-        self.on_card = False
-
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-        try:
-            ctypes.CDLL("libc.so.6").malloc_trim(0)
-        except (OSError, AttributeError):
-            pass  # not glibc: nothing to trim this way
-
     def drop_caches(self) -> None:
         """The key-value caches let go, so the next piece makes them again on the card. They are scratch every piece
-        writes before it reads, and they are made inside inference mode: a cache carried down into host memory and put
-        back up refuses the next piece's write into it ("Inference tensors do not track version counter"). The frame
-        step's graph, which reads them where they stand, is let go first."""
+        writes before it reads. The frame step's graph, which reads them where they stand, is let go first."""
         if self.step is not None:
             self.step.forget()
 
@@ -788,37 +740,29 @@ class Mouth:
         self.model.max_batch_size = -1
         self.model._cache_setup_done = False
 
-    def up(self) -> float:
-        """The models put back on the card from their host copies; answers the seconds it took."""
-        import torch
-
-        started = time.monotonic()
-
-        if self.model is not None and not self.on_card:
-            for tensor, host in self.kept.values():
-                tensor.data = host.to("cuda", non_blocking=True)
-
-            torch.cuda.synchronize()
-            self.on_card = True
-
-        return time.monotonic() - started
-
-    def kept_bytes(self) -> int:
-        """What the host copies hold."""
-        return sum(host.numel() * host.element_size() for _, host in self.kept.values())
-
     def release(self) -> None:
-        """The card given back and the host copies with it: the models dropped and the allocator's cache emptied,
-        whether or not a model was held, since a load that failed half way leaves what it allocated there."""
+        """The card given back and the host's memory with it: the graph and the caches let go, every tensor the models
+        hold on the card emptied in place, the models dropped, the allocator's cache emptied and the C heap trimmed,
+        whether or not a model was held, since a load that failed half way leaves what it allocated there. The tensors
+        are emptied rather than left to their last reference, which the frames of a failed line's traceback may hold
+        while this runs."""
         import gc
 
         import torch
 
+        if self.model is not None:
+            self.drop_caches()
+
+        for tensor in list(self.held()):
+            if tensor.is_cuda:
+                try:
+                    tensor.data = torch.empty(0, dtype=tensor.dtype)
+                except RuntimeError as failure:
+                    print(f"voice-fish: a tensor could not be emptied, so it stands until its last reference goes: {failure}", file=sys.stderr, flush=True)
+
         self.model = None
         self.codec = None
         self.checkpoint = None
-        self.kept = {}
-        self.on_card = False
 
         if self.step is not None:
             # What was compiled for the models let go is let go with them; the kernels stay on the disk.
@@ -831,6 +775,11 @@ class Mouth:
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+        try:
+            ctypes.CDLL("libc.so.6").malloc_trim(0)
+        except (OSError, AttributeError):
+            pass  # not glibc: nothing to trim this way
 
 
 def encode(python: str, wav: Path, args: argparse.Namespace) -> int:
@@ -865,9 +814,9 @@ class Service:
 
     The card is taken for a run of lines rather than for each: after a line, the next one waiting keeps
     the card and the model on it while the node's queue says it still stands first, and otherwise the
-    model goes down and the card is let go at once (docs/card.md, 「One queue of requests」). With no line
+    model is let go whole and the card with it (docs/voice-plan.md, 「How it holds the card」). With no line
     waiting the turn rests with the model on the card, until the arbiter says another wants the card
-    (watch_card), and asks to come back once it has given way (docs/card.md, 「Resting」)."""
+    (watch_card); the next line after that loads the model again."""
 
     def __init__(self, voices: Path, base: Path, token: str, card: "Card", room_every_s: float = 0.5) -> None:
         self.voices = voices
@@ -881,7 +830,7 @@ class Service:
         # When each line waiting behind the one being spoken arrived, guarded apart from the line's lock.
         self.waiting: list[float] = []
         self.waiting_lock = threading.Lock()
-        # Woken when the card starts to rest or to wait to come back, which the watcher then asks after.
+        # Woken when the card starts to rest, which the watcher then asks after.
         self.watch_wake = threading.Event()
 
     def health(self) -> dict:
@@ -893,10 +842,9 @@ class Service:
         return {
             "loaded": None if self.mouth.checkpoint is None else self.mouth.checkpoint.name,
             "busy": self.busy,
-            "onCard": self.mouth.on_card,
+            "onCard": self.mouth.model is not None,
             "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
             "vramBytes": torch.cuda.memory_allocated() if torch.cuda.is_available() else 0,
-            "keptBytes": self.mouth.kept_bytes(),
             "torch": torch.__version__,
             "cardFreeBytes": free,
             # Whether other work holds the node's shared GPU lock this moment.
@@ -910,10 +858,9 @@ class Service:
         }
 
     def fits(self, free: int | None) -> bool:
-        """Whether the card's free memory takes the model: the kept weights put up where it is loaded, a
-        whole load where it is not. A card the driver cannot be asked about is given the benefit of the
-        doubt."""
-        return free is None or free >= (UP_BYTES if self.mouth.model is not None else LOAD_BYTES)
+        """Whether the card's free memory takes a load of the model. A card the driver cannot be asked
+        about is given the benefit of the doubt."""
+        return free is None or free >= LOAD_BYTES
 
     def room(self) -> None:
         """The card just taken, waited on until its memory takes the model, however long that takes. A turn
@@ -959,13 +906,7 @@ class Service:
                 self.room()
 
             try:
-                # A LoRA swap happens in the host copies, before the model goes up, so the next line is
-                # put up from them: a model still on the card from the line before is put down first
-                # where this line names other weights.
-                if self.mouth.on_card and self.mouth.checkpoint != checkpoint:
-                    self.settle()
                 loaded = self.mouth.ready(checkpoint)
-                loaded += self.mouth.up()
                 started = time.monotonic()
                 audio, rate = self.mouth.speak(checkpoint, text.strip(), int(request.get("seed", 0)), style, by_sentence)
                 spoke = time.monotonic() - started
@@ -990,8 +931,8 @@ class Service:
 
     def after_line(self) -> None:
         """The card after a line that was spoken: kept for the next line waiting while it still stands first
-        for the card, let go where another stands first, and with no line waiting rested on, or given way
-        to whoever already wants it and asked back, or let go where the arbiter keeps no rests."""
+        for the card, let go where another stands first, and with no line waiting rested on, or let go where
+        somebody already wants it or the arbiter keeps no rests."""
         with self.waiting_lock:
             oldest = min(self.waiting) if self.waiting else None
 
@@ -1007,10 +948,6 @@ class Service:
             return
 
         self.let_go()
-
-        if said == "gives way":
-            self.card.come_back()
-            self.watch_wake.set()
 
     def watch_card(self, again_s: float = 0.2) -> None:
         """The card watched for the server's life, on a thread of its own (watch_step), asked again after a
@@ -1034,16 +971,14 @@ class Service:
                 time.sleep(again_s)
 
     def watch_step(self) -> bool:
-        """One ask after the resting card's ticket, its answer held open until another wants the card, or,
-        once the card was given way, after the ticket that only rests until it is granted; False where there
-        is neither to ask after. What the answer calls for is done under the line's lock, and only where no
-        line is in hand and the card still stands as it did when asked: a line that came meanwhile has the
-        card its own way."""
+        """One ask after the resting card's ticket, its answer held open until another wants the card; False where
+        the card is not resting. What the answer calls for is done under the line's lock, and only where no line is in
+        hand and the card still rests as it did when asked: a line being spoken holds that lock, so it is never given
+        way under, and a line that came meanwhile has the card its own way."""
         card = self.card
         ticket = None if card.turn is None else card.turn.ticket
-        resting, returning = card.resting, card.returning
 
-        if ticket is None or not (resting or returning):
+        if ticket is None or not card.resting:
             return False
 
         answered = card.turn.watch(ticket)
@@ -1052,44 +987,22 @@ class Service:
             with self.waiting_lock:
                 in_hand = bool(self.waiting)
 
-            if in_hand or card.turn.ticket != ticket or (card.resting, card.returning) != (resting, returning):
+            if in_hand or card.turn.ticket != ticket or not card.resting:
                 return True
 
-            if resting and (answered is None or not answered.turn or answered.give_way_for is not None):
-                # Asked for by another, or the arbiter no longer knows the turn: down, and back once free.
+            if answered is None or not answered.turn or answered.give_way_for is not None:
+                # Asked for by another, or the arbiter no longer knows the turn: the model let go whole.
                 self.let_go()
-                card.come_back()
-            elif returning and answered is None:
-                card.come_back()
-            elif returning and answered.turn and card.take_returned():
-                if not self.fits(card_free_bytes()):
-                    # The card handed back still holds another's memory: nothing goes up, and the next
-                    # line takes the card its own way.
-                    self.let_go()
-                    return True
-                try:
-                    self.mouth.up()
-                except Exception as failure:
-                    print(f"voice-fish: putting the model back up failed, so the card was let go: {type(failure).__name__}: {failure}", file=sys.stderr, flush=True)
-                    self.let_go()
 
         return True
 
     def let_go(self) -> None:
-        """The model put down and the card let go, at once."""
+        """The model let go whole and the card with it, at once, however the line ended. The card's lock is
+        let go even where the model could not be, so a failure here never leaves the card locked."""
         try:
-            self.settle()
+            self.mouth.release()
         finally:
             self.card.let_go()
-
-    def settle(self) -> None:
-        """The card given back before its lock is, however the line ended: the model put down into
-        its host copies, or, where even that fails, let go whole."""
-        try:
-            self.mouth.down()
-        except Exception as failure:
-            print(f"voice-fish: putting the model down failed, so it was let go: {type(failure).__name__}: {failure}", file=sys.stderr, flush=True)
-            self.mouth.release()
 
 
 class CardTaken(Exception):
@@ -1121,10 +1034,8 @@ class Card:
         self.turn = turn
         # The open lock while this server holds the card, from one line to the next that carries on.
         self.handle: int | None = None
-        # The turn resting with the model on the card, nothing left to speak (docs/card.md, 「Resting」);
-        # and, having given way, a ticket that only rests waiting to be granted.
+        # The turn resting with the model on the card, nothing left to speak (docs/card.md, 「Resting」).
         self.resting = False
-        self.returning = False
 
     def elsewhere(self) -> bool:
         """Whether another process holds the lock now.
@@ -1162,11 +1073,6 @@ class Card:
         """
         if self.handle is not None:
             return
-
-        if self.returning:
-            # The ticket that only rests goes, and the line stands in line by its own arrival.
-            self.returning = False
-            self.turn.give_back()
 
         if self.turn is not None:
             from turn import hold
@@ -1221,35 +1127,6 @@ class Card:
             self.resting = False
 
         return kept
-
-    def come_back(self) -> None:
-        """Having given way, a ticket asked that only rests, granted once nobody else wants the card."""
-        if self.turn is None or self.handle is not None:
-            return
-
-        try:
-            self.returning = self.turn.ask(rest=True) is not None
-        except PermissionError:
-            self.returning = False
-
-    def take_returned(self) -> bool:
-        """The lock taken for a ticket that only rests, now granted; the turn rests from the start. False
-        where somebody took the lock in the moment between."""
-        if self.handle is None:
-            handle = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o644)
-
-            try:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                os.close(handle)
-                return False
-
-            self.handle = handle
-
-        self.returning = False
-        self.resting = True
-
-        return True
 
     def let_go(self) -> None:
         """The lock let go and the turn given back, at once."""
