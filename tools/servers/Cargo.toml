@@ -1,6 +1,6 @@
 [package]
 name = "voice-servers-tool"
-description = "The voice's hosted tool: which voice nodes stand in the voice node list, whether their servers answer and the voices they hold loaded, read through the tool host for a session kept off the engine's port."
+description = "The voice's hosted tool: which voice nodes stand in the voice node list, whether their servers answer and the voices they hold loaded, or a finished synthesis's sound written to the file its caller names, through the tool host for a session kept off the engine's port."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

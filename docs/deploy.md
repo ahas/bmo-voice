@@ -10,10 +10,10 @@ How a commit of this repository goes live. The testbed deploys it from the repos
   the settings from the data root's `env/voice.toml` as the release's `settings.toml`, and, before the flip,
   generates the script studio's screen into `studio/client/.output/public`, where the studio's server serves it
   from. The screen is generated in Korean, from the pack this repository holds, `studio/client/i18n/locales/ko.yaml`.
-- **The hosted tool:** before the flip, the release's `voice-servers-tool`, the manifest and the schema of
-  `tools/servers/` are copied into its `.placed/` and put into the tool host's registry for this service with
-  `room.tools` allowed (`docs/boundary-api.md`, 「The hosted tool」). The tool host reads the registry's copy, so
-  a session sees the new tool with no restart.
+- **The hosted tool:** before the flip, the release's `voice-servers-tool`, the manifest and its entries' schemas
+  of `tools/servers/` are copied into its `.placed/` and put into the tool host's registry for this service with
+  `room.tools` and `room.send` allowed (`docs/boundary-api.md`, 「The hosted tool」). The tool host reads the
+  registry's copy, so a session sees the new tool with no restart.
 - **The units:** the files under `deploy/`, each kept as a user unit by the testbed and marked for it:
   `bmo-voice.service`, the voice service, the one whose health the deployment waits on; and `bmo-script.service`, the
   script studio's server on port 3214, restarted by every deployment just before the voice service. Each starts only

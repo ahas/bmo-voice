@@ -410,26 +410,36 @@ The co-worker pool and its role's sessions (its `docs/api.md`, 「slots, reserva
 
 ## The hosted tool
 
-- **`voice/servers` is a tool of the tool host** (bmo-pocket's `docs/mcp-host.md`, 「Placed tools」): a session
-  the shell guard keeps off every unit's loopback port, the chat agent among them, reads through it which voice
-  nodes stand in the voice node list and whether their servers answer, since the tool host runs it outside every
-  harness. It is the folder `tools/servers/`, the crate `voice-servers-tool`, built into the release and placed
-  before the flip for this service, with the capability its entry asks for allowed (`docs/deploy.md`).
-- **Its one entry** is `voice/servers`, asking for `room.tools`, read-only and taking no arguments; the tool host
-  keeps no clock on a call, which ends when the engine has answered. The executable
-  speaks the tool host's call protocol 1 itself: one request on standard input, one tool result of text on
-  standard output.
-- **What it answers:** every page of `GET /voice-servers`, called through the engine's own client, as one line a
-  voice server in the node list's order, with its node's name, its `state` and the voices it holds loaded; then a
-  line saying where a line is spoken now (`docs/voice-plan.md`, 「Which road speaks a line」): on the voice server
-  of the listed node the arbiter's master grants a card of `voice`, where any is listed, and, where none is,
-  nowhere, since a synthesis fails and nothing speaks on the operations machine's card.
+- **The tool host serves two entries from the voice's own folder** (bmo-pocket's `docs/mcp-host.md`, 「Placed
+  tools」): a session the shell guard keeps off every unit's loopback port, the chat agent among them, reads
+  through `voice/servers` which voice nodes stand in the voice node list and whether their servers answer, since
+  the tool host runs it outside every harness; and a worker whose role holds `room.send`, the producer among them,
+  writes a finished synthesis's sound through `worker/voice_sound`. It is the folder `tools/servers/`, the crate
+  `voice-servers-tool`, built into the release and placed before the flip for this service, with the capabilities
+  its entries ask for allowed (`docs/deploy.md`).
+- **`voice/servers`** asks for `room.tools`, is read-only and takes no arguments. **`worker/voice_sound`** asks for
+  `room.send`, takes a `synthesisId`, the `key` the synthesis was taken in under and the absolute `path` to write,
+  and answers the path with the bytes written. The tool host keeps no clock on either call, which ends when the
+  engine has answered. The executable speaks the tool host's call protocol 1 itself: one request on standard
+  input, one tool result of text on standard output.
+- **What `voice/servers` answers:** every page of `GET /voice-servers`, called through the engine's own client, as
+  one line a voice server in the node list's order, with its node's name, its `state` and the voices it holds
+  loaded; then a line saying where a line is spoken now (`docs/voice-plan.md`, 「Which road speaks a line」): on the
+  voice server of the listed node the arbiter's master grants a card of `voice`, where any is listed, and, where
+  none is, nowhere, since a synthesis fails and nothing speaks on the operations machine's card.
+- **What `worker/voice_sound` answers:** the synthesis at `GET /syntheses/{synthesisId}`, then, where it is done
+  and carries the given key, the bytes of `GET /syntheses/{synthesisId}/sound` written at `path` whole or not at
+  all, the folders it names made where they do not stand and a file already there replaced. Only the caller's own
+  line is written: a synthesis taken in with no key, or under another key, is refused, since the key is the
+  caller's own name for the line. The sound is OGG/Opus, as the route answers it.
 - **Its settings** are the file `BMO_VOICE_SETTINGS` names, else `settings.toml` under the link of the voice's
   deploy tree, `~/.local/share/bmo-voice/deploy`: the tool host runs the registry's copy of the placed folder,
-  which stands in no release. It calls the settings' address with the settings' token.
+  which stands in no release. Both entries call the settings' address with the settings' token.
 - **What it refuses,** each as an answer marked as an error: settings or a token that do not read, with the
   sentence saying why; an engine that does not answer, or one that refuses, carrying the status, code and sentence
-  of the refusal, or the sentence saying why nothing answered, as the harness plugin's failures do; and a call of
+  of the refusal, or the sentence saying why nothing answered, as the harness plugin's failures do; the sound's
+  arguments when they do not read, naming what is wrong; a synthesis that is not the caller's own or is not done,
+  naming the key or the state; a path that is not absolute or could not be written, naming it; and a call of
   another entry, naming its own. It serves no resources, and a kind of request it does not answer ends the call
   unclean.
 

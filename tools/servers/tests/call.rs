@@ -2,9 +2,9 @@
 //! `docs/mcp-host.md`, 「A call」): protocol 1, a call of the one entry, and an answer of text pieces.
 
 use serde_json::json;
-use voice_servers_tool::{Asked, ENTRY, read_arguments, read_handed};
+use voice_servers_tool::{Asked, ENTRY, SOUND_ENTRY, read_arguments, read_handed};
 
-use crate::stand::{call, env_without_settings, text, tool};
+use crate::stand::{call, call_entry, env_without_settings, text, tool};
 
 // "a call is read with its entry and arguments, the record and the sockets beside it passed over"
 #[test]
@@ -13,7 +13,7 @@ fn a_call_is_read_with_its_entry_and_arguments() {
 
   assert_eq!(handed.protocol, 1);
   assert!(matches!(&handed.asked, Asked::Call { entry, .. } if entry == ENTRY));
-  assert_eq!(handed.session["holderName"], "chat");
+  assert_eq!(handed.session["holderName"], "producer");
 }
 
 // "the resources kinds read, and a kind the tool does not answer reads as another"
@@ -78,6 +78,40 @@ fn a_call_of_another_entry_or_with_arguments_answers_an_error() {
     assert!(text(&answer).contains(said), "{}", text(&answer));
     assert!(!text(&answer).contains(&missing), "{}", text(&answer));
   }
+}
+
+// "a call of the sound entry with no arguments answers with what it takes, and reads no settings"
+#[test]
+fn the_sound_entry_says_what_it_takes() {
+  let (env, missing) = env_without_settings("sound-arguments");
+
+  for (arguments, said) in [
+    (json!({}), "synthesisId"),
+    (json!({ "synthesisId": 1, "key": "", "path": "/tmp/line.ogg" }), "non-blank key"),
+    (json!({ "synthesisId": 1, "key": "line", "path": "line.ogg" }), "absolute path"),
+  ] {
+    let ran = tool(&call_entry(SOUND_ENTRY, arguments).to_string(), &env);
+    let answer = ran.answer();
+
+    assert_eq!(ran.code, 0, "{}", ran.err);
+    assert_eq!(answer["isError"], true);
+    assert!(text(&answer).contains(said), "{}", text(&answer));
+    assert!(!text(&answer).contains(&missing), "{}", text(&answer));
+  }
+}
+
+// "a sound call with arguments answers the settings it cannot read, and not the arguments"
+#[test]
+fn a_sound_call_reads_the_settings() {
+  let (env, missing) = env_without_settings("sound-settings");
+  let arguments = json!({ "synthesisId": 1, "key": "line", "path": "/tmp/line.ogg" });
+  let ran = tool(&call_entry(SOUND_ENTRY, arguments).to_string(), &env);
+  let answer = ran.answer();
+
+  assert_eq!(ran.code, 0, "{}", ran.err);
+  assert_eq!(answer["isError"], true);
+  assert!(text(&answer).contains("settings do not read"), "{}", text(&answer));
+  assert!(text(&answer).contains(&missing), "{}", text(&answer));
 }
 
 // "settings that do not read answer an error naming their path"

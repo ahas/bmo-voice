@@ -7,16 +7,21 @@ use std::process::{Command, Stdio};
 
 use serde_json::{Value, json};
 
-/// A call of the entry, as the tool host hands it.
-pub fn call(arguments: Value) -> Value {
+/// A call of one entry, as the tool host hands it.
+pub fn call_entry(entry: &str, arguments: Value) -> Value {
   json!({
     "protocol": 1,
     "kind": "call",
-    "entry": "voice/servers",
+    "entry": entry,
     "arguments": arguments,
-    "session": { "holderName": "chat", "capabilities": ["room.tools"], "variables": {} },
+    "session": { "holderName": "producer", "capabilities": ["room.tools", "room.send"], "variables": {} },
     "callback": "/run/calls/1.sock",
   })
+}
+
+/// A call of the voice servers entry, as the tool host hands it.
+pub fn call(arguments: Value) -> Value {
+  call_entry("voice/servers", arguments)
 }
 
 /// How a run of the executable ended.

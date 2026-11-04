@@ -1,6 +1,6 @@
-# The voice's hosted tool: a session the shell guard keeps off every unit's loopback port reads the voice servers
-# through the tool host, which runs this executable outside every harness (docs/boundary-api.md, 「The hosted
-# tool」).
+# The voice's hosted tool: a session the shell guard keeps off every unit's loopback port reads the voice servers,
+# or writes a finished synthesis's sound where it names, through the tool host, which runs this executable outside
+# every harness (docs/boundary-api.md, 「The hosted tool」).
 [tool]
 name = "servers"
 protocol = 1
@@ -19,3 +19,17 @@ capabilities = ["room.tools"]
 
 [entry.hints]
 read_only = true
+
+# A worker whose role holds `room.send`, the producer among them, reaches this entry through the `worker`
+# namespace its line already names: the line is taken in under the caller's own key, which is what makes the sound
+# the caller's to write.
+[[entry]]
+namespace = "worker"
+name = "voice_sound"
+title = "Write a synthesis's sound"
+description = "Write a finished synthesis's sound to a file the caller names, for a line the caller took in under its own key: OGG/Opus, its folders made where they do not stand and a file there replaced."
+input = "voice_sound.json"
+capabilities = ["room.send"]
+
+[entry.hints]
+idempotent = true

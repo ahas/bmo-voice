@@ -72,8 +72,8 @@ ln -sfn "$HOME/.local/share/bmo-voice/deploy/bin/bmo-voice" "$bmo_dir/bmo-voice"
 '''
 
 # The hosted tool is placed in its folder's .placed/, the folder the tool host reads (docs/deploy.md, 「The hosted
-# tool」): the executable the release's bin/ holds, its manifest and its input schema, put into the tool host's
-# registry for this service with the capability its entry asks for allowed.
+# tool」): the executable the release's bin/ holds, its manifest and its entries' input schemas, put into the tool
+# host's registry for this service with the capabilities its entries ask for allowed.
 [[deploy.step]]
 id = "place-servers-tool"
 phase = "before-flip"
@@ -81,8 +81,8 @@ command = '''
 set -eu
 rm -rf tools/servers/.placed
 mkdir -p tools/servers/.placed
-cp bin/voice-servers-tool tools/servers/tool.toml tools/servers/servers.json tools/servers/.placed/
-bmo-pocket put tools/servers/.placed --placed --service voice --allow room.tools
+cp bin/voice-servers-tool tools/servers/tool.toml tools/servers/servers.json tools/servers/voice_sound.json tools/servers/.placed/
+bmo-pocket put tools/servers/.placed --placed --service voice --allow room.tools --allow room.send
 '''
 
 # The script studio's screen, generated into the release where its server serves it from.

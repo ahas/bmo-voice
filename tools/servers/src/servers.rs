@@ -95,17 +95,21 @@ pub fn failure_text(failure: &ClientFailure) -> String {
   ToolFailure::Client(failure.clone()).content().to_string()
 }
 
-/// The voice servers read with the settings at `settings`, as the call's answer.
-pub async fn servers(settings: &Path) -> Answer {
-  let settings = match Settings::read(settings) {
-    Ok(settings) => settings,
-    Err(why) => return Answer::error(format!("the voice's settings do not read: {why}")),
-  };
-  let client = settings
+/// The engine's client built from the settings at `settings`, or why it stands nowhere: settings or a token that
+/// do not read, said as the call's answer.
+pub fn client_of(settings: &Path) -> Result<VoiceClient, String> {
+  let settings =
+    Settings::read(settings).map_err(|why| format!("the voice's settings do not read: {why}"))?;
+
+  settings
     .token(&settings.token_file)
     .map_err(|why| format!("the voice's token does not read: {why}"))
-    .and_then(|token| VoiceClient::new(&settings.address, token).map_err(|why| failure_text(&why)));
-  let client = match client {
+    .and_then(|token| VoiceClient::new(&settings.address, token).map_err(|why| failure_text(&why)))
+}
+
+/// The voice servers read with the settings at `settings`, as the call's answer.
+pub async fn servers(settings: &Path) -> Answer {
+  let client = match client_of(settings) {
     Ok(client) => client,
     Err(why) => return Answer::error(why),
   };

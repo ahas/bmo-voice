@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["synthesisId", "key", "path"],
+  "properties": {
+    "synthesisId": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The id of the finished synthesis whose sound is written."
+    },
+    "key": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The key the caller took the synthesis in under. A synthesis with no key, or another key, is refused, since only the caller's own line is written."
+    },
+    "path": {
+      "type": "string",
+      "description": "The absolute path of the file to write. Its folders are made where they do not stand, and a file already there is replaced."
+    }
+  }
+}

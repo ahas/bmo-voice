@@ -1,21 +1,25 @@
 //! The voice's hosted tool (docs/boundary-api.md, 「The hosted tool」): the tool host hands it one call of
-//! `voice/servers`, and it answers which voice nodes stand in the voice node list, whether their servers answer
-//! and the voices they hold loaded, for a session the shell guard keeps off the engine's port.
+//! `voice/servers` or `worker/voice_sound`, and it answers which voice nodes stand in the voice node list,
+//! whether their servers answer and the voices they hold loaded, or writes a finished synthesis's sound to the
+//! file its caller names, for a session the shell guard keeps off the engine's port.
 
 mod call;
 mod servers;
+mod sound;
 
 use serde_json::{Value, json};
 
 pub use call::{Answer, Asked, Content, Handed, PROTOCOL, read_handed};
 pub use servers::{
-  DEPLOY_SETTINGS, failure_text, listed, servers, servers_text, settings_of_process, settings_path,
+  DEPLOY_SETTINGS, client_of, failure_text, listed, servers, servers_text, settings_of_process,
+  settings_path,
 };
+pub use sound::{ENTRY as SOUND_ENTRY, not_finished, not_its_own, read_sound_arguments, sound, write};
 
-/// The one entry this tool answers, by its full name.
+/// The entry that reads the voice servers, by its full name.
 pub const ENTRY: &str = "voice/servers";
 
-/// The entry's arguments read: it takes none, so an empty object, or none at all.
+/// The voice servers entry's arguments read: it takes none, so an empty object, or none at all.
 pub fn read_arguments(arguments: &Value) -> Result<(), String> {
   match arguments {
     Value::Null => Ok(()),
@@ -33,15 +37,22 @@ pub fn read_arguments(arguments: &Value) -> Result<(), String> {
 pub async fn answer(handed: &Handed) -> Result<Value, String> {
   match &handed.asked {
     Asked::Call { entry, arguments } => {
-      let answered = if entry != ENTRY {
-        Answer::error(format!("this tool answers {ENTRY}, not {entry}"))
-      } else if let Err(why) = read_arguments(arguments) {
-        Answer::error(why)
-      } else {
-        match settings_of_process() {
-          Ok(settings) => servers(&settings).await,
+      let answered = match entry.as_str() {
+        ENTRY => match read_arguments(arguments) {
+          Ok(()) => match settings_of_process() {
+            Ok(settings) => servers(&settings).await,
+            Err(why) => Answer::error(why),
+          },
           Err(why) => Answer::error(why),
-        }
+        },
+        SOUND_ENTRY => match read_sound_arguments(arguments) {
+          Ok(asked) => match settings_of_process() {
+            Ok(settings) => sound(&settings, &asked).await,
+            Err(why) => Answer::error(why),
+          },
+          Err(why) => Answer::error(why),
+        },
+        other => Answer::error(format!("this tool answers {ENTRY} and {SOUND_ENTRY}, not {other}")),
       };
 
       serde_json::to_value(answered).map_err(|why| why.to_string())
