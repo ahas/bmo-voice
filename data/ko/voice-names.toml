@@ -1,8 +1,9 @@
 # The seed of the voice name table (docs/voice-plan.md, 「How names are said」): the rows a table first made is
 # given. Each is a spelling and what a Korean stretch and an English stretch say in its place, empty where that
-# language reads the spelling as it stands. These are words the reading gate was heard to sound out where Korean
-# has a settled spelling, and English says each as written. The names a deployment's own agents and owner go by
-# are that deployment's to add with `scripts/voice-names.ts --set` (docs/deploy.md).
+# language reads the spelling as it stands. These are the spellings the reading gate was heard to sound out or to
+# say wrongly where Korean has a settled reading — names, and the months and days of a date — and English says each
+# as written. The names a deployment's own agents and owner go by are that deployment's to add with
+# `scripts/voice-names.ts --set` (docs/deploy.md).
 
 [[name]]
 written = "git"
@@ -33,4 +34,50 @@ en = ""
 [[name]]
 written = "Job"
 ko = "잡"
+en = ""
+
+# The months and days of a date, each said as one word, as a Korean reader says them.
+[[name]]
+written = "1월"
+ko = "일월"
+en = ""
+
+[[name]]
+written = "10월"
+ko = "시월"
+en = ""
+
+[[name]]
+written = "11월"
+ko = "십일월"
+en = ""
+
+[[name]]
+written = "12월"
+ko = "십이월"
+en = ""
+
+[[name]]
+written = "1일"
+ko = "일일"
+en = ""
+
+[[name]]
+written = "5일"
+ko = "오일"
+en = ""
+
+[[name]]
+written = "11일"
+ko = "십일일"
+en = ""
+
+[[name]]
+written = "12일"
+ko = "십이일"
+en = ""
+
+[[name]]
+written = "21일"
+ko = "이십일일"
 en = ""

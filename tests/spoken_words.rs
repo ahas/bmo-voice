@@ -594,6 +594,51 @@ async fn written_words_alone_are_derived_on_a_slot_the_agreed_readings_first_and
 }
 
 #[tokio::test]
+async fn the_settled_month_and_day_readings_are_handed_over_and_the_line_kept_whole() {
+  let scratch = Scratch::new().await;
+  let asked = Arc::new(Asked::default());
+  let line = "오늘 아침 브리핑입니다. 시장은 어제보다 조금 안정을 되찾았고, 투자자들은 다음 주에 나올 물가 \
+    지표와 금리 전망을 기다리고 있습니다. 11월 5일 발표된 지표 가운데 소비자 물가가 가장 눈에 띄었고, \
+    시장의 반응도 잠잠했습니다.";
+  let heard = line.replace("11월 5일", "십일월 오일");
+
+  *asked.answers.lock().unwrap() = vec![json!({ "spoken": heard, "readings": [] }).to_string()];
+
+  let engine = engine(&scratch, Some(stand_in_agency(Arc::clone(&asked)).await)).await;
+  let mut store = PgConnection::connect(&address_of(&scratch.name)).await.expect("the store answers");
+
+  store
+    .execute(
+      r#"INSERT INTO "voice_names" ("written", "ko", "en", "set_at")
+         VALUES ('11월', '십일월', '', 0), ('5일', '오일', '', 0)"#,
+    )
+    .await
+    .expect("the settled readings are written");
+
+  let (status, made) =
+    call(&engine, "POST", "/syntheses", Some(json!({ "voiceName": "voice-a", "text": line }))).await;
+
+  assert_eq!(status, StatusCode::CREATED, "{made}");
+
+  let id = made["id"].as_i64().expect("an id");
+  let read = read_until(&engine, id, |read| read["spoken"].is_string()).await;
+
+  assert_eq!(read["text"], line, "the written line stands as given, nothing of it lost");
+  assert_eq!(read["spoken"], heard, "{read}");
+
+  let prompt = asked.prompts.lock().unwrap()[0].clone();
+
+  assert!(
+    prompt.contains("- 11월: 십일월"),
+    "the month's settled reading is handed over: {prompt}"
+  );
+  assert!(prompt.contains("- 5일: 오일"), "the day's settled reading is handed over: {prompt}");
+  assert!(prompt.contains(line), "the written line reaches the model whole: {prompt}");
+
+  store.close().await.expect("the store connection closes");
+}
+
+#[tokio::test]
 async fn what_the_syntheses_an_earlier_process_left_hold_is_given_back_by_their_owners() {
   let scratch = Scratch::new().await;
   let asked = Arc::new(Asked::default());

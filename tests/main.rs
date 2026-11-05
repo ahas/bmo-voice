@@ -8,4 +8,5 @@ mod mouth_gives_way;
 mod mouth_long_line;
 mod node_target;
 mod personal_data;
+mod script_figures;
 mod spoken_words;

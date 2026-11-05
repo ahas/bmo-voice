@@ -154,6 +154,9 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **No line is spoken by these rules.** A line's figures are said as its spoken words say them, which a model
   writes with judgement, and the check refuses spoken words that still hold a digit (`docs/boundary-api.md`, 「The
   spoken words」). The rules are the reading table's, kept with it.
+- **A figure's reading the model writes wrongly is settled the way a name's is:** a row of `voice_names` holds the
+  spelling and its Korean reading, and every derivation applies it as it stands (`docs/store.md`). The months and
+  days of a date are seeded there, so a month and its counter are read as one word every time.
 - **What it reads:** a figure with the marks it is written with (`#`, a thousands comma, a decimal point, a colon, a
   slash, a tilde, `%`, a currency sign), not a figure in or only spaces away from a run holding a roman letter
   unless a counter follows it, and not a figure inside code.
