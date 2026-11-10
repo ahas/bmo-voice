@@ -87,7 +87,7 @@ impl Drop for Scratch {
 /// holds, so every line in it fails to be spoken; one, `voice-b`, under the voices root, whose lines ask the master
 /// `master` names; and one, `voice-c`, whose folder declares no engine, as a retired voice's does.
 async fn engine(scratch: &Scratch, master: Option<std::net::SocketAddr>) -> axum::Router {
-  let master = master.map_or_else(|| "127.0.0.1:9".to_owned(), |at| at.to_string());
+  let master = master.map_or_else(|| "[::1]:9".to_owned(), |at| at.to_string());
   let settings_path = scratch.root.join("env").join("voice.toml");
   let settings = format!(
     r#"listen = "127.0.0.1:0"
@@ -97,13 +97,13 @@ database = "{}"
 data_root = "{}"
 
 [units.node]
-address = "http://127.0.0.1:9"
+address = "http://[::1]:9"
 
 [units.arbiter]
 address = "http://{master}"
 
 [units.web]
-address = "http://127.0.0.1:9"
+address = "http://[::1]:9"
 "#,
     address_of(&scratch.name),
     scratch.root.display()

@@ -251,13 +251,13 @@ database = "postgres:///unused"
 data_root = "{}"
 
 [units.node]
-address = "http://127.0.0.1:9"
+address = "http://[::1]:9"
 
 [units.arbiter]
 address = "http://{at}"
 
 [units.web]
-address = "http://127.0.0.1:9"
+address = "http://[::1]:9"
 "#,
       root.display()
     ),

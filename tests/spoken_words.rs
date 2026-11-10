@@ -94,7 +94,7 @@ async fn engine(scratch: &Scratch, agency: Option<std::net::SocketAddr>) -> axum
 
 /// What [`engine`] serves: its context and its event log, for a test that runs the service's own start steps.
 async fn served(scratch: &Scratch, agency: Option<std::net::SocketAddr>) -> Served {
-  let master = "127.0.0.1:9";
+  let master = "[::1]:9";
   let agency =
     agency.map_or_else(String::new, |at| format!("\n[units.agency]\naddress = \"http://{at}\"\n"));
   let settings_path = scratch.root.join("env").join("voice.toml");
@@ -106,13 +106,13 @@ database = "{}"
 data_root = "{}"
 
 [units.node]
-address = "http://127.0.0.1:9"
+address = "http://[::1]:9"
 
 [units.arbiter]
 address = "http://{master}"
 
 [units.web]
-address = "http://127.0.0.1:9"
+address = "http://[::1]:9"
 {agency}"#,
     address_of(&scratch.name),
     scratch.root.display()
@@ -680,13 +680,13 @@ database = "{}"
 data_root = "{}"
 
 [units.node]
-address = "http://127.0.0.1:9"
+address = "http://[::1]:9"
 
 [units.arbiter]
-address = "http://127.0.0.1:9"
+address = "http://[::1]:9"
 
 [units.web]
-address = "http://127.0.0.1:9"
+address = "http://[::1]:9"
 
 [spoken]
 "#,
