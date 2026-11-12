@@ -143,6 +143,8 @@ address = "http://[::1]:9"
     db: db.clone(),
     units,
     waits: Default::default(),
+    reads: Default::default(),
+    clocks: Default::default(),
     stops: Default::default(),
   };
 

@@ -1,8 +1,10 @@
 //! A line spoken on a voice node (docs/voice-plan.md, 「The voice servers on the voice nodes」, 「Which node speaks
 //! a line」, 「How a line crosses」, 「When the nodes are out of reach」). The server listens on the node's loopback
 //! alone, so every call goes through the node's own shell: the request handed in on standing input, the asker
-//! started apart on the node, its answer asked after until it is there, the wav carried back and every file of
-//! the call removed. The OGG/Opus encode stays on this machine.
+//! started apart on the node, its answer and the line's stage asked after until it is there, the wav carried back
+//! and every file of the call removed, the asker ended first where the call is let go of before it. Every command
+//! answers within the node's answer clock, and a line standing still on the node ends on its progress clock
+//! (docs/boundary-api.md, 「The clocks」). The OGG/Opus encode stays on this machine.
 //!
 //! Which node speaks a line is the card the arbiter's master grants it ([`super::card`]); how that node is reached is
 //! the node service's answer for it. The card is held for the whole of the line, and a node out of reach is never
@@ -13,6 +15,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -136,11 +139,12 @@ impl fmt::Display for NodeError {
   }
 }
 
-/// Why a line was not spoken on a node: the node's own failure, or a failure here: the master's refusal of its card
-/// or this machine's own encode step.
+/// Why a line was not spoken on a node: a request no node could take, the failure of the node granted, named, or a
+/// failure here: the master's refusal of its card or this machine's own encode step.
 #[derive(Debug)]
 pub enum NotSpoken {
   Node(NodeError),
+  OnNode(String, NodeError),
   Here(String),
 }
 
@@ -148,6 +152,7 @@ impl fmt::Display for NotSpoken {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       Self::Node(error) => error.fmt(f),
+      Self::OnNode(node, error) => write!(f, "on {node}: {error}"),
       Self::Here(why) => f.write_str(why),
     }
   }
@@ -170,17 +175,76 @@ struct ShellRun {
   stderr: String,
 }
 
-/// A node's own shell: a command run there as bash runs it, with bytes on its standing input. An ssh node is
-/// reached over a batch login, a hub node through its hub; a node whose login answers in PowerShell runs no bash
-/// command and is out of reach.
-pub enum NodeShell {
+/// How a node's own shell is reached: an ssh node over a batch login, a hub node through its hub; a node whose login
+/// answers in PowerShell runs no bash command and is out of reach.
+#[derive(Clone)]
+enum Reached {
   Ssh { args: Vec<String>, host: String },
   Hub(HubTarget),
   PowerShell(String),
 }
 
+/// A node's own shell: a command run there as bash runs it, with bytes on its standing input, each command answering
+/// within the node's answer clock or failing as the node not answering.
+#[derive(Clone)]
+pub struct NodeShell {
+  reached: Reached,
+  within: Duration,
+}
+
 impl NodeShell {
-  // A failure to reach the node at all, as the call's error; a command that ran and failed is a run.
+  // A failure to reach the node at all, or a command it did not answer within the clock, as the call's error; a
+  // command that ran and failed is a run.
+  async fn run(&self, command: &str, input: Option<&[u8]>) -> Result<ShellRun, String> {
+    tokio::time::timeout(self.within, self.reached.run(command, input))
+      .await
+      .unwrap_or_else(|_| Err(format!("it did not answer within {}", span(self.within))))
+  }
+
+  // A whole file on the node, carried back as its bytes a slice to a command, each slice inside what one command
+  // may answer with.
+  async fn get(&self, path: &str) -> Result<Vec<u8>, String> {
+    let word = shell_word(path);
+    let unread =
+      |ran: &ShellRun| format!("{path} could not be read on the node: {}", tail(ran.stderr.trim(), 300));
+    let sized = self.run(&format!("stat -c %s {word}"), None).await?;
+
+    if sized.code != Some(0) {
+      return Err(unread(&sized));
+    }
+
+    let size: u64 = String::from_utf8_lossy(&sized.stdout)
+      .trim()
+      .parse()
+      .map_err(|_| format!("{path} told no size on the node"))?;
+    let mut bytes = Vec::with_capacity(usize::try_from(size).unwrap_or_default());
+
+    while (bytes.len() as u64) < size {
+      let from = bytes.len() as u64 + 1;
+      let ran = self
+        .run(&format!("tail -c +{from} {word} | head -c {SLICE_BYTES} | base64 -w0"), None)
+        .await?;
+
+      if ran.code != Some(0) {
+        return Err(unread(&ran));
+      }
+
+      let slice = STANDARD
+        .decode(String::from_utf8_lossy(&ran.stdout).split_whitespace().collect::<String>())
+        .map_err(|why| format!("{path} came back unreadable: {why}"))?;
+
+      if slice.is_empty() {
+        return Err(format!("{path} ended short of its {size} bytes on the node"));
+      }
+
+      bytes.extend_from_slice(&slice);
+    }
+
+    Ok(bytes)
+  }
+}
+
+impl Reached {
   async fn run(&self, command: &str, input: Option<&[u8]>) -> Result<ShellRun, String> {
     match self {
       Self::Ssh { args, host } => {
@@ -246,48 +310,6 @@ impl NodeShell {
       }
     }
   }
-
-  // A whole file on the node, carried back as its bytes a slice to a command, each slice inside what one command
-  // may answer with.
-  async fn get(&self, path: &str) -> Result<Vec<u8>, String> {
-    let word = shell_word(path);
-    let unread =
-      |ran: &ShellRun| format!("{path} could not be read on the node: {}", tail(ran.stderr.trim(), 300));
-    let sized = self.run(&format!("stat -c %s {word}"), None).await?;
-
-    if sized.code != Some(0) {
-      return Err(unread(&sized));
-    }
-
-    let size: u64 = String::from_utf8_lossy(&sized.stdout)
-      .trim()
-      .parse()
-      .map_err(|_| format!("{path} told no size on the node"))?;
-    let mut bytes = Vec::with_capacity(usize::try_from(size).unwrap_or_default());
-
-    while (bytes.len() as u64) < size {
-      let from = bytes.len() as u64 + 1;
-      let ran = self
-        .run(&format!("tail -c +{from} {word} | head -c {SLICE_BYTES} | base64 -w0"), None)
-        .await?;
-
-      if ran.code != Some(0) {
-        return Err(unread(&ran));
-      }
-
-      let slice = STANDARD
-        .decode(String::from_utf8_lossy(&ran.stdout).split_whitespace().collect::<String>())
-        .map_err(|why| format!("{path} came back unreadable: {why}"))?;
-
-      if slice.is_empty() {
-        return Err(format!("{path} ended short of its {size} bytes on the node"));
-      }
-
-      bytes.extend_from_slice(&slice);
-    }
-
-    Ok(bytes)
-  }
 }
 
 fn tail(text: &str, most: usize) -> String {
@@ -296,14 +318,24 @@ fn tail(text: &str, most: usize) -> String {
   text.chars().skip(count.saturating_sub(most)).collect()
 }
 
-/// The shell of a node by its name, as the node service says it is reached. A name the service does not list, a
-/// node that cannot be reached as it stands, and a node its role reserves for other services are all the node out
-/// of reach.
-pub async fn node_shell(units: &Units, name: String) -> Result<NodeShell, NodeError> {
-  let target = units
-    .node
-    .target(name.clone())
+/// A span as a person reads it: whole seconds where it is whole, tenths otherwise.
+pub fn span(span: Duration) -> String {
+  if span.subsec_millis() == 0 {
+    format!("{} s", span.as_secs())
+  } else {
+    format!("{:.1} s", span.as_secs_f64())
+  }
+}
+
+/// The shell of a node by its name, as the node service says it is reached, every command on it answering within
+/// `within`. A name the service does not list, a node that cannot be reached as it stands, a node its role reserves
+/// for other services, and a node service that does not answer within `within` are all the node out of reach.
+pub async fn node_shell(units: &Units, name: String, within: Duration) -> Result<NodeShell, NodeError> {
+  let silent =
+    || unreachable(format!("the node service did not answer for {name} within {}", span(within)));
+  let target = tokio::time::timeout(within, units.node.target(name.clone()))
     .await
+    .map_err(|_| silent())?
     .map_err(|why| unreachable(format!("there is no reachable node called {name}: {why}")))?;
 
   if let Some(role) =
@@ -312,30 +344,31 @@ pub async fn node_shell(units: &Units, name: String) -> Result<NodeShell, NodeEr
     return Err(unreachable(format!("{name} is reserved for {role} and carries no {SERVICE}")));
   }
 
-  match target.reach {
+  let reached = match target.reach {
     Reach::Hub {
       hub_url,
       token_file,
       agent,
-    } => Ok(NodeShell::Hub(HubTarget {
+    } => Reached::Hub(HubTarget {
       hub_url,
       agent,
       token_file,
-    })),
+    }),
     Reach::Ssh {
       host, port, shell, ..
-    } if shell.as_deref() == Some("powershell") => Ok(NodeShell::PowerShell(format!("{host}:{port}"))),
+    } if shell.as_deref() == Some("powershell") => Reached::PowerShell(format!("{host}:{port}")),
     Reach::Ssh { host, .. } => {
-      let args = units
-        .node
-        .login(name.clone())
+      let args = tokio::time::timeout(within, units.node.login(name.clone()))
         .await
+        .map_err(|_| silent())?
         .map_err(|why| unreachable(why.to_string()))?
         .ok_or_else(|| unreachable(format!("{name} has no SSH route")))?;
 
-      Ok(NodeShell::Ssh { args, host })
+      Reached::Ssh { args, host }
     }
-  }
+  };
+
+  Ok(NodeShell { reached, within })
 }
 
 // A path as a name under the voices root, or none where it stands outside.
@@ -369,14 +402,20 @@ fn on_node() -> String {
   format!(r#""$HOME/{PLACE}/{ENGINE_PYTHON}" "$HOME/{PLACE}/voice-fish.py""#)
 }
 
-// Starts the asker apart from the call and says where the call's files stand. The call's lock is taken before any
-// of its files is written, and the asker holds it from before this returns until it has written its end, so the
-// moment it lets go is the moment its line is there.
+// The folder a call's files stand in on the node, as a line of the node's shell.
+fn call_folder() -> String {
+  format!(r#"d="$HOME/{PLACE}/spoken""#)
+}
+
+// Starts the asker apart from the call, in a process group of its own whose id stands beside the call's files, and
+// says where those files stand. The call's lock is taken before any of its files is written, and the asker holds it
+// from before this returns until it has written its end, so the moment it lets go is the moment its line is there.
+// The asker hands the server the call's stage file, where the server writes where the line stands.
 fn start_command(id: &str) -> String {
   let asker = on_node();
 
   [
-    format!(r#"d="$HOME/{PLACE}/spoken""#),
+    call_folder(),
     r#"mkdir -p "$d" && chmod 700 "$d" || exit 3"#.to_owned(),
     SWEEP.to_owned(),
     format!(
@@ -386,26 +425,43 @@ fn start_command(id: &str) -> String {
     format!(r#"exec 9> "$d/{id}.lock" && flock -n 9 || exit 3"#),
     format!(r#"cat > "$d/{id}.in" || exit 3"#),
     format!(
-      r#"setsid sh -c '{asker} --ask --port {PORT} --token-file "$HOME/{TOKEN}" --request "$1/$2.in" --wav "$1/$2.wav" > "$1/$2.out" 2> "$1/$2.err"; echo $? > "$1/$2.code"' sh "$d" {} < /dev/null > /dev/null 2>&1 &"#,
+      r#"setsid sh -c '{asker} --ask --port {PORT} --token-file "$HOME/{TOKEN}" --request "$1/$2.in" --wav "$1/$2.wav" --stage "$1/$2.stage" > "$1/$2.out" 2> "$1/$2.err"; echo $? > "$1/$2.code"' sh "$d" {} < /dev/null > /dev/null 2>&1 &"#,
       shell_word(id)
     ),
+    format!(r#"echo $! > "$d/{id}.pid""#),
     "exec 9>&-".to_owned(),
     r#"printf '%s\n' "$d""#.to_owned(),
   ]
   .join("\n")
 }
 
+// Ends a call on the node: where `asker` holds, the asker's process group is ended first, so the server sees its line
+// let go; then every file of the call is removed.
+fn end_command(id: &str, asker: bool) -> String {
+  let id = shell_word(id);
+  let mut lines = vec![call_folder()];
+
+  if asker {
+    lines.push(format!(r#"[ -f "$d/"{id}.pid ] && kill -TERM -- -"$(cat "$d/"{id}.pid)" 2>/dev/null"#));
+  }
+
+  lines.push(format!(r#"rm -f "$d/"{id}.*"#));
+  lines.join("\n")
+}
+
 // Waits on the node, `seconds` at most, for the asker to let go of the call's lock, then says whether it has
-// ended and what it wrote: `waiting`, `gone` where it ended without writing its end, or `done <code>` followed by
-// its answer and the tail of its error stream folded onto one line.
+// ended and what it wrote: `waiting` followed by the line's stage as the server last wrote it and the moment any
+// line's stage in the folder last changed, `gone` where it ended without writing its end, or `done <code>` followed
+// by its answer and the tail of its error stream folded onto one line.
 fn await_command(dir: &str, id: &str, seconds: i64) -> String {
-  let at = format!("{}/{}", shell_word(dir), shell_word(id));
+  let folder = shell_word(dir);
+  let at = format!("{folder}/{}", shell_word(id));
 
   [
     format!("[ -f {at}.code ] || flock -w {seconds} -s {at}.lock true 2>/dev/null"),
     format!("if flock -n -s {at}.lock true 2>/dev/null; then free=1; else free=0; fi"),
     format!(
-      r#"if [ -f {at}.code ]; then echo "done $(cat {at}.code)"; cat {at}.out; echo; tail -c 1000 {at}.err | tr '\n' ' '; elif [ $free = 1 ]; then echo gone; else echo waiting; fi"#
+      r#"if [ -f {at}.code ]; then echo "done $(cat {at}.code)"; cat {at}.out; echo; tail -c 1000 {at}.err | tr '\n' ' '; elif [ $free = 1 ]; then echo gone; else echo waiting; [ -f {at}.stage ] && printf 'stage %s\n' "$(head -c 2000 {at}.stage | tr '\n' ' ')"; printf 'moved %s\n' "$(find {folder} -maxdepth 1 -name '*.stage' -printf '%T@\n' 2>/dev/null | sort -n | tail -n 1)"; fi"#
     ),
   ]
   .join("\n")
@@ -446,10 +502,54 @@ fn failure_of(asked: &Asked) -> NodeError {
   NodeError::new(kind, Some(status), error)
 }
 
-// Waits on the node, a piece at a time, until the asker has ended: what it wrote, or how it ended without it.
-async fn ask_after(shell: &NodeShell, dir: &str, id: &str, wait_seconds: i64) -> Result<Asked, NodeError> {
+/// Where a line stands on its voice server, as the server writes it into the call's stage file: the stage's kind,
+/// its count of steps, which grows with every change, and an English sentence saying it.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+pub struct Staged {
+  pub stage: String,
+  #[serde(default)]
+  pub step: u64,
+  #[serde(default)]
+  pub said: String,
+}
+
+// What one look at a waiting call read: the line's stage, where the server wrote one, and the moment any line of the
+// server last moved, as the node's clock writes it.
+#[derive(Default, PartialEq, Eq)]
+struct Look {
+  stage: Option<Staged>,
+  moved: String,
+}
+
+fn look_of(lines: &[&str]) -> Look {
+  let mut look = Look::default();
+
+  for line in lines {
+    if let Some(stage) = line.strip_prefix("stage ") {
+      look.stage = serde_json::from_str(stage.trim()).ok();
+    } else if let Some(moved) = line.strip_prefix("moved ") {
+      moved.trim().clone_into(&mut look.moved);
+    }
+  }
+
+  look
+}
+
+// Waits on the node, a piece at a time, until the asker has ended: what it wrote, or how it ended without it. Each
+// stage the server writes for the line is handed to `told` as it changes; a line whose stage and whose server's
+// every line stand still for `still` fails, naming where it stood.
+async fn ask_after(
+  shell: &NodeShell,
+  dir: &str,
+  id: &str,
+  still: Duration,
+  told: &mut (dyn FnMut(&Staged) + Send),
+) -> Result<Asked, NodeError> {
+  let mut seen = Look::default();
+  let mut moved_at = tokio::time::Instant::now();
+
   loop {
-    let polled = shell.run(&await_command(dir, id, wait_seconds), None).await.map_err(unreachable)?;
+    let polled = shell.run(&await_command(dir, id, ASK_WAIT_SECONDS), None).await.map_err(unreachable)?;
     let said = String::from_utf8_lossy(&polled.stdout).into_owned();
     let lines: Vec<&str> = said.split('\n').collect();
     let first = lines.first().map(|line| line.trim()).unwrap_or_default();
@@ -483,6 +583,28 @@ async fn ask_after(shell: &NodeShell, dir: &str, id: &str, wait_seconds: i64) ->
         )),
       ));
     }
+
+    let look = look_of(&lines[1..]);
+
+    if look != seen {
+      if let Some(stage) = look.stage.as_ref().filter(|stage| seen.stage.as_ref() != Some(*stage)) {
+        told(stage);
+      }
+
+      seen = look;
+      moved_at = tokio::time::Instant::now();
+    } else if moved_at.elapsed() >= still {
+      let at = seen
+        .stage
+        .as_ref()
+        .map_or("before the voice server wrote any stage", |stage| stage.said.as_str());
+
+      return Err(NodeError::new(
+        Failure::Failed,
+        None,
+        Some(format!("the line stood still for {} at: {at}", span(still))),
+      ));
+    }
   }
 }
 
@@ -495,78 +617,127 @@ pub struct Spoken {
   pub checkpoint: String,
 }
 
-// One line spoken on the node, as the wav it answered, waited for until the asker on the node has ended.
-async fn speak_on_node(shell: &NodeShell, request: &Value) -> Result<(Vec<u8>, Spoken), NodeError> {
+// One call on a node, ended there however its speaking ends: where it is let go of before its asker ended, dropped by
+// a clock, a stop or a failure, the asker's process group is ended and the call's files removed, on a task of its
+// own, since nothing waits on that.
+struct Call {
+  shell: NodeShell,
+  id: String,
+  ended: bool,
+}
+
+impl Call {
+  // The asker ended by itself: only its files are left to remove.
+  async fn end(mut self) {
+    self.ended = true;
+
+    let _ = self.shell.run(&end_command(&self.id, false), None).await;
+  }
+}
+
+impl Drop for Call {
+  fn drop(&mut self) {
+    if self.ended {
+      return;
+    }
+
+    let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+      return;
+    };
+    let shell = self.shell.clone();
+    let command = end_command(&self.id, true);
+
+    runtime.spawn(async move {
+      let _ = shell.run(&command, None).await;
+    });
+  }
+}
+
+// One line spoken on the node, as the wav it answered, waited for until the asker on the node has ended or the line
+// stands still for `still`; each stage the server writes is handed to `told`.
+async fn speak_on_node(
+  shell: &NodeShell,
+  request: &Value,
+  still: Duration,
+  told: &mut (dyn FnMut(&Staged) + Send),
+) -> Result<(Vec<u8>, Spoken), NodeError> {
   let id = format!("{:x}-{:08x}", now_ms(), rand::random::<u32>());
-  let dir = Mutex::new(None::<String>);
-  let work = async {
-    let input = request.to_string();
-    let begun = shell.run(&start_command(&id), Some(input.as_bytes())).await.map_err(unreachable)?;
-
-    if begun.code == Some(NOT_INSTALLED) {
-      let said = begun.stderr.trim();
-
-      return Err(unreachable(if said.is_empty() {
-        "the voice server is not installed on this node"
-      } else {
-        said
-      }));
-    }
-
-    let named = String::from_utf8_lossy(&begun.stdout)
-      .trim()
-      .lines()
-      .last()
-      .unwrap_or_default()
-      .trim()
-      .to_owned();
-
-    if begun.code != Some(0) || !named.starts_with('/') {
-      return Err(NodeError::new(
-        Failure::Failed,
-        None,
-        Some(format!("the node did not start asking: {}", tail(begun.stderr.trim(), 300))),
-      ));
-    }
-
-    *dir.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(named.clone());
-
-    let asked = ask_after(shell, &named, &id, ASK_WAIT_SECONDS).await?;
-
-    if asked.status != Some(200) {
-      return Err(failure_of(&asked));
-    }
-
-    let wav = shell.get(&format!("{named}/{id}.wav")).await.map_err(unreachable)?;
-
-    if wav.len() < 44 || &wav[..4] != b"RIFF" {
-      return Err(NodeError::new(
-        Failure::BadAnswer,
-        asked.status,
-        Some("the answer is not a wav".to_owned()),
-      ));
-    }
-
-    Ok((
-      wav,
-      Spoken {
-        seconds: asked.seconds.unwrap_or_default(),
-        load_seconds: asked.load_seconds.unwrap_or_default(),
-        speak_seconds: asked.speak_seconds.unwrap_or_default(),
-        checkpoint: asked.checkpoint.unwrap_or_default(),
-      },
-    ))
+  let call = Call {
+    shell: shell.clone(),
+    id: id.clone(),
+    ended: false,
   };
-  let spoken = work.await;
-  let dir = dir.into_inner().unwrap_or_else(std::sync::PoisonError::into_inner);
+  let input = request.to_string();
+  let begun = shell.run(&start_command(&id), Some(input.as_bytes())).await.map_err(unreachable)?;
 
-  // The line and its sound leave the node with the call; a node gone meanwhile keeps them until the next call's
-  // sweep.
-  if let Some(dir) = dir {
-    let _ = shell.run(&format!("rm -f {}/{}.*", shell_word(&dir), shell_word(&id)), None).await;
+  if begun.code == Some(NOT_INSTALLED) {
+    let said = begun.stderr.trim();
+
+    return Err(unreachable(if said.is_empty() {
+      "the voice server is not installed on this node"
+    } else {
+      said
+    }));
   }
 
+  let named = String::from_utf8_lossy(&begun.stdout)
+    .trim()
+    .lines()
+    .last()
+    .unwrap_or_default()
+    .trim()
+    .to_owned();
+
+  if begun.code != Some(0) || !named.starts_with('/') {
+    return Err(NodeError::new(
+      Failure::Failed,
+      None,
+      Some(format!("the node did not start asking: {}", tail(begun.stderr.trim(), 300))),
+    ));
+  }
+
+  let asked = ask_after(shell, &named, &id, still, told).await?;
+
+  told(&staged(CARRIED, "its sound is carried back"));
+
+  // The asker has ended: the line and its sound leave the node with the call, however what it wrote reads.
+  let spoken = carried(shell, &named, &id, &asked).await;
+
+  call.end().await;
+
   spoken
+}
+
+// The wav the asker wrote, carried back once its answer says the line was spoken.
+async fn carried(
+  shell: &NodeShell,
+  dir: &str,
+  id: &str,
+  asked: &Asked,
+) -> Result<(Vec<u8>, Spoken), NodeError> {
+  if asked.status != Some(200) {
+    return Err(failure_of(asked));
+  }
+
+  let wav = shell.get(&format!("{dir}/{id}.wav")).await.map_err(unreachable)?;
+
+  if wav.len() < 44 || &wav[..4] != b"RIFF" {
+    return Err(NodeError::new(
+      Failure::BadAnswer,
+      asked.status,
+      Some("the answer is not a wav".to_owned()),
+    ));
+  }
+
+  Ok((
+    wav,
+    Spoken {
+      seconds: asked.seconds.unwrap_or_default(),
+      load_seconds: asked.load_seconds.unwrap_or_default(),
+      speak_seconds: asked.speak_seconds.unwrap_or_default(),
+      checkpoint: asked.checkpoint.clone().unwrap_or_default(),
+    },
+  ))
 }
 
 /// What a node's server says of itself: the checkpoint it holds loaded, whether it is speaking this moment,
@@ -613,8 +784,9 @@ pub async fn health(shell: &NodeShell) -> Result<Health, NodeError> {
   }
 }
 
-/// One line to speak on the card the master grants: the voice, the words, where the sound goes, and the demand asked
-/// for the card.
+/// One line to speak on the card the master grants: the voice, the words, where the sound goes, the demand asked
+/// for the card, and the node's clocks: how long one call to reach the node may take and how long the line may stand
+/// still on it.
 pub struct Speech<'a> {
   pub units: &'a Units,
   pub settings: &'a Settings,
@@ -622,14 +794,34 @@ pub struct Speech<'a> {
   pub text: &'a str,
   pub out: &'a Path,
   pub ask: &'a Ask,
+  pub answer_within: Duration,
+  pub still_within: Duration,
 }
 
-/// Where a line stands on its way to a node, as it changes: waiting for its card, with what it waits on, or
-/// speaking on the card granted.
+/// Where a line stands on its way to a node, as it changes: waiting for its card, with what it waits on, or on the
+/// node of the card granted, held by its demand, with where the line stands there.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage<'a> {
   Waiting(&'a str),
-  Speaking,
+  OnNode {
+    demand: i64,
+    node: &'a str,
+    stage: &'a Staged,
+  },
+}
+
+/// The line asked of its node, before the server has written any stage of it.
+pub const ASKED: &str = "asked";
+
+/// The line spoken, its sound carried back from the node.
+pub const CARRIED: &str = "carried";
+
+fn staged(stage: &str, said: &str) -> Staged {
+  Staged {
+    stage: stage.to_owned(),
+    step: 0,
+    said: said.to_owned(),
+  }
 }
 
 /// Which node spoke a line, how long the run waited for its card, and the node's own account of the line.
@@ -642,9 +834,10 @@ pub struct Heard {
 
 /// The line spoken on the node of the card the master grants and encoded here into `out`, with nothing laid over
 /// the voice (docs/voice-plan.md, 「Which node speaks a line」). The card is waited for however long its grant takes,
-/// each stage told as it changes, and the speaking for however long the node takes; where the node's card arbiter
-/// gives the voice no place on the card, the demand is read again until its card is granted again and the line is
-/// asked once more. The demand is given back however the line ends.
+/// each stage told as it changes, and the speaking while the node answers and the line moves on it, each stage the
+/// server writes told too; where the node's card arbiter gives the voice no place on the card, the demand is read
+/// again until its card is granted again and the line is asked once more. The demand is given back however the line
+/// ends.
 pub async fn speak_on_card(
   speech: Speech<'_>,
   told: &mut (dyn FnMut(Stage<'_>) + Send),
@@ -660,11 +853,19 @@ pub async fn speak_on_card(
 
   let ended = loop {
     let waited_ms = now_ms() - started;
+    let (demand, node) = (held.demand, held.node.clone());
+    let mut on_node = |stage: &Staged| {
+      told(Stage::OnNode {
+        demand,
+        node: &node,
+        stage,
+      })
+    };
 
-    told(Stage::Speaking);
+    on_node(&staged(ASKED, "the line is asked of the node"));
 
-    let spoken = match node_shell(speech.units, held.node.clone()).await {
-      Ok(shell) => speak_on_node(&shell, &request).await,
+    let spoken = match node_shell(speech.units, node.clone(), speech.answer_within).await {
+      Ok(shell) => speak_on_node(&shell, &request, speech.still_within, &mut on_node).await,
       Err(error) => Err(error),
     };
 
@@ -685,7 +886,7 @@ pub async fn speak_on_card(
           Err(why) => break Err(NotSpoken::Here(why)),
         }
       }
-      Err(error) => break Err(NotSpoken::Node(error)),
+      Err(error) => break Err(NotSpoken::OnNode(held.node.clone(), error)),
     }
   };
 

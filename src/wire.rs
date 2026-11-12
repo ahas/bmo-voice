@@ -96,13 +96,13 @@ pub struct Voice {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum SynthesisState {
-  /// Taken in, its card not yet granted.
+  /// Taken in, its spoken words being derived or its card not yet granted.
   Waiting,
-  /// One voice server is speaking it.
+  /// Its card is granted and the line is on that card's node.
   Speaking,
   /// Its sound stands at `/syntheses/{synthesisId}/sound`.
   Done,
-  /// It could not be spoken.
+  /// It ended without a sound; its `failure` says why.
   Failed,
   /// Its briefing was stopped before it ended; it has no sound and is never spoken again.
   Stopped,
@@ -149,13 +149,44 @@ pub struct Synthesis {
   #[serde(default)]
   pub key: Option<String>,
   pub state: SynthesisState,
-  /// What a waiting synthesis waits on for its card, an English sentence; null once its card is granted.
+  /// What a synthesis that has not ended waits on: its words, its card or its node; null once it ended.
+  #[serde(default)]
+  pub wait: Option<SynthesisWait>,
+  /// What it waits on, an English sentence; null once it ended.
   #[serde(default)]
   pub waiting_on: Option<String>,
+  /// Why a failed synthesis ended, an English sentence; null on every other.
+  #[serde(default)]
+  pub failure: Option<String>,
   /// How long its sound runs; null until it is done.
   pub duration_ms: Option<i64>,
   /// Epoch milliseconds.
   pub created_at: i64,
+}
+
+/// What a synthesis that has not ended waits on (`docs/boundary-api.md`, 「What it waits on」).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SynthesisWait {
+  pub on: WaitOn,
+  /// The node of the card granted; null before the grant.
+  pub node: Option<String>,
+  /// The master's demand the line holds its card by; null before the grant.
+  pub demand_id: Option<i64>,
+  /// Epoch milliseconds of when it began to wait on what it waits on now.
+  pub since: i64,
+}
+
+/// What kind of thing a synthesis waits on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum WaitOn {
+  /// Its spoken words being derived.
+  Words,
+  /// Its card, not yet granted.
+  Demand,
+  /// The node of the card granted, where the line stands.
+  Node,
 }
 
 /// A text to speak.

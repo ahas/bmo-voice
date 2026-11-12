@@ -331,12 +331,17 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **Waiting for a card has no end but its grant:** in the line behind the demands asked before it, while every card
   of `voice` is in use or held by a claim or a lower tier, or while the master is not reached. The synthesis stays
   `waiting`, and its `waitingOn` says why.
-- **No clock bounds the speaking:** it ends when the node answers with the line's sound or with a failure.
-- **On the node** the server waits for its turn however long that takes, in the card arbiter's hold queue through
-  the turn client, and once the turn has come, for the card's memory to take the model. Where the node's arbiter
+- **The speaking ends** when the node answers with the line's sound or with a failure, or when one of the engine's
+  clocks ends it: the node not answering a call, or the line standing still on the node, its stage and every line of
+  its server unchanged for the span (`docs/boundary-api.md`, 「The clocks」). A line that keeps moving is spoken
+  however long it is.
+- **On the node** the server waits for its turn in the card arbiter's hold queue through the turn client, and once
+  the turn has come, for the card's memory to take the model, writing each of those stages where the engine reads
+  it (「How a line crosses」). Where the node's arbiter
   gives the voice no place on the card it answers 503, and the run reads its demand again until the card is granted
   again and asks the line of that card's node once more.
-- **A caller that gives up its call** ends the speaking the call had started; the synthesis ends `failed`.
+- **A line the engine lets go of** ends on the node too: its asker is ended and the server drops it rather than
+  take the card for it (「How a line crosses」).
 - **A granted node out of reach fails the run at once,** naming the node and what it met. It is not spoken on the
   operations machine's card instead: a line quietly spoken elsewhere would hide the fault.
 
@@ -373,11 +378,21 @@ the voice nodes. What a caller does with the sound is the caller's.
 ### How a line crosses
 
 - **The request goes in on the node's standard input,** never on a command line. The node writes it into `spoken/`
-  and starts the asker apart, `voice-fish.py --ask`, which posts it to the server on loopback with the token and writes
-  the answer's wav beside it with one line of JSON: the status, the reason, the headers.
+  and starts the asker apart in a process group of its own, `voice-fish.py --ask`, keeping its process id beside the
+  call's files; the asker posts the line to the server on loopback with the token and the call's stage file, and
+  writes the answer's wav beside it with one line of JSON: the status, the reason, the headers.
+- **The server writes the line's stage** into the call's stage file each time it changes, and never otherwise:
+  behind another line on the server, waiting for its turn, waiting for room on the card with the memory free and
+  needed, loading the voice, and each piece spoken of how many. Each stage is one line of JSON, its kind, its count
+  of steps and an English sentence; the words of the line are never in it. A stage file outside `spoken/` is
+  refused.
 - **The operations machine hears of that line** by waiting on the asker's lock on the node, each wait a short piece
-  inside what a hub node lets a command run, asked again until the asker lets go, then fetches the wav a slice at a
-  time, four MiB to a command, every byte counted back, and removes every file of the call. Each call first sweeps
+  inside what a hub node lets a command run, asked again until the asker lets go, each look reading the line's stage
+  and the newest stage file of every call in `spoken/`, the moment the server last moved any line; then it fetches
+  the wav a slice at a time, four MiB to a command, every byte counted back, and removes every file of the call.
+- **A call the operations machine lets go of,** ended by a clock, a stop or a failure, has its asker's process group
+  ended and its files removed. The server reads the asker's connection before it takes the card and while it waits
+  for room, and drops a line whose asker has gone, answering nothing. Each call first sweeps
   away the files a call left behind once its asker has let go of its lock and nothing of it has been written for an
   hour; a call whose asker still holds its lock is never swept, however long it runs.
 - **Why apart:** a hub node stops a command after five minutes, and a long line from a cold server can take longer.
@@ -397,7 +412,9 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **`GET /health`:** the checkpoint loaded, whether a line is being spoken, whether the model is on the card, the
   device and VRAM held, the card's free memory (asked of `nvidia-smi`, opening no CUDA context), whether
   other work holds the card lock (read from the kernel's lock table, never by taking it), whether the server holds
-  the card between lines, and whether it has room: 11.0 GiB free to load the model.
+  the card between lines, and whether it has room: 11.0 GiB free to load the model, the memory the server's own
+  process holds on the card counted as free, since it is the server's to use and stays on the card after the model
+  is let go.
 - **`503`:** the node's card arbiter gives the voice no place on the card; nothing was loaded or spoken.
 - **`500`:** the line failed while it was spoken. The answer names the failure's kind, its message and the frame of
   the mouth's own code it was raised in, which the engine writes into the synthesis's failure; the node's journal
@@ -430,7 +447,7 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 - **No count of characters bounds a line.** The mouth speaks a line piece by piece, so what a line takes of the card
   is what its longest piece takes; what grows with the line is only the sound held in host memory until it leaves,
-  about 10 MiB a minute, and the time it takes, which no clock bounds. The engine bounds the line itself, at the
+  about 10 MiB a minute, and the time it takes, which no clock bounds while its pieces keep coming. The engine bounds the line itself, at the
   30,000 characters of spoken words a synthesis holds (`docs/boundary-api.md`, 「Syntheses」), and hands it to one
   server whole.
 - **A line is cut into pieces:** a row that speaks a sentence at a time speaks each sentence as one piece, and any

@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use bmo_voice::context::Context;
+use bmo_voice::context::{Clocks, Context};
 use bmo_voice::events::Events;
 use bmo_voice::http::{Served, router};
 use bmo_voice::settings::Settings;
@@ -23,10 +23,10 @@ use tower::ServiceExt;
 
 static MADE: AtomicU32 = AtomicU32::new(0);
 
-const TOKEN: &str = "a-test-token";
+pub(crate) const TOKEN: &str = "a-test-token";
 const ROOM: i64 = -500;
 /// Spoken words a Korean voice says as they stand, given beside each line so none waits on a derivation.
-const SPOKEN: &str = "백업이 끝났습니다.";
+pub(crate) const SPOKEN: &str = "백업이 끝났습니다.";
 
 fn server() -> String {
   std::env::var("BMO_TEST_POSTGRES")
@@ -43,13 +43,13 @@ fn address_of(database: &str) -> String {
 }
 
 /// A database and a data root of this test's own, made empty and dropped when the test ends.
-struct Scratch {
+pub(crate) struct Scratch {
   name: String,
-  root: std::path::PathBuf,
+  pub(crate) root: std::path::PathBuf,
 }
 
 impl Scratch {
-  async fn new() -> Scratch {
+  pub(crate) async fn new() -> Scratch {
     let made = MADE.fetch_add(1, Ordering::SeqCst);
     let name = format!("bmo_voice_briefings_test_{}_{made}", std::process::id());
     let mut admin = PgConnection::connect(&address_of("postgres")).await.expect("the server answers");
@@ -97,6 +97,16 @@ async fn served(
   scratch: &Scratch,
   master: Option<std::net::SocketAddr>,
   node: Option<std::net::SocketAddr>,
+) -> Served {
+  served_with(scratch, master, node, Clocks::default()).await
+}
+
+/// What the engine's routes stand on, as `served` builds it, the clocks that end a synthesis the ones `clocks` sets.
+pub(crate) async fn served_with(
+  scratch: &Scratch,
+  master: Option<std::net::SocketAddr>,
+  node: Option<std::net::SocketAddr>,
+  clocks: Clocks,
 ) -> Served {
   let master = master.map_or_else(|| "[::1]:9".to_owned(), |at| at.to_string());
   let node = node.map_or_else(|| "[::1]:9".to_owned(), |at| at.to_string());
@@ -160,6 +170,8 @@ address = "http://[::1]:9"
     db: db.clone(),
     units,
     waits: Default::default(),
+    reads: Default::default(),
+    clocks,
     stops: Default::default(),
   };
 
@@ -172,7 +184,12 @@ address = "http://[::1]:9"
 
 use sea_orm::ConnectionTrait;
 
-async fn call(engine: &axum::Router, method: &str, path: &str, body: Option<Value>) -> (StatusCode, Value) {
+pub(crate) async fn call(
+  engine: &axum::Router,
+  method: &str,
+  path: &str,
+  body: Option<Value>,
+) -> (StatusCode, Value) {
   let request = Request::builder()
     .method(method)
     .uri(path)
@@ -356,12 +373,12 @@ async fn a_retired_voice_is_listed_as_such_and_never_spoken() {
 /// A stand-in master: a demand waits, its reads saying why, until the test lets it be granted on a node nothing
 /// reaches; every demand given back is kept. Its one demand is asked with the first synthesis's work key.
 #[derive(Default)]
-struct Line {
-  open: std::sync::atomic::AtomicBool,
-  given: std::sync::Mutex<Vec<i64>>,
+pub(crate) struct Line {
+  pub(crate) open: std::sync::atomic::AtomicBool,
+  pub(crate) given: std::sync::Mutex<Vec<i64>>,
 }
 
-const IN_USE: &str = "Every card of voice is in use: song.";
+pub(crate) const IN_USE: &str = "Every card of voice is in use: song.";
 
 fn line_demand(line: &Line) -> Value {
   if line.open.load(Ordering::SeqCst) {
@@ -373,7 +390,7 @@ fn line_demand(line: &Line) -> Value {
   }
 }
 
-async fn line_master(line: Arc<Line>) -> std::net::SocketAddr {
+pub(crate) async fn line_master(line: Arc<Line>) -> std::net::SocketAddr {
   use axum::extract::{Path, State};
   use axum::routing::{get, post};
 
@@ -740,10 +757,10 @@ async fn a_stop_ends_a_rooms_waiting_briefings_gives_back_their_card_and_tells_i
 
 /// A stand-in master holding a demand for each line that asks: the one asked with `granted` as its work key is
 /// granted a card on `node-a`, every other waits; each demand given back is kept.
-struct Cards {
-  granted: String,
-  asked: std::sync::Mutex<Vec<(i64, String)>>,
-  given: std::sync::Mutex<Vec<i64>>,
+pub(crate) struct Cards {
+  pub(crate) granted: String,
+  pub(crate) asked: std::sync::Mutex<Vec<(i64, String)>>,
+  pub(crate) given: std::sync::Mutex<Vec<i64>>,
 }
 
 fn card_demand(cards: &Cards, id: i64, key: &str) -> Value {
@@ -770,7 +787,7 @@ fn held_demands(cards: &Cards) -> Vec<Value> {
     .collect()
 }
 
-async fn cards_master(cards: Arc<Cards>) -> std::net::SocketAddr {
+pub(crate) async fn cards_master(cards: Arc<Cards>) -> std::net::SocketAddr {
   use axum::extract::{Path, State};
   use axum::routing::{get, post};
 

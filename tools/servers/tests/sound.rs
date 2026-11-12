@@ -17,7 +17,9 @@ fn synthesis(key: Option<&str>, state: SynthesisState) -> Synthesis {
     emotion: None,
     key: key.map(str::to_owned),
     state,
+    wait: None,
     waiting_on: None,
+    failure: None,
     duration_ms: None,
     created_at: 0,
   }

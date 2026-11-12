@@ -471,21 +471,27 @@ async fn a_line_gives_its_card_back_however_it_ends_and_says_each_stage() {
       text: "A short line.",
       out: &out,
       ask: &ask,
+      answer_within: Duration::from_secs(60),
+      still_within: Duration::from_secs(600),
     },
     &mut |stage| {
       stages.push(match stage {
         Stage::Waiting(why) => format!("waiting: {why}"),
-        Stage::Speaking => "speaking".to_owned(),
+        Stage::OnNode {
+          demand,
+          node,
+          stage,
+        } => format!("on {node} by {demand}: {}", stage.stage),
       })
     },
   )
   .await;
 
   assert!(
-    matches!(spoken, Err(NotSpoken::Node(_))),
+    matches!(spoken, Err(NotSpoken::OnNode(_, _))),
     "the granted node is out of reach, so the line fails: {spoken:?}"
   );
-  assert_eq!(stages, [format!("waiting: {WAITING}"), "speaking".to_owned()]);
+  assert_eq!(stages, [format!("waiting: {WAITING}"), format!("on node-a by 101: {}", node::ASKED)]);
   assert_eq!(*stand.given.lock().unwrap(), [101], "the card is given back as the line ends");
   assert!(ledger(&settings).is_empty());
 }

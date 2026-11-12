@@ -94,8 +94,29 @@ One row per text handed to the engine.
 | `emotion` | the emotion it was asked for; null where none was |
 | `key` | the caller's key for the line (`docs/boundary-api.md`, 「Syntheses」); null where none was given. No two rows that have not failed hold one key |
 | `state` | `waiting`, `speaking`, `done`, `failed` or `stopped` |
+| `failure` | why a `failed` row ended, an English sentence naming the node, the stage and the clock where one of them ended it; null on every other |
 | `duration_ms` | the sound's length once it is done; null before |
 | `created_at` | when it was taken in, in epoch milliseconds |
+
+A row's `state` moves as the boundary's state machine says (`docs/boundary-api.md`, 「Its states」):
+
+```mermaid
+flowchart TD
+  W[waiting] -->|card granted| S[speaking]
+  S -->|the node's arbiter gives no place| W
+  S --> D[done]
+  W --> F[failed]
+  S --> F
+  W --> X[stopped]
+  S --> X
+```
+
+- **Only `waiting` and `speaking` move;** `done`, `failed` and `stopped` are ends, and a write that would move an
+  ended row leaves it as it stands.
+- **A row moves to `failed` with its `failure` in the one write,** so no failed row stands without its reason.
+- **The clocks that end a row are the engine's policy,** not columns: the caller's, the node's answer and the
+  node's progress (`docs/boundary-api.md`, 「The clocks」). What a row waits on, and since when, is the running
+  process's and is never written; a process that takes a row up names its wait again.
 
 ### `voice_transcriptions`
 

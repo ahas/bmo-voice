@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "bmo-voice",
-    "version": "0.1.0-rev.26",
+    "version": "0.1.0-rev.27",
     "description": "The voice engine: trained voices, speech synthesis on the voice servers of the nodes, transcription, speaker encodings and scripts for the ear. A synthesis is answered at once and the sound follows. Bodies are JSON with camelCase keys, times are integers of epoch milliseconds and spans of milliseconds end in Ms. A list is a page, `after` being the last member's name. Every failure is a non-2xx answer whose body is `code` and `error`. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`. A briefing is a line spoken for a room, kept with the room and the line its caller names and told on the event stream for its listeners to play; when one is spoken, and what it says, is its caller's decision."
   },
   "servers": [
@@ -1370,12 +1370,32 @@
           "state": {
             "$ref": "#/components/schemas/SynthesisState"
           },
+          "wait": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SynthesisWait"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What a synthesis that has not ended waits on: its words, its card or its node; null once it ended.",
+            "default": null
+          },
           "waitingOn": {
             "type": [
               "string",
               "null"
             ],
-            "description": "What a waiting synthesis waits on for its card, an English sentence; null once its card is granted.",
+            "description": "What it waits on, an English sentence; null once it ended.",
+            "default": null
+          },
+          "failure": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why a failed synthesis ended, an English sentence; null on every other.",
             "default": null
           },
           "durationMs": {
@@ -1406,12 +1426,12 @@
           {
             "type": "string",
             "const": "waiting",
-            "description": "Taken in, its card not yet granted."
+            "description": "Taken in, its spoken words being derived or its card not yet granted."
           },
           {
             "type": "string",
             "const": "speaking",
-            "description": "One voice server is speaking it."
+            "description": "Its card is granted and the line is on that card's node."
           },
           {
             "type": "string",
@@ -1421,7 +1441,7 @@
           {
             "type": "string",
             "const": "failed",
-            "description": "It could not be spoken."
+            "description": "It ended without a sound; its `failure` says why."
           },
           {
             "type": "string",
@@ -1430,6 +1450,59 @@
           }
         ],
         "description": "Where a synthesis stands in its life."
+      },
+      "SynthesisWait": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "$ref": "#/components/schemas/WaitOn"
+          },
+          "node": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The node of the card granted; null before the grant."
+          },
+          "demandId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The master's demand the line holds its card by; null before the grant."
+          },
+          "since": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Epoch milliseconds of when it began to wait on what it waits on now."
+          }
+        },
+        "required": [
+          "on",
+          "since"
+        ],
+        "description": "What a synthesis that has not ended waits on (`docs/boundary-api.md`, 「What it waits on」)."
+      },
+      "WaitOn": {
+        "oneOf": [
+          {
+            "type": "string",
+            "const": "words",
+            "description": "Its spoken words being derived."
+          },
+          {
+            "type": "string",
+            "const": "demand",
+            "description": "Its card, not yet granted."
+          },
+          {
+            "type": "string",
+            "const": "node",
+            "description": "The node of the card granted, where the line stands."
+          }
+        ],
+        "description": "What kind of thing a synthesis waits on."
       },
       "NewBriefing": {
         "type": "object",

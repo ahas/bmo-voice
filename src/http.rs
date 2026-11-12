@@ -21,7 +21,7 @@ use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
-use crate::context::Context;
+use crate::context::{Context, Wait};
 use crate::events::{
   BRIEFING_CHANGED, BRIEFING_CREATED, BRIEFING_ENDED, BRIEFINGS_STOPPED, Events, SYNTHESIS_CREATED,
   SYNTHESIS_ENDED, TRANSCRIPTION_ENDED,
@@ -35,7 +35,8 @@ use crate::units::arbiter::Ask;
 use crate::wire::{
   Briefing, BriefingKind, BriefingLine, BriefingQuery, BriefingStop, BriefingsStopped, Encoding, Event,
   EventQuery, Health, NewBriefing, NewEncoding, NewScriptReading, NewSynthesis, NewTranscription, Page,
-  PageQuery, ScriptReading, Synthesis, SynthesisState, Transcription, Voice, VoiceServer, WireError,
+  PageQuery, ScriptReading, Synthesis, SynthesisState, Transcription, Voice, VoiceServer, WaitOn,
+  WireError,
 };
 
 /// How often an idle event stream says it is still there.
@@ -357,7 +358,7 @@ async fn create_synthesis(
   if let Some(key) = key
     && let Some(held) = store::syntheses::keyed(&served.context.db, key).await?
   {
-    return Ok((StatusCode::OK, Json(held.synthesis())).into_response());
+    return Ok((StatusCode::OK, Json(read_by_caller(&served.context, &held))).into_response());
   }
 
   let row = voices::voice(&served.context.db, &asked.voice_name)
@@ -385,7 +386,7 @@ async fn create_synthesis(
     store::syntheses::Taken::New(id) => id,
     // Another call with this key took its synthesis in in the moment between: that one is the answer.
     store::syntheses::Taken::Held(held) => {
-      return Ok((StatusCode::OK, Json(held.synthesis())).into_response());
+      return Ok((StatusCode::OK, Json(read_by_caller(&served.context, &held))).into_response());
     }
   };
   let synthesis = Synthesis {
@@ -396,7 +397,9 @@ async fn create_synthesis(
     emotion: asked.emotion.clone(),
     key: key.map(str::to_owned),
     state: SynthesisState::Waiting,
+    wait: None,
     waiting_on: None,
+    failure: None,
     duration_ms: None,
     created_at: at,
   };
@@ -417,6 +420,8 @@ async fn create_synthesis(
     language,
   };
 
+  served.context.reads.read(id);
+  eprintln!("voice: synthesis {id} taken in, in {} ({})", voice.name, words.language.code());
   speak_apart(Arc::clone(&served.context), served.events.clone(), id, None, voice, words);
 
   Ok((StatusCode::CREATED, Json(synthesis)).into_response())
@@ -547,20 +552,24 @@ fn known_emotion(emotion: Option<&str>) -> Result<(), Refused> {
 // The spoken words a synthesis taken in without them is derived (docs/boundary-api.md, 「How the engine derives the
 // spoken words」), kept as its own once they stand; what the derivation waits on is told as the synthesis's wait.
 async fn derived_words(context: &Context, id: i64, language: Language, text: &str) -> String {
-  let mut told = |why: &str| context.waits.set(id, Some(why));
+  let mut told = |why: &str| {
+    eprintln!("voice: synthesis {id} waits on its spoken words: {why}");
+    context.waits.set(id, Wait::words(why));
+  };
   let words = crate::speech::spoken::derived(context, id, language, text, &mut told).await;
 
   if let Err(why) = store::syntheses::set_spoken(&context.db, id, &words).await {
     eprintln!("voice: synthesis {id}'s spoken words were not kept: {why}");
   }
 
-  context.waits.set(id, None);
+  context.waits.clear(id);
 
   words
 }
 
 // A line's speaking run apart from the answer, a task of the service's one runtime, which every waiting line shares;
-// its stop signal stands before the task does, and a briefing's end is kept and told as its synthesis ends.
+// its stop signal stands before the task does, and a briefing's end is kept and told as its synthesis ends. A plain
+// synthesis is held by its caller's reads; a briefing's is the room's and has no caller's clock.
 fn speak_apart(
   context: Arc<Context>,
   events: Events,
@@ -576,14 +585,29 @@ fn speak_apart(
       tokio::spawn(brief(context, events, briefing, synthesis, voice, words, stop));
     }
     None => {
-      tokio::spawn(speak(context, events, synthesis, voice, words, stop));
+      tokio::spawn(speak(context, events, synthesis, voice, words, stop, Caller::Held));
     }
   }
 }
 
-// One synthesis spoken unless its stop signal comes first: a stop drops its speaking where it stands, the derivation,
-// the wait for its card or the node's speech, and gives back whatever card its line holds; the stop's own route has
-// written and told its end. Answers whether it ran to its own end.
+// Whether a synthesis is held by its caller's reads, and so ends once its caller is gone.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Caller {
+  Held,
+  Room,
+}
+
+// How a synthesis's speaking came to its end: its own, its stop, or its caller gone.
+enum Ended {
+  Own,
+  Stopped,
+  CallerGone,
+}
+
+// One synthesis spoken unless its stop signal or its caller's clock comes first: either drops its speaking where it
+// stands, the derivation, the wait for its card or the call on its node, ends that call on the node, and gives back
+// whatever card its line holds. The stop's own route has written and told its end; a caller gone fails the synthesis
+// here, saying so. Answers whether it ran to its own end.
 async fn speak(
   context: Arc<Context>,
   events: Events,
@@ -591,25 +615,147 @@ async fn speak(
   voice: voices::VoiceRow,
   words: Words,
   stop: CancellationToken,
+  caller: Caller,
 ) -> bool {
-  let ran = tokio::select! {
-    () = speak_line(&context, events, id, voice, words) => true,
-    () = stop.cancelled() => false,
+  let ended = tokio::select! {
+    () = speak_line(&context, events.clone(), id, voice, words) => Ended::Own,
+    () = stop.cancelled() => Ended::Stopped,
+    () = caller_gone(&context, id), if caller == Caller::Held => Ended::CallerGone,
   };
 
   context.stops.forget(id);
+  context.reads.forget(id);
 
-  if !ran {
-    context.waits.set(id, None);
-    card::give_back_work(&context.units.arbiter, &context.settings.demands_folder(), &node::work_key(id))
-      .await;
+  let caller_gone = match ended {
+    Ended::Own => return true,
+    Ended::Stopped => false,
+    Ended::CallerGone => true,
+  };
+
+  context.waits.clear(id);
+  card::give_back_work(&context.units.arbiter, &context.settings.demands_folder(), &node::work_key(id))
+    .await;
+
+  if caller_gone {
+    let why =
+      format!("its caller has gone, not having read it for {}", node::span(context.clocks.caller_gone));
+
+    failed(&context, events, id, &why).await;
+  } else {
+    eprintln!("voice: synthesis {id} stopped");
   }
 
-  ran
+  false
+}
+
+// Ends once the synthesis's caller has not read it for the caller's clock, counted from its last read.
+async fn caller_gone(context: &Context, id: i64) {
+  loop {
+    let last = context.reads.last(id).unwrap_or_else(tokio::time::Instant::now);
+    let due = last + context.clocks.caller_gone;
+
+    if tokio::time::Instant::now() >= due {
+      return;
+    }
+
+    tokio::time::sleep_until(due).await;
+  }
+}
+
+// A synthesis failed with its reason, written to the journal and, where it had not ended meanwhile, told as its end.
+async fn failed(context: &Context, events: Events, id: i64, why: &str) {
+  eprintln!("voice: synthesis {id} failed: {why}");
+
+  match store::syntheses::fail(&context.db, id, why).await {
+    Ok(true) => {
+      let _ = ended_synthesis(events, context.db.clone(), id).await;
+    }
+    Ok(false) => {}
+    Err(why) => eprintln!("voice: synthesis {id}'s failure was not written: {why}"),
+  }
+}
+
+// Where a line stands as its speaking tells it: waiting for its card, or on the node of the card granted.
+enum Told {
+  Card(String),
+  Node {
+    demand: i64,
+    node: String,
+    stage: String,
+    said: String,
+  },
+}
+
+impl Told {
+  fn of(stage: node::Stage<'_>) -> Self {
+    match stage {
+      node::Stage::Waiting(why) => Self::Card(why.to_owned()),
+      node::Stage::OnNode {
+        demand,
+        node,
+        stage,
+      } => Self::Node {
+        demand,
+        node: node.to_owned(),
+        stage: stage.stage.clone(),
+        said: stage.said.clone(),
+      },
+    }
+  }
+
+  fn state(&self) -> SynthesisState {
+    match self {
+      Self::Card(_) => SynthesisState::Waiting,
+      Self::Node { .. } => SynthesisState::Speaking,
+    }
+  }
+
+  fn wait(&self) -> Wait {
+    match self {
+      Self::Card(why) => Wait {
+        on: WaitOn::Demand,
+        node: None,
+        demand: None,
+        said: why.clone(),
+      },
+      Self::Node {
+        demand, node, said, ..
+      } => Wait {
+        on: WaitOn::Node,
+        node: Some(node.clone()),
+        demand: Some(*demand),
+        said: format!("{node}: {said}"),
+      },
+    }
+  }
+
+  // What the journal tells of it: a line for each change in kind, the card's reason, or the node and the stage of
+  // the line there, and none for a piece of a long line, which is the same stage spoken on.
+  fn kind(&self) -> String {
+    match self {
+      Self::Card(why) => format!("waits for its card: {why}"),
+      Self::Node {
+        demand,
+        node,
+        stage,
+        ..
+      } => format!("on {node} (demand {demand}): {stage}"),
+    }
+  }
+
+  fn journal(&self, id: i64) {
+    match self {
+      Self::Card(why) => eprintln!("voice: synthesis {id} waits for its card: {why}"),
+      Self::Node {
+        demand, node, said, ..
+      } => eprintln!("voice: synthesis {id} on {node} (demand {demand}): {said}"),
+    }
+  }
 }
 
 // One synthesis spoken on the card the arbiter's master grants it, its state, what it waits on and the event of its
-// end told as they come. A synthesis that ended meanwhile, stopped, takes no state and tells no end of its own.
+// end told as they come, and each change in kind written to the journal. A synthesis that ended meanwhile, stopped,
+// takes no state and tells no end of its own.
 async fn speak_line(context: &Context, events: Events, id: i64, voice: voices::VoiceRow, words: Words) {
   let text = match words.spoken {
     Some(spoken) => spoken,
@@ -633,39 +779,42 @@ async fn speak_line(context: &Context, events: Events, id: i64, voice: voices::V
     text: &text,
     out: &out,
     ask: &ask,
+    answer_within: context.clocks.node_answer,
+    still_within: context.clocks.node_still,
   };
   // Each stage is handed over as it changes and written here, since the speaking cannot wait on the store.
-  let (said, mut heard) = tokio::sync::mpsc::unbounded_channel::<Option<String>>();
+  let (said, mut heard) = tokio::sync::mpsc::unbounded_channel::<Told>();
   let mut told = move |stage: node::Stage<'_>| {
-    let _ = said.send(match stage {
-      node::Stage::Waiting(why) => Some(why.to_owned()),
-      node::Stage::Speaking => None,
-    });
+    let _ = said.send(Told::of(stage));
   };
   let speaking = node::speak_on_card(speech, &mut told);
   let mut state = SynthesisState::Waiting;
+  let mut kind = String::new();
 
   tokio::pin!(speaking);
 
   let ended = loop {
     tokio::select! {
       ended = &mut speaking => break ended,
-      Some(waiting_on) = heard.recv() => {
-        let now = if waiting_on.is_some() { SynthesisState::Waiting } else { SynthesisState::Speaking };
+      Some(now) = heard.recv() => {
+        context.waits.set(id, now.wait());
 
-        context.waits.set(id, waiting_on.as_deref());
+        if now.kind() != kind {
+          now.journal(id);
+          kind = now.kind();
+        }
 
-        if now != state {
-          let _ = store::syntheses::set_state(&context.db, id, now, None).await;
-          state = now;
+        if now.state() != state {
+          let _ = store::syntheses::set_state(&context.db, id, now.state(), None).await;
+          state = now.state();
         }
       }
     }
   };
 
-  context.waits.set(id, None);
+  context.waits.clear(id);
 
-  let duration_ms = match ended {
+  let (heard, duration_ms) = match ended {
     Ok(heard) => {
       let seconds = tokio::fs::read(&out)
         .await
@@ -673,21 +822,19 @@ async fn speak_line(context: &Context, events: Events, id: i64, voice: voices::V
         .and_then(|bytes| synth::ogg_opus_seconds(&bytes))
         .unwrap_or(heard.spoken.seconds);
 
-      Some((seconds * 1_000.0).round().max(0.0) as i64)
+      (heard, Some((seconds * 1_000.0).round().max(0.0) as i64))
     }
-    Err(why) => {
-      eprintln!("voice: synthesis {id} failed: {why}");
-
-      if let Ok(true) = store::syntheses::set_state(&context.db, id, SynthesisState::Failed, None).await {
-        let _ = ended_synthesis(events, context.db.clone(), id).await;
-      }
-
-      return;
-    }
+    Err(why) => return failed(context, events, id, &why.to_string()).await,
   };
 
   match store::syntheses::set_state(&context.db, id, SynthesisState::Done, duration_ms).await {
     Ok(true) => {
+      eprintln!(
+        "voice: synthesis {id} done on {}: {} ms of sound, {} ms waited for its card",
+        heard.node,
+        duration_ms.unwrap_or_default(),
+        heard.waited_ms
+      );
       let _ = ended_synthesis(events, context.db.clone(), id).await;
     }
     Ok(false) => {}
@@ -717,11 +864,30 @@ async fn read_synthesis(
   let row = store::syntheses::get(&served.context.db, id)
     .await?
     .ok_or_else(|| Refused::not_found(format!("there is no synthesis {id}")))?;
+
+  Ok(Json(read_by_caller(&served.context, &row)))
+}
+
+// A read of a synthesis that has not ended starts its caller's clock again; an ended one has no clock left.
+fn caller_read(context: &Context, row: &store::syntheses::Row) {
+  if matches!(row.state, SynthesisState::Waiting | SynthesisState::Speaking) {
+    context.reads.read(row.id);
+  }
+}
+
+// A synthesis as its caller reads it: what it waits on where it has not ended, and the read starting its caller's
+// clock again (docs/boundary-api.md, 「The clocks」).
+fn read_by_caller(context: &Context, row: &store::syntheses::Row) -> Synthesis {
   let mut synthesis = row.synthesis();
 
-  synthesis.waiting_on = served.context.waits.of(id);
+  caller_read(context, row);
 
-  Ok(Json(synthesis))
+  if let Some((wait, said)) = context.waits.of(row.id) {
+    synthesis.wait = Some(wait);
+    synthesis.waiting_on = Some(said);
+  }
+
+  synthesis
 }
 
 /// `GET /syntheses/{synthesisId}/sound`.
@@ -733,6 +899,8 @@ async fn synthesis_sound(
   let row = store::syntheses::get(&served.context.db, id)
     .await?
     .ok_or_else(|| Refused::not_found(format!("there is no synthesis {id}")))?;
+
+  caller_read(&served.context, &row);
 
   if row.state != SynthesisState::Done {
     return Err(Refused::not_found(format!("synthesis {id} has no sound yet")));
@@ -834,6 +1002,11 @@ async fn create_briefing(
     language,
   };
 
+  eprintln!(
+    "voice: synthesis {synthesis_id} taken in for briefing {id}, in {} ({})",
+    voice.name,
+    words.language.code()
+  );
   speak_apart(Arc::clone(&served.context), served.events.clone(), synthesis_id, Some(id), voice, words);
 
   Ok((StatusCode::CREATED, Json(briefing)).into_response())
@@ -852,21 +1025,25 @@ pub async fn take_up(context: Arc<Context>, events: Events) -> Result<usize, Sto
     let language = row.language.as_deref().and_then(Language::parse);
     let language = language.or_else(|| voice.as_ref().and_then(|voice| Language::parse(&voice.language)));
     let (Some(voice), Some(language)) = (voice, language) else {
-      let _ = store::syntheses::set_state(db, id, SynthesisState::Failed, None).await;
-      let _ = ended_synthesis(events.clone(), db.clone(), id).await;
+      let why = format!("its voice {} is gone or not served", row.voice_name);
+
+      failed(&context, events.clone(), id, &why).await;
 
       if let Ok(Some(briefing)) = store::briefings::of_synthesis(db, id).await {
         let _ = store::briefings::ended(db, briefing, crate::now_ms(), None).await;
       }
 
-      eprintln!(
-        "voice: synthesis {id} left unspoken failed: its voice {} is gone or not served",
-        row.voice_name
-      );
       continue;
     };
 
     let _ = store::syntheses::set_state(db, id, SynthesisState::Waiting, None).await;
+
+    context.reads.read(id);
+    eprintln!(
+      "voice: synthesis {id} taken up from an earlier process, in {} ({})",
+      voice.name,
+      language.code()
+    );
 
     let briefing = store::briefings::of_synthesis(db, id).await?;
     let words = Words {
@@ -893,7 +1070,7 @@ async fn brief(
   words: Words,
   stop: CancellationToken,
 ) {
-  if !speak(Arc::clone(&context), events.clone(), synthesis_id, voice, words, stop).await {
+  if !speak(Arc::clone(&context), events.clone(), synthesis_id, voice, words, stop, Caller::Room).await {
     return;
   }
 
@@ -1214,7 +1391,13 @@ async fn list_voice_servers(
   let mut items = Vec::new();
 
   for name in chosen {
-    let (state, loaded) = match node::node_shell(&served.context.units, name.clone()).await {
+    let (state, loaded) = match node::node_shell(
+      &served.context.units,
+      name.clone(),
+      served.context.clocks.node_answer,
+    )
+    .await
+    {
       Ok(shell) => match node::health(&shell).await {
         Ok(health) => ("running", health.loaded),
         Err(_) => ("absent", None),

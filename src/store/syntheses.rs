@@ -16,6 +16,7 @@ pub struct Row {
   pub emotion: Option<String>,
   pub key: Option<String>,
   pub state: SynthesisState,
+  pub failure: Option<String>,
   pub duration_ms: Option<i64>,
   pub created_at: i64,
 }
@@ -31,7 +32,9 @@ impl Row {
       emotion: self.emotion.clone(),
       key: self.key.clone(),
       state: self.state,
+      wait: None,
       waiting_on: None,
+      failure: self.failure.clone(),
       duration_ms: self.duration_ms,
       created_at: self.created_at,
     }
@@ -52,6 +55,7 @@ fn row_of(row: &QueryResult) -> Result<Row, StoreError> {
     emotion: row.try_get("", "emotion")?,
     key: row.try_get("", "key")?,
     state,
+    failure: row.try_get("", "failure")?,
     duration_ms: row.try_get("", "duration_ms")?,
     created_at: row.try_get("", "created_at")?,
   })
@@ -113,7 +117,8 @@ pub async fn insert(
 pub async fn keyed(db: &DatabaseConnection, key: &str) -> Result<Option<Row>, StoreError> {
   one(
     db,
-    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "key", "state", "duration_ms", "created_at"
+    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "key", "state", "failure", "duration_ms",
+         "created_at"
        FROM "voice_syntheses" WHERE "key" = $1 AND "state" <> 'failed' ORDER BY "id" DESC LIMIT 1"#,
     vec![key.into()],
   )
@@ -127,7 +132,8 @@ pub async fn keyed(db: &DatabaseConnection, key: &str) -> Result<Option<Row>, St
 pub async fn get(db: &DatabaseConnection, id: i64) -> Result<Option<Row>, StoreError> {
   one(
     db,
-    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "key", "state", "duration_ms", "created_at"
+    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "key", "state", "failure", "duration_ms",
+         "created_at"
        FROM "voice_syntheses" WHERE "id" = $1"#,
     vec![id.into()],
   )
@@ -141,7 +147,8 @@ pub async fn get(db: &DatabaseConnection, id: i64) -> Result<Option<Row>, StoreE
 pub async fn unfinished(db: &DatabaseConnection) -> Result<Vec<Row>, StoreError> {
   all(
     db,
-    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "key", "state", "duration_ms", "created_at"
+    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "key", "state", "failure", "duration_ms",
+         "created_at"
        FROM "voice_syntheses" WHERE "state" IN ('waiting', 'speaking') ORDER BY "id""#,
     vec![],
   )
@@ -182,6 +189,20 @@ pub async fn set_state(
   Ok(moved > 0)
 }
 
+/// A synthesis ended `failed` with the reason it failed, in the one write. Only a synthesis not yet ended moves;
+/// answers whether it moved, which it does not once it ended, a stopped one among them.
+pub async fn fail(db: &DatabaseConnection, id: i64, failure: &str) -> Result<bool, StoreError> {
+  let moved = run(
+    db,
+    r#"UPDATE "voice_syntheses" SET "state" = $2, "failure" = $3
+       WHERE "id" = $1 AND "state" IN ('waiting', 'speaking')"#,
+    vec![id.into(), SynthesisState::Failed.as_str().into(), failure.into()],
+  )
+  .await?;
+
+  Ok(moved > 0)
+}
+
 /// A voice's syntheses, newest first, past `after`.
 pub async fn of_voice(
   db: &DatabaseConnection,
@@ -191,7 +212,8 @@ pub async fn of_voice(
 ) -> Result<Vec<Row>, StoreError> {
   all(
     db,
-    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "key", "state", "duration_ms", "created_at"
+    r#"SELECT "id", "voice_name", "text", "spoken", "language", "emotion", "key", "state", "failure", "duration_ms",
+         "created_at"
        FROM "voice_syntheses"
        WHERE "voice_name" = $1 AND ($2 = 0 OR "id" < $2)
        ORDER BY "id" DESC LIMIT $3"#,

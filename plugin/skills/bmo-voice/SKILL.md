@@ -33,8 +33,10 @@ It calls the engine at the address in the voice settings, with the engine's toke
    `style` and `seed` are optional. The answer is the synthesis: its `id` and its state, `waiting` or
    `speaking`.
 3. `voice_synthesis` with `{ "synthesisId": <id> }` until the state is `done` or `failed`. A `done`
-   synthesis carries `durationMs` and its `spoken` words. A `waiting` one waits for its spoken words to be
-   derived and for a voice server's card however long that takes, and its `waitingOn` says what it waits on.
+   synthesis carries `durationMs` and its `spoken` words. One that has not ended says what it waits on in
+   `wait` (its words, its card or its node) and in the sentence `waitingOn`. Keep reading it while you wait for
+   it: one its caller has not read for two minutes fails as its caller gone. A `failed` one says why in
+   `failure`.
 4. The sound is the synthesis's `sound` route of the engine's API, `GET /syntheses/{synthesisId}/sound`, an
    OGG/Opus answer that honours `Range`. The MCP server names no tool for the bytes; read them through the
    engine's client or its address.

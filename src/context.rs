@@ -1,46 +1,138 @@
-//! What every part of the voice stands on: its settings, its database, the units it calls, what each waiting
-//! synthesis waits on, and the signal each line this process speaks is stopped by.
+//! What every part of the voice stands on: its settings, its database, the units it calls, what each synthesis that
+//! has not ended waits on, when its caller last read it, the clocks that end it, and the signal each line this
+//! process speaks is stopped by.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
+use std::time::Duration;
 
 use sea_orm::DatabaseConnection;
+use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
+use crate::policy::POLICY;
 use crate::settings::Settings;
 use crate::store;
 use crate::units::Units;
+use crate::wire::{SynthesisWait, WaitOn};
 
-/// The voice's settings, its store, its clients of the other units, what its waiting syntheses wait on, and the
-/// stop signals of the lines it speaks.
+/// The voice's settings, its store, its clients of the other units, what its syntheses wait on, when their callers
+/// last read them, the clocks that end them, and the stop signals of the lines it speaks.
 #[derive(Clone, Debug)]
 pub struct Context {
   pub settings: Settings,
   pub db: DatabaseConnection,
   pub units: Units,
   pub waits: Waits,
+  pub reads: Reads,
+  pub clocks: Clocks,
   pub stops: Stops,
 }
 
-/// What each synthesis of this process that waits for its card waits on, by its id: held in memory alone, since only
-/// the process that waits knows it.
+/// What a synthesis waits on as its speaking tells it: its kind, the node and the demand where they stand, and an
+/// English sentence saying it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Wait {
+  pub on: WaitOn,
+  pub node: Option<String>,
+  pub demand: Option<i64>,
+  pub said: String,
+}
+
+impl Wait {
+  /// A wait on the spoken words' derivation.
+  pub fn words(said: &str) -> Self {
+    Self {
+      on: WaitOn::Words,
+      node: None,
+      demand: None,
+      said: said.to_owned(),
+    }
+  }
+}
+
+/// What each synthesis of this process that has not ended waits on, by its id, and since when: held in memory alone,
+/// since only the process that waits knows it.
 #[derive(Clone, Debug, Default)]
-pub struct Waits(Arc<Mutex<HashMap<i64, String>>>);
+pub struct Waits(Arc<Mutex<HashMap<i64, (Wait, i64)>>>);
 
 impl Waits {
-  /// What the synthesis waits on now, or that it waits on nothing.
-  pub fn set(&self, synthesis: i64, why: Option<&str>) {
+  /// What the synthesis waits on now; its moment kept where the wait is the one it held, and now otherwise.
+  pub fn set(&self, synthesis: i64, wait: Wait) {
     let mut held = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-
-    match why {
-      Some(why) => held.insert(synthesis, why.to_owned()),
-      None => held.remove(&synthesis),
+    let since = match held.get(&synthesis) {
+      Some((was, since)) if *was == wait => *since,
+      _ => crate::now_ms(),
     };
+
+    held.insert(synthesis, (wait, since));
   }
 
-  /// What the synthesis waits on, where it waits.
-  pub fn of(&self, synthesis: i64) -> Option<String> {
-    self.0.lock().unwrap_or_else(PoisonError::into_inner).get(&synthesis).cloned()
+  /// The synthesis waits on nothing any more.
+  pub fn clear(&self, synthesis: i64) {
+    self.0.lock().unwrap_or_else(PoisonError::into_inner).remove(&synthesis);
+  }
+
+  /// What the synthesis waits on as the wire answers it, and the sentence saying it, where it waits.
+  pub fn of(&self, synthesis: i64) -> Option<(SynthesisWait, String)> {
+    let held = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+    let (wait, since) = held.get(&synthesis)?;
+
+    Some((
+      SynthesisWait {
+        on: wait.on,
+        node: wait.node.clone(),
+        demand_id: wait.demand,
+        since: *since,
+      },
+      wait.said.clone(),
+    ))
+  }
+}
+
+/// When each synthesis's caller last read it, by its id, for the caller's clock: held in memory alone, since a
+/// process that takes a synthesis up starts its caller's clock again.
+#[derive(Clone, Debug, Default)]
+pub struct Reads(Arc<Mutex<HashMap<i64, Instant>>>);
+
+impl Reads {
+  /// The synthesis read by its caller this moment.
+  pub fn read(&self, synthesis: i64) {
+    self.0.lock().unwrap_or_else(PoisonError::into_inner).insert(synthesis, Instant::now());
+  }
+
+  /// When its caller last read it, where it was read.
+  pub fn last(&self, synthesis: i64) -> Option<Instant> {
+    self.0.lock().unwrap_or_else(PoisonError::into_inner).get(&synthesis).copied()
+  }
+
+  /// The synthesis ended: its reads are forgotten.
+  pub fn forget(&self, synthesis: i64) {
+    self.0.lock().unwrap_or_else(PoisonError::into_inner).remove(&synthesis);
+  }
+}
+
+/// The spans of the clocks that end a synthesis (`docs/boundary-api.md`, 「The clocks」): the policy's, or shorter
+/// where a test sets them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Clocks {
+  /// How long a synthesis its caller has not read waits before it fails.
+  pub caller_gone: Duration,
+  /// How long one call to reach a line's node may take.
+  pub node_answer: Duration,
+  /// How long a line on its node may stand still.
+  pub node_still: Duration,
+}
+
+impl Default for Clocks {
+  fn default() -> Self {
+    let spans = POLICY.clocks;
+
+    Self {
+      caller_gone: Duration::from_secs(spans.caller_gone_seconds),
+      node_answer: Duration::from_secs(spans.node_answer_seconds),
+      node_still: Duration::from_secs(spans.node_still_seconds),
+    }
   }
 }
 
@@ -91,6 +183,8 @@ impl Context {
       db,
       units,
       waits: Waits::default(),
+      reads: Reads::default(),
+      clocks: Clocks::default(),
       stops: Stops::default(),
     })
   }

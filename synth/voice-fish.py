@@ -36,6 +36,7 @@ usage: <engine venv>/bin/python synth/voice-fish.py --text '<words>' --out <path
 """
 
 import argparse
+import csv
 import ctypes
 import fcntl
 import hmac
@@ -44,6 +45,8 @@ import json
 import os
 import random
 import re
+import select
+import socket
 import subprocess
 import sys
 import tempfile
@@ -151,6 +154,76 @@ def card_free_bytes() -> int | None:
         return int(ran.stdout.strip().splitlines()[0]) * 1024 * 1024 if ran.returncode == 0 else None
     except (OSError, ValueError, IndexError):
         return None
+
+
+def own_card_bytes() -> int:
+    """What this server's own process holds on the card as the driver counts it: its CUDA context, and the model
+    where it stands. It is the server's to use, and the context stays on the card after the model is let go, so the
+    room the model needs counts it as free. Nothing where the driver cannot be asked."""
+    try:
+        ran = subprocess.run(
+            ["nvidia-smi", "--id=0", "--query-compute-apps=pid,used_memory", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True,
+        )
+    except OSError:
+        return 0
+
+    if ran.returncode != 0:
+        return 0
+
+    mine = str(os.getpid())
+    held = 0
+
+    for row in csv.reader(io.StringIO(ran.stdout), skipinitialspace=True):
+        if len(row) >= 2 and row[0].strip() == mine:
+            try:
+                held += int(row[1].strip()) * 1024 * 1024
+            except ValueError:
+                continue
+
+    return held
+
+
+def card_room_bytes() -> int | None:
+    """The memory on the card the model may take: what the driver counts free, and what this server holds itself."""
+    free = card_free_bytes()
+
+    return None if free is None else free + own_card_bytes()
+
+
+def gib(count: int | None) -> str:
+    return "an unknown amount" if count is None else f"{count / 1024**3:.2f} GiB"
+
+
+class Abandoned(Exception):
+    """The line's asker has gone: nobody waits for its sound, so the server drops it and answers nothing."""
+
+
+class LineStage:
+    """Where one line stands on the server, written into the call's stage file each time it changes, for the engine to
+    read (docs/voice-plan.md, 「How a line crosses」): one line of JSON, its kind, its count of steps and an English
+    sentence, never the line's words. A line asked with no stage file is told nowhere."""
+
+    def __init__(self, path: Path | None = None) -> None:
+        self.path = path
+        self.step = 0
+
+    def tell(self, stage: str, said: str) -> None:
+        self.step += 1
+
+        if self.path is None:
+            return
+
+        written = self.path.with_name(self.path.name + ".new")
+
+        try:
+            written.write_text(json.dumps({"stage": stage, "step": self.step, "said": said}) + "\n", encoding="utf-8")
+            os.replace(written, self.path)
+        except OSError as failure:
+            print(f"voice-fish: a line's stage could not be written: {failure}", file=sys.stderr, flush=True)
+
+    def piece(self, at: int, of: int) -> None:
+        self.tell("speak", f"speaks piece {at} of {of}")
 
 
 def failed_at(failure: BaseException) -> str:
@@ -590,9 +663,10 @@ class Mouth:
 
         return codec.to("cuda")
 
-    def speak(self, checkpoint: Path, text: str, seed: int, style: str = "", by_sentence: bool = False):
-        """The line in the voice those weights carry, peak-matched, at `RATE` (`pieces`, joined 0.3 seconds apart)."""
-        pieces, rate = self.pieces(checkpoint, text, seed, style, by_sentence)
+    def speak(self, checkpoint: Path, text: str, seed: int, style: str = "", by_sentence: bool = False, told=None):
+        """The line in the voice those weights carry, peak-matched, at `RATE` (`pieces`, joined 0.3 seconds apart),
+        each piece handed to `told` by its place and the count of pieces as it is begun."""
+        pieces, rate = self.pieces(checkpoint, text, seed, style, by_sentence, told)
         pause = np.zeros(int(SENTENCE_PAUSE * rate), dtype=np.float32)
         joined: list[np.ndarray] = []
 
@@ -607,7 +681,7 @@ class Mouth:
 
         return (audio / peak * PEAK).astype(np.float32), RATE
 
-    def pieces(self, checkpoint: Path, text: str, seed: int, style: str = "", by_sentence: bool = False):
+    def pieces(self, checkpoint: Path, text: str, seed: int, style: str = "", by_sentence: bool = False, told=None):
         """The line's pieces at the codec's rate, each levelled (`levelled`) and faded at both edges (`faded`): a
         sentence at a time where asked (`sentences`), in passes the context holds otherwise (`passes`). Each piece
         after the first is spoken on from the first (`piece`), and every piece on the same seed, so the same line gives
@@ -618,7 +692,12 @@ class Mouth:
         carried: dict = {"first": None}
         out: list[np.ndarray] = []
 
-        for piece in sentences(text) if by_sentence else passes(text):
+        parts = sentences(text) if by_sentence else passes(text)
+
+        for at, piece in enumerate(parts, 1):
+            if told is not None:
+                told(at, len(parts))
+
             for wav in self.spoken(piece, lambda words: self.piece(styled(style, words), seed, carried)):
                 out.append(faded(levelled(wav), rate))
 
@@ -853,8 +932,8 @@ class Service:
             "holding": self.card.holding,
             "resting": self.card.resting,
             # Whether a line could be spoken now: the card this server's own, or nobody else on it and
-            # room on it for the weights (fits).
-            "room": self.card.holding or (not elsewhere and self.fits(free)),
+            # room on it for the weights (fits), what this server holds itself counted as room.
+            "room": self.card.holding or (not elsewhere and self.fits(card_room_bytes())),
         }
 
     def fits(self, free: int | None) -> bool:
@@ -862,14 +941,48 @@ class Service:
         about is given the benefit of the doubt."""
         return free is None or free >= LOAD_BYTES
 
-    def room(self) -> None:
-        """The card just taken, waited on until its memory takes the model, however long that takes. A turn
-        is handed on the moment the holder before gives it back, and a holder can give it back while its
-        process still stands on the card, so the turn alone never says the memory is free."""
-        while not self.fits(card_free_bytes()):
+    def room(self, stage: LineStage, gone) -> None:
+        """The card just taken, waited on until its memory takes the model, the memory this server holds itself
+        counted as room (card_room_bytes), the wait written to the line's stage once. A turn is handed on the moment
+        the holder before gives it back, and a holder can give it back while its process still stands on the card, so
+        the turn alone never says the memory is free. A line whose asker has gone meanwhile lets the card go and is
+        dropped; the engine's clock ends one that waits here too long."""
+        told = False
+
+        while True:
+            room = card_room_bytes()
+
+            if self.fits(room):
+                return
+
+            if not told:
+                stage.tell("room", f"waits for room on the card for the model: {gib(room)} free of the {gib(LOAD_BYTES)} it needs")
+                told = True
+
+            if gone():
+                self.let_go()
+                raise Abandoned("the line's asker went while it waited for room on the card")
+
             time.sleep(self.room_every_s)
 
-    def speak(self, request: dict) -> tuple[bytes, dict]:
+    def stage_file(self, named: str | None) -> Path | None:
+        """The call's stage file the asker names: it stands in the server's call folder beside the voices, `spoken/`,
+        and any other is refused; none where the asker names none."""
+        if not named:
+            return None
+
+        path = Path(named)
+
+        if path.suffix != ".stage" or path.parent.resolve() != (self.voices.parent / "spoken").resolve():
+            raise ValueError("a stage file stands in the server's call folder")
+
+        return path
+
+    def speak(self, request: dict, stage: LineStage | None = None, gone=None) -> tuple[bytes, dict]:
+        """One line spoken, each stage it reaches written to `stage`; a line whose asker has gone (`gone`) before it
+        takes the card, or while it waits for room on it, is dropped (Abandoned)."""
+        stage = stage or LineStage()
+        gone = gone or (lambda: False)
         checkpoint = inside(self.voices, request.get("checkpoint"))
         text = request.get("text")
 
@@ -889,26 +1002,41 @@ class Service:
             self.waiting.append(arrived)
 
         try:
+            if self.lock.locked():
+                stage.tell("queued", "waits behind another line on the voice server")
+
             self.lock.acquire()
         finally:
             with self.waiting_lock:
                 self.waiting.remove(arrived)
 
         try:
+            if gone():
+                raise Abandoned("the line's asker went while it waited behind another line")
+
             self.busy = True
             if self.card.resting and not self.card.resume(time.monotonic() - arrived):
                 # Another stands first for the card: the rest ends in giving way, and the line asks in line.
                 self.let_go()
             fresh = not self.card.holding
+
+            if fresh:
+                stage.tell("turn", "waits for its turn on the card")
+
             self.card.take(time.monotonic() - arrived)
 
             if fresh:
-                self.room()
+                self.room(stage, gone)
 
             try:
+                if self.mouth.model is None or self.mouth.checkpoint != checkpoint:
+                    stage.tell("load", "loads the voice")
+
                 loaded = self.mouth.ready(checkpoint)
                 started = time.monotonic()
-                audio, rate = self.mouth.speak(checkpoint, text.strip(), int(request.get("seed", 0)), style, by_sentence)
+                audio, rate = self.mouth.speak(
+                    checkpoint, text.strip(), int(request.get("seed", 0)), style, by_sentence, told=stage.piece,
+                )
                 spoke = time.monotonic() - started
             except BaseException:
                 self.let_go()
@@ -1166,6 +1294,15 @@ def handler(service: Service):
         def refuse(self, status: int, why: str) -> None:
             self.answer(status, json.dumps({"error": why}).encode(), "application/json")
 
+        def gone(self) -> bool:
+            """Whether the asker has let go of its connection: readable with nothing to read is its end."""
+            try:
+                readable, _, _ = select.select([self.connection], [], [], 0)
+
+                return bool(readable) and self.connection.recv(1, socket.MSG_PEEK) == b""
+            except OSError:
+                return True
+
         def allowed(self) -> bool:
             given = self.headers.get("Authorization", "")
 
@@ -1208,9 +1345,15 @@ def handler(service: Service):
                 return self.refuse(400, "a request body is JSON")
 
             try:
-                wav, headers = service.speak(request if isinstance(request, dict) else {})
+                stage = LineStage(service.stage_file(self.headers.get("X-Voice-Stage")))
+                wav, headers = service.speak(request if isinstance(request, dict) else {}, stage, self.gone)
             except (ValueError, FileNotFoundError) as refusal:
                 return self.refuse(400, str(refusal))
+            except Abandoned as why:
+                # Nobody waits for the answer: the connection is closed with none.
+                print(f"voice-fish: a line was dropped: {why}", file=sys.stderr, flush=True)
+                self.close_connection = True
+                return
             except CardTaken as taken:
                 # Never told when to come back: the caller chooses a node again at once (docs/voice-plan.md).
                 return self.refuse(503, str(taken))
@@ -1278,6 +1421,9 @@ def ask(args: argparse.Namespace) -> int:
 
     if body is not None:
         headers["Content-Type"] = "application/json"
+
+    if args.stage:
+        headers["X-Voice-Stage"] = args.stage
 
     try:
         with urllib.request.urlopen(urllib.request.Request(url, data=body, headers=headers)) as answer:
@@ -1364,6 +1510,7 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--ask", action="store_true")
     parser.add_argument("--request")
+    parser.add_argument("--stage")
     parser.add_argument("--port", type=int, default=7432)
     parser.add_argument("--gpu-lock", default=GPU_LOCK)
     args = parser.parse_args()

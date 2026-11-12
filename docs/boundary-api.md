@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.26.
+Fixed at 0.1.0-rev.27.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -92,18 +92,79 @@ asking `Accept: application/json`.
 
 - **A synthesis:** `id`, `voiceName`, `text` (the written words), `spoken` (the words the voice says, null until
   they stand; 「The spoken words」), `emotion`, `key` (the caller's key, null where none was given), `state`,
-  `waitingOn`, `durationMs` (null until done) and `createdAt`. Its `state` is `waiting` (taken in, its card not yet granted), `speaking` (a voice
-  server is speaking it), `done` (its sound stands), `failed`, or `stopped` (its briefing was stopped before it
-  ended, 「Briefings」; it has no sound and is never spoken again).
+  `wait`, `waitingOn`, `failure`, `durationMs` (null until done) and `createdAt`.
 - **A synthesis is answered at once;** the speaking runs apart on the voice server of the card the arbiter's
   master grants it (「The voice servers and the card」), and the caller reads the member again until its
   state is `done` or `failed`. `done` carries `durationMs`, the sound's length read from its Ogg pages.
-- **A synthesis taken in with no `spoken` has them derived first** (「How the engine derives the spoken words」),
-  before any card is asked; it is `waiting` meanwhile, and `waitingOn` says how the derivation stands.
-- **A synthesis waits for its card however long the grant takes:** nothing ends the wait and nothing refuses
-  it as busy. While it waits, `waitingOn` is an English sentence saying what on: the master's reason for its
-  card (every card in use, a card held by a claim or a lower tier, the service starting), its place in the
-  line, or the master not reached. It is null once the card is granted, and on a synthesis that ended.
+
+### Its states
+
+```mermaid
+flowchart TD
+  T[taken in] --> W[waiting]
+  W -->|card granted| S[speaking]
+  S -->|the node's arbiter gives no place| W
+  S -->|sound kept| D[done]
+  W -->|refused, caller gone| F[failed]
+  S -->|node silent or still, caller gone| F
+  W -->|its briefing stopped| X[stopped]
+  S -->|its briefing stopped| X
+```
+
+- **`waiting`:** taken in, its spoken words being derived or its card not yet granted.
+- **`speaking`:** its card is granted and the line is on that card's node.
+- **`done`:** its sound stands. **`failed`:** it ended without one, and `failure` says why.
+  **`stopped`:** its briefing was stopped before it ended (「Briefings」); it has no sound and is never spoken again.
+- **`done`, `failed` and `stopped` are ends:** a synthesis that reached one never moves again.
+
+### What it waits on
+
+- **`wait` says what a synthesis that has not ended waits on,** and is null on one that ended:
+  - `on`: `words` while its spoken words are derived, `demand` while its card is not granted, `node` once the
+    line is on the node of the card granted;
+  - `node`: the node of the card granted, null before;
+  - `demandId`: the master's demand the line holds its card by, null before the grant;
+  - `since`: when the synthesis began to wait on what it waits on now.
+- **`waitingOn` is an English sentence saying the same,** for a person or a log:
+  - while its words are derived, how the derivation stands (「How the engine derives the spoken words」);
+  - while its card is not granted, the master's reason (every card in use, a card held by a claim or a lower tier,
+    the service starting), its place in the line, or the master not reached;
+  - once the line is on its node, that node and where the line stands there: asked of the node, behind another
+    line on its voice server, waiting for its turn on the card, waiting for room on the card for the model,
+    loading the voice, the piece it speaks of how many, its sound carried back.
+- **Both are this process's:** a synthesis taken up by a new process names its wait again as that process waits.
+- **`failure` is an English sentence saying why a `failed` synthesis ended,** naming the node, the stage and the
+  clock where one of them ended it; null on every other.
+
+### The clocks
+
+Three clocks end a synthesis that nothing else would end. Their spans are the policy's (「The policy」).
+
+| Clock | Span | What it bounds | `failure` |
+|---|---|---|---|
+| the caller's | `caller_gone_seconds`, 120 | a synthesis taken in through `POST /syntheses` that its caller has not read for the span | its caller has gone, not having read it for the span |
+| the node's answer | `node_answer_seconds`, 60 | each call the line makes to reach its node: the node service's target for it, and each command on the node's shell | the node, and that it did not answer within the span |
+| the node's progress | `node_still_seconds`, 600 | a line on its node that stands still: its stage on the voice server unchanged and no line of that server moving | the node, the stage the line stood at, and the span |
+
+- **A caller reads its synthesis** by `GET /syntheses/{synthesisId}`, by its sound, or by a `POST` naming its key;
+  each read starts the caller's clock again. A synthesis taken in starts it, and so does one taken up as the
+  service starts. A briefing's synthesis has no caller's clock: its caller is the room, and its end is the
+  stop's (「Briefings」).
+- **Nothing else bounds a synthesis.** A wait for the card ends only by its grant, a refusal of the master's, its
+  caller's clock or its briefing's stop; a line on its node that keeps moving is spoken however long it is.
+- **A synthesis a clock ends** gives back its card, ends the call on its node, and is told as `synthesis.ended`,
+  state `failed`, its `failure` saying which clock and why.
+
+### What the journal says
+
+- **The service writes a line to its journal for each synthesis** as it is taken in or taken up, each time what
+  it waits on changes in kind (its words, its card's reason, the node granted and the line's stage there), and
+  as it ends `done`, `failed` or `stopped`. Each line opens with `voice: synthesis <id>` and names the node and the
+  demand where they stand; a piece of a long line does not take a line of its own.
+- **No line of the journal carries the words** of a synthesis.
+
+### Taking a synthesis in
+
 - **`text` must hold something to say,** in at most 10,000 characters, and a `spoken` given holds at most 30,000;
   either longer is answered 400 `bad-request`. A `spoken` given that holds nothing, or that fails the check, is
   answered 422 `unconverted-run` (「The spoken words」). A voice no list holds is answered 404 `not-found`; a voice
@@ -111,8 +172,8 @@ asking `Accept: application/json`.
   `unknown-emotion`. `style` and `seed` are laid over the voice's row for this one synthesis.
 - **A line taken in is spoken whatever its length.** Its voice server is handed the spoken words whole and speaks
   them piece by piece into one sound (`docs/voice-plan.md`, 「What a long line takes of the card」); no line within
-  the bounds above is refused or cut off for its length, and no clock ends its speaking: it ends when the voice
-  server answers with its sound or with a failure.
+  the bounds above is refused or cut off for its length: the node's clocks bound a node that does not answer or a
+  line that stands still on it, never a line that keeps moving (「The clocks」).
 - **The sound** is answered only once the state is `done`; before that, and where a failed synthesis left
   none, 404 `not-found`. A sound is kept under the data root, never in the database.
 - **A line a stopped process left is taken up by the next.** As the service starts, every synthesis still
@@ -228,8 +289,8 @@ server any other way.
   words into a script by its own reading rules (「Script readings」), and the script is the written words of a
   synthesis in the named voice, `spoken` its spoken words where the caller gave them and derived where it did
   not (「The spoken words」), spoken on the voice server of the card granted it. `text` is the script. Its `state` and
-  `durationMs` are its synthesis's, and `synthesisId` names it, whose `waitingOn` says what a waiting one waits
-  on. `text` must hold something to say, within a synthesis's bounds (「Syntheses」); a `spoken` that is empty or
+  `durationMs` are its synthesis's, and `synthesisId` names it, whose `wait` and `waitingOn` say what it waits
+  on and whose `failure` says why a failed one ended. `text` must hold something to say, within a synthesis's bounds (「Syntheses」); a `spoken` that is empty or
   fails the check is 422 `unconverted-run`, a voice no list holds is 404 `not-found`, a voice that is not served is
   422 `retired-voice`, and an emotion outside the policy's is 422 `unknown-emotion`.
 - **A key makes a briefing once,** as it does a synthesis (「Syntheses」): the key is its synthesis's, and a `POST`
@@ -341,13 +402,14 @@ It asks no model, takes no card turn and keeps nothing. A language other than `k
   read for one of the line's work key: the first found is the line's demand, and any beyond it are given back.
 - **Every line runs on the service's one runtime and through its one HTTP client,** whose idle connections are
   kept to a bound, so a waiting line holds no thread, poller or socket of its own.
-- **The wait has no end but the grant.** While the master holds the demand in line, or cannot be reached, the
-  synthesis stays `waiting`, its `waitingOn` saying why. A master that answers `404` for the demand, one
+- **The wait for the card ends only by its grant,** a refusal of the master's, the caller's clock or a briefing's
+  stop (「Syntheses」, 「The clocks」). While the master holds the demand in line, or cannot be reached, the
+  synthesis stays `waiting`, its `wait` on `demand` and its `waitingOn` saying why. A master that answers `404` for the demand, one
   restarted, is asked a new one. `voice` placed on no node (`no-place`) and any other refusal of the master's
   fail the synthesis at once, the demand it held given back.
 - **A card the node's arbiter keeps from the line:** where the node's server answers that its card arbiter gives the
   voice no place on the card (503), the demand is read again until its card is granted again, and the line is asked of
-  that card's node once more; nothing bounds that either.
+  that card's node once more, the synthesis `waiting` on its demand meanwhile.
 - **Every demand the engine holds stands in its ledger** (`docs/store.md`, 「The folder」) from its asking until
   the master answers its give-back, `204` or `404`, or answers `404` for it by its id; a give-back the master
   refuses leaves it there.
@@ -356,6 +418,14 @@ It asks no model, takes no card turn and keeps nothing. A language other than `k
   no line of the new process holds one yet: what a process left behind, in the ledger or not.
 - **A node out of reach is never quietly replaced by this machine's card:** the synthesis fails, naming the node
   and what it met.
+- **A line on its node is followed by its stage.** The voice server writes where each line it holds stands, beside
+  the call's files on the node, each time that changes: behind another line, waiting for its turn on the card,
+  waiting for room on the card, loading the voice, each piece spoken. Every look the engine takes at the call reads
+  the line's stage and the moment any line of that server last moved; the line's `waitingOn` names the stage, and
+  the node's progress clock ends a line whose stage and server both stand still for its span (「The clocks」).
+- **A line the engine lets go of is ended on its node:** where a clock or a stop ends it, or it ends any other way,
+  the asker started for it on the node is ended with its process group and the call's files are removed, and the
+  voice server drops a line whose asker has gone rather than take the card for it.
 
 ## What the engine calls
 
@@ -474,8 +544,9 @@ declares the nouns `listen` and `brief` when asked `nouns`, so the platform hand
 ## The policy
 
 `policy/voice.toml` holds the engine's own policy values, read once at start: `emotions`, the emotions a voice may be
-asked to speak with, and `engine`, the engine every served voice belongs to (`fish-s2-pro`). No route serves them; the
-voices list them, and a synthesis outside them is refused.
+asked to speak with; `engine`, the engine every served voice belongs to (`fish-s2-pro`); and `clocks`, the spans of
+the three clocks that end a synthesis (「Syntheses」, 「The clocks」): `caller_gone_seconds`, `node_answer_seconds` and
+`node_still_seconds`. No route serves them; the voices list the emotions, and a synthesis outside them is refused.
 
 ## Settings
 
