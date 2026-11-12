@@ -14,7 +14,7 @@ How the repository is laid out, what each part is, and where it runs. Read this 
 | `policy/` | The engine's own policy values, `policy/voice.toml` |
 | `prompts/` | What the engine's own model runs are told: the training lines' writer and the spoken words' deriver. English only |
 | `scripts/` | The node and training scripts, a Bun project of its own: the voice node install, push, sync, health, speak and card adapter, a voice installed and checked, the voice names, training stages placed on a card, the training lines written |
-| `src/` | The crate: the settings, the store, the event log, the service's client, the MCP server, the OpenAPI document, the script rules, synthesis and the voice nodes, the routes, the script studio's server, and the `voice-server`, `bmo-voice` and `script-studio` binaries |
+| `src/` | The crate: the settings, the store, the event log, the service's client, the MCP server, the OpenAPI document, the script rules, synthesis and the voice nodes, the routes, a document's narration, the script studio's server, and the `voice-server`, `bmo-voice` and `script-studio` binaries |
 | `studio/` | The script studio's screen (`studio/client/`, a Nuxt project) and its media tools (`studio/lib/` and `studio/scripts/`, Bun and Python), with their records' shared fixtures |
 | `synth/` | What speaks: the Fish S2-Pro mouth and voice server and the engine's pinned install (`engine.toml`), the encoder, the transcriber, the intelligibility measure, the tool entries and their schemas, and the frozen package list of the voice environment |
 | `tests/` | Every test of the repository's crate, whatever its language |
@@ -45,8 +45,9 @@ stands, and no other.
 
 - **`voice-server`:** the service. It reads the settings, runs the store's migrations and serves the routes of
   `docs/boundary-api.md`.
-- **`bmo-voice`:** the unit's command and harness plugin: `health`, `mcp` and `openapi`. A coding harness
-  starts `bmo-voice mcp` as its stdio MCP server.
+- **`bmo-voice`:** the unit's command and harness plugin: `listen`, `brief`, `brief-attach`, `health`, `mcp` and
+  `openapi` (`docs/boundary-api.md`, 「The command line」). A coding harness starts `bmo-voice mcp` as its stdio MCP
+  server.
 - **`script-studio`:** the script studio's server (`docs/script-studio.md`).
 
 ## The hosted tool
@@ -62,7 +63,8 @@ stands, and no other.
   standing in no release, reads it through the deploy tree's link.
 - **What it holds** is `docs/boundary-api.md`, 「Settings」: where the service listens and is reached, its token
   file, the database, the data root, the folder of its Python side, and the address and token file of each
-  unit it calls: the node service, the arbiter's master and the account service the studio signs in against.
+  unit it calls: the node service, the arbiter's master, the account service the studio signs in against, agency,
+  and the archive a narration is attached to.
 - **Every token** stands in its own file under the data root's `env/`, never in the settings, a log, a command
   line or an environment variable.
 - **The node and training scripts** read the same file, and the Python under `synth/` is handed what it needs on

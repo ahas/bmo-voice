@@ -7,6 +7,7 @@ mod import;
 mod mouth_gives_way;
 mod mouth_long_line;
 mod mouth_stages;
+mod narration;
 mod node_target;
 mod personal_data;
 mod script_figures;

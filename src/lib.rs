@@ -7,6 +7,7 @@ pub mod events;
 pub mod http;
 pub mod import;
 pub mod mcp;
+pub mod narration;
 pub mod openapi;
 pub mod policy;
 pub mod script;

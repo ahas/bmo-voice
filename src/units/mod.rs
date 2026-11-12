@@ -3,6 +3,7 @@
 
 pub mod agency;
 pub mod arbiter;
+pub mod artifact;
 pub mod hub;
 pub mod node;
 pub mod web;

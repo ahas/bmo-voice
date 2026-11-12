@@ -1,5 +1,5 @@
-//! `bmo-voice` (`docs/boundary-api.md`, 「The command line」): the harness plugin's MCP server, the OpenAPI
-//! document, and the health the deployment waits on.
+//! `bmo-voice` (`docs/boundary-api.md`, 「The command line」): the ear's and the mouth's verbs, a document's
+//! narration, the harness plugin's MCP server, the OpenAPI document, and the health the deployment waits on.
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -7,8 +7,11 @@ use std::process::ExitCode;
 use std::time::Duration;
 
 use bmo_voice::client::VoiceClient;
+use bmo_voice::narration::{self, NARRATION_WAIT};
 use bmo_voice::settings::Settings;
-use bmo_voice::wire::{BriefingKind, NewBriefing, NewTranscription, SynthesisState};
+use bmo_voice::units::Caller;
+use bmo_voice::units::artifact::{Artifact, NewAttachment};
+use bmo_voice::wire::{BriefingKind, NewBriefing, NewSynthesis, NewTranscription, SynthesisState};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -20,7 +23,7 @@ struct Command {
 
 #[derive(Subcommand)]
 enum Word {
-  /// Answers the nouns this command carries: `listen` and `brief`.
+  /// Answers the nouns this command carries: `listen`, `brief` and `brief-attach`.
   Nouns,
   /// Takes sound files down as text: the ear group's first-class verb, `bmo listen`.
   Listen {
@@ -63,6 +66,19 @@ enum Word {
     plays: Option<bool>,
     #[arg(long)]
     json: bool,
+  },
+  /// Speaks a text as a document's narration and attaches its sound to that document of the archive:
+  /// `bmo brief-attach`.
+  BriefAttach {
+    /// The archive's number of the document.
+    document: i64,
+    /// The file holding the text to speak, the written words.
+    file: PathBuf,
+    /// The trained voice that speaks it; the settings' narration voice where absent.
+    voice: Option<String>,
+    /// How many minutes the synthesis is waited on at most before it is let go and the command ends failed.
+    #[arg(long, default_value_t = NARRATION_WAIT.as_secs() / 60, value_parser = clap::value_parser!(u64).range(1..))]
+    within: u64,
   },
   /// Whether the service the settings name answers ready; ends 0 where it does.
   Health,
@@ -191,6 +207,82 @@ async fn brief(
   Ok(())
 }
 
+// The archive's number of a document and the file holding the words its narration says.
+struct Narrated {
+  document: i64,
+  file: PathBuf,
+}
+
+// `bmo brief-attach`: a text spoken as a document's narration, its synthesis waited on within the bound, and its sound
+// attached to the document as its head sound.
+async fn brief_attach(
+  settings: &Settings,
+  narrated: Narrated,
+  voice: Option<String>,
+  within: Duration,
+) -> Result<(), String> {
+  let Some(voice) = voice.or_else(|| settings.narration.voice.clone()) else {
+    return Err("no voice: name one, or the settings' [narration] voice".to_owned());
+  };
+  let Some(archive) = &settings.units.artifact else {
+    return Err("the settings name no archive to attach to, [units.artifact]".to_owned());
+  };
+  let archive =
+    Caller::new("artifact", settings, archive, reqwest::Client::new()).map_err(|why| why.to_string())?;
+  let archive = Artifact::new(archive);
+  let text =
+    std::fs::read_to_string(&narrated.file).map_err(|why| format!("{}: {why}", narrated.file.display()))?;
+  let client = connect(settings)?;
+  let language = client.voice(&voice).await.map_err(|why| why.to_string())?.language;
+  let taken = client
+    .create_synthesis(&NewSynthesis {
+      voice_name: voice,
+      text: text.trim().to_owned(),
+      spoken: None,
+      language: None,
+      emotion: None,
+      style: None,
+      seed: None,
+      key: None,
+    })
+    .await
+    .map_err(|why| why.to_string())?;
+  eprintln!("synthesis {} taken in, waited on for at most {}", taken.id, minutes(within));
+  let done = narration::wait(taken, within, |id| client.synthesis(id), |line| eprintln!("  {line}"))
+    .await
+    .map_err(|why| why.to_string())?;
+  let sound = client.synthesis_sound(done.id, None).await.map_err(|why| why.to_string())?;
+  let name = format!("narration-{language}.ogg");
+  let kept = archive
+    .attach(
+      narrated.document,
+      &NewAttachment {
+        name: &name,
+        media_type: "audio/ogg",
+        role: Some("head"),
+        content: &sound,
+      },
+    )
+    .await
+    .map_err(|why| why.to_string())?;
+
+  println!(
+    "attached {} ({} bytes, {} ms) to document {} as attachment {}",
+    kept.name,
+    sound.len(),
+    done.duration_ms.unwrap_or_default(),
+    narrated.document,
+    kept.id
+  );
+
+  Ok(())
+}
+
+// A bound as the minutes it is named in.
+fn minutes(within: Duration) -> String {
+  format!("{} minutes", within.as_secs() / 60)
+}
+
 // The service's `GET /health`, at its own address and with its token as the settings name them.
 async fn health(settings: &Settings) -> Result<(), String> {
   let token = settings.token(&settings.token_file).map_err(|why| why.to_string())?;
@@ -210,7 +302,7 @@ async fn main() -> ExitCode {
 
   // The nouns are answered before the settings are read, as every unit command's are.
   if let Word::Nouns = command.word {
-    for noun in ["listen", "brief"] {
+    for noun in ["listen", "brief", "brief-attach"] {
       println!("{noun}\t");
     }
 
@@ -271,6 +363,16 @@ async fn main() -> ExitCode {
       let words = Words { text, spoken };
 
       brief(&settings, chat, voice, words, kind, title, emotion, message, plays, json).await
+    }
+    Word::BriefAttach {
+      document,
+      file,
+      voice,
+      within,
+    } => {
+      let within = Duration::from_secs(within.saturating_mul(60));
+
+      brief_attach(&settings, Narrated { document, file }, voice, within).await
     }
     Word::Health => health(&settings).await,
     Word::Mcp { address, token } => {

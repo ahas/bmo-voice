@@ -30,6 +30,9 @@ pub struct Units {
   /// Agency, whose co-worker pool derives a line's spoken words; none where the deployment names none.
   #[serde(default)]
   pub agency: Option<Unit>,
+  /// The archive a document's narration is attached to; none where the deployment names none.
+  #[serde(default)]
+  pub artifact: Option<Unit>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -55,6 +58,17 @@ pub struct Settings {
   /// How a line's spoken words are derived.
   #[serde(default)]
   pub spoken: Spoken,
+  /// How a document's narration is spoken.
+  #[serde(default)]
+  pub narration: Narration,
+}
+
+/// How a document's narration is spoken (`docs/boundary-api.md`, 「Narrating a document」).
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Narration {
+  /// The voice a narration is spoken in where its caller names none.
+  pub voice: Option<String>,
 }
 
 /// How a line's spoken words are derived on agency's co-worker pool (`docs/boundary-api.md`, 「How the engine

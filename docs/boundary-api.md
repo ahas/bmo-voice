@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.27.
+Fixed at 0.1.0-rev.28.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -474,6 +474,14 @@ The co-worker pool and its role's sessions (its `docs/api.md`, 「slots, reserva
 |---|---|---|
 | sign-in | `POST /sumida/auth/session` with `name` and `password`, then `DELETE /sumida/auth/session` with the `bmo.sid` cookie it answered | the script studio's sign-in: a name and a password the account service takes are a login, a 401 is a wrong one; the studio keeps its own session after |
 
+### bmo-artifact
+
+The archive (its `docs/api.md`, 「Attachments」), called by the command alone, never by the service.
+
+| Call | Route | Used for |
+|---|---|---|
+| an attachment | `POST /documents/{documentId}/attachments` with `name`, `mediaType`, `role` and `content` in base64 | a document's narration, kept as its head sound (「Narrating a document」) |
+
 ## The harness plugin
 
 - **The MCP server is `bmo-voice mcp`,** on standard input and output. It calls the engine at the settings'
@@ -529,17 +537,38 @@ The co-worker pool and its role's sessions (its `docs/api.md`, 「slots, reserva
 ## The command line
 
 `bmo-voice` serves the harness plugin, the document and the ear and mouth groups' first-class verbs: it
-declares the nouns `listen` and `brief` when asked `nouns`, so the platform hands `bmo listen` and
-`bmo brief` straight to it.
+declares the nouns `listen`, `brief` and `brief-attach` when asked `nouns`, so the platform hands `bmo listen`,
+`bmo brief` and `bmo brief-attach` straight to it.
 
 | Word | What it does |
 |---|---|
-| `nouns` | answers `listen` and `brief`, one a line |
+| `nouns` | answers `listen`, `brief` and `brief-attach`, one a line |
 | `listen <file>…` | asks `POST /transcriptions` for the files in `--language` and waits for it to end, however long it takes; prints what was heard, or the transcription as JSON with `--json` |
 | `brief` | asks `POST /briefings` for a line spoken in `--voice` for the room `--chat`, of kind `--kind` (`summary` or `full`), with `--text`, and optional `--spoken`, `--title`, `--emotion`, `--message` and `--plays`; waits for the engine to speak it, however long it takes, then prints its id, or the briefing as JSON with `--json` |
+| `brief-attach <document> <file> [voice]` | speaks the text the file holds as a document's narration and attaches its sound to that document of the archive, waiting at most `--within` minutes for the synthesis (「Narrating a document」) |
 | `health` | asks the service the settings name for `GET /health`, with its token, and exits 0 where it answers ready, 1 where it answers otherwise or nothing listens; it waits for the answer however long it takes |
 | `mcp` | runs the harness plugin's MCP server; `--address` and `--token` name the engine |
 | `openapi` | prints `docs/openapi.json` as the repository keeps it |
+
+### Narrating a document
+
+- **What it asks:** `POST /syntheses` for the file's text, in the voice named, else the settings' narration voice
+  (「Settings」); with neither it is refused before anything is asked. The text is the written words, and the engine
+  derives what the voice says (「The spoken words」).
+- **How long it waits:** it reads the synthesis every half second until it ends, and at most `--within` minutes,
+  60 where absent, from the moment it was taken in. A synthesis that has not ended by then is let go: the command
+  ends 1 with a sentence naming the synthesis, its state, how long it waited and what it waits on, and the
+  caller's clock ends the synthesis once it goes unread (「The clocks」). A read the service does not answer is
+  told and asked again within the same span; a refusal ends the command.
+- **Where it stands while it waits:** on standard error, a line naming the synthesis, its state, the time waited
+  and what it waits on, `waitingOn` as the engine says it: once as it is taken in, each time the state or what it
+  waits on changes, and again every five minutes while neither changes.
+- **What it attaches:** once the synthesis is `done`, its sound, through the archive's
+  `POST /documents/{documentId}/attachments` (「bmo-artifact」), named `narration-<language>.ogg` for the language of
+  the voice, typed `audio/ogg`, with the role `head`, the archive's word for a sound a reader plays at the
+  document's head. It prints the attachment's id and name, the sound's bytes and length and the document's number.
+- **How it ends:** 0 once the sound is attached; 1 with the reason on standard error where the synthesis failed or
+  was stopped, the wait ran out, or the archive refused, a name the document already keeps among its refusals.
 
 ## The policy
 
@@ -566,6 +595,8 @@ tool」).
 | `[units.arbiter]` | `address` and `token_file?` of the arbiter's master, which grants every synthesis its card |
 | `[units.web]` | `address` and `token_file?` of the account service the script studio signs in against |
 | `[units.agency]` | optional, `address` and `token_file?` of agency, whose co-worker pool derives the spoken words; a line with no `spoken` waits, its `waitingOn` saying so, while none is named |
+| `[units.artifact]` | optional, `address` and `token_file?` of the archive a narration is attached to; `brief-attach` is refused while none is named |
+| `[narration]` | optional, `voice`, the voice `brief-attach` speaks in where its caller names none |
 | `[spoken]` | optional, how the spoken words are derived: `role`, the agency role the slot is asked for (`transliterator`), `line`, the runner line its session goes out on (`search`), and `provider?` and `model?`, the road the slot is asked on, named together or not at all, the role's order picking where they are not |
 | `[studio]` | optional, the script studio's deployment values (`docs/script-studio.md`, 「Access and service」) |
 
