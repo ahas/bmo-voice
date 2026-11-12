@@ -14,7 +14,7 @@ use crate::wire::Event;
 
 /// The kind an event of a synthesis taken in.
 pub const SYNTHESIS_CREATED: &str = "synthesis.created";
-/// The kind an event of a synthesis that ended, done or failed.
+/// The kind an event of a synthesis that ended, done, failed or stopped.
 pub const SYNTHESIS_ENDED: &str = "synthesis.ended";
 /// The kind an event of a transcription that ended.
 pub const TRANSCRIPTION_ENDED: &str = "transcription.ended";
@@ -23,13 +23,15 @@ pub const VOICE_CHANGED: &str = "voice.changed";
 
 /// The kind an event of a briefing taken in.
 pub const BRIEFING_CREATED: &str = "briefing.created";
-/// The kind an event of a briefing that ended, done or failed.
+/// The kind an event of a briefing that ended, done, failed or stopped.
 pub const BRIEFING_ENDED: &str = "briefing.ended";
 /// The kind an event of a briefing whose line was named or let go.
 pub const BRIEFING_CHANGED: &str = "briefing.changed";
+/// The kind an event of a stop of a room's briefings, or of every room's.
+pub const BRIEFINGS_STOPPED: &str = "briefings.stopped";
 
 /// Every kind the service publishes, in the order the document lists them.
-pub const KINDS: [&str; 7] = [
+pub const KINDS: [&str; 8] = [
   SYNTHESIS_CREATED,
   SYNTHESIS_ENDED,
   TRANSCRIPTION_ENDED,
@@ -37,6 +39,7 @@ pub const KINDS: [&str; 7] = [
   BRIEFING_CREATED,
   BRIEFING_ENDED,
   BRIEFING_CHANGED,
+  BRIEFINGS_STOPPED,
 ];
 
 // How many events a live reader may fall behind before it is let go, to resume from the window.

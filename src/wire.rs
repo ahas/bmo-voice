@@ -38,7 +38,7 @@ pub struct Event {
   /// The event number, which only grows.
   pub id: i64,
   /// `synthesis.created`, `synthesis.ended`, `transcription.ended`, `voice.changed`, `briefing.created`,
-  /// `briefing.ended` or `briefing.changed`.
+  /// `briefing.ended`, `briefing.changed` or `briefings.stopped`.
   pub kind: String,
   /// When it happened, in epoch milliseconds.
   pub at: i64,
@@ -104,6 +104,8 @@ pub enum SynthesisState {
   Done,
   /// It could not be spoken.
   Failed,
+  /// Its briefing was stopped before it ended; it has no sound and is never spoken again.
+  Stopped,
 }
 
 impl SynthesisState {
@@ -114,6 +116,7 @@ impl SynthesisState {
       Self::Speaking => "speaking",
       Self::Done => "done",
       Self::Failed => "failed",
+      Self::Stopped => "stopped",
     }
   }
 
@@ -124,6 +127,7 @@ impl SynthesisState {
       "speaking" => Some(Self::Speaking),
       "done" => Some(Self::Done),
       "failed" => Some(Self::Failed),
+      "stopped" => Some(Self::Stopped),
       _ => None,
     }
   }
@@ -367,6 +371,25 @@ pub struct BriefingQuery {
   /// 1 to 1,000; 100 where absent.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub limit: Option<u32>,
+}
+
+/// The room whose briefings are stopped, or none to stop every room's.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BriefingStop {
+  /// The room, as its caller numbers it; every room where absent.
+  #[serde(default)]
+  pub chat_id: Option<i64>,
+}
+
+/// What a stop came to, told as `briefings.stopped` for the listeners to fall silent.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BriefingsStopped {
+  /// The room whose briefings were stopped; null for every room.
+  pub chat_id: Option<i64>,
+  /// The briefings it stopped, oldest first.
+  pub briefing_ids: Vec<i64>,
 }
 
 /// The line a briefing speaks, or none to let it go without one.

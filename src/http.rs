@@ -17,24 +17,25 @@ use axum::{Json, Router};
 use futures_util::stream::{self, StreamExt};
 use serde::de::DeserializeOwned;
 use tokio::sync::broadcast;
+use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
 use crate::context::Context;
 use crate::events::{
-  BRIEFING_CHANGED, BRIEFING_CREATED, BRIEFING_ENDED, Events, SYNTHESIS_CREATED, SYNTHESIS_ENDED,
-  TRANSCRIPTION_ENDED,
+  BRIEFING_CHANGED, BRIEFING_CREATED, BRIEFING_ENDED, BRIEFINGS_STOPPED, Events, SYNTHESIS_CREATED,
+  SYNTHESIS_ENDED, TRANSCRIPTION_ENDED,
 };
 use crate::policy::POLICY;
 use crate::script::reading::Language;
 use crate::script::{spoken, unconverted};
-use crate::speech::{node, synth};
+use crate::speech::{card, node, synth};
 use crate::store::{self, StoreError, voices};
 use crate::units::arbiter::Ask;
 use crate::wire::{
-  Briefing, BriefingKind, BriefingLine, BriefingQuery, Encoding, Event, EventQuery, Health, NewBriefing,
-  NewEncoding, NewScriptReading, NewSynthesis, NewTranscription, Page, PageQuery, ScriptReading, Synthesis,
-  SynthesisState, Transcription, Voice, VoiceServer, WireError,
+  Briefing, BriefingKind, BriefingLine, BriefingQuery, BriefingStop, BriefingsStopped, Encoding, Event,
+  EventQuery, Health, NewBriefing, NewEncoding, NewScriptReading, NewSynthesis, NewTranscription, Page,
+  PageQuery, ScriptReading, Synthesis, SynthesisState, Transcription, Voice, VoiceServer, WireError,
 };
 
 /// How often an idle event stream says it is still there.
@@ -137,6 +138,7 @@ pub fn router(served: Served) -> Router {
     .route("/syntheses/{synthesisId}", get(read_synthesis))
     .route("/syntheses/{synthesisId}/sound", get(synthesis_sound))
     .route("/briefings", post(create_briefing).get(list_briefings))
+    .route("/briefings/stop", post(stop_briefings))
     .route("/briefings/{briefingId}", get(read_briefing))
     .route("/briefings/{briefingId}/line", post(name_line))
     .route("/briefings/{briefingId}/sound", get(briefing_sound))
@@ -409,21 +411,13 @@ async fn create_synthesis(
     voice.seed = seed;
   }
 
-  let context = Arc::clone(&served.context);
-  let events = served.events.clone();
-  let text = asked.text;
-  // The speaking runs apart from the answer, a task of the service's one runtime, which every waiting line shares.
-  tokio::spawn(speak(
-    context,
-    events,
-    id,
-    voice,
-    Words {
-      text,
-      spoken,
-      language,
-    },
-  ));
+  let words = Words {
+    text: asked.text,
+    spoken,
+    language,
+  };
+
+  speak_apart(Arc::clone(&served.context), served.events.clone(), id, None, voice, words);
 
   Ok((StatusCode::CREATED, Json(synthesis)).into_response())
 }
@@ -565,14 +559,63 @@ async fn derived_words(context: &Context, id: i64, language: Language, text: &st
   words
 }
 
+// A line's speaking run apart from the answer, a task of the service's one runtime, which every waiting line shares;
+// its stop signal stands before the task does, and a briefing's end is kept and told as its synthesis ends.
+fn speak_apart(
+  context: Arc<Context>,
+  events: Events,
+  synthesis: i64,
+  briefing: Option<i64>,
+  voice: voices::VoiceRow,
+  words: Words,
+) {
+  let stop = context.stops.watch(synthesis);
+
+  match briefing {
+    Some(briefing) => {
+      tokio::spawn(brief(context, events, briefing, synthesis, voice, words, stop));
+    }
+    None => {
+      tokio::spawn(speak(context, events, synthesis, voice, words, stop));
+    }
+  }
+}
+
+// One synthesis spoken unless its stop signal comes first: a stop drops its speaking where it stands, the derivation,
+// the wait for its card or the node's speech, and gives back whatever card its line holds; the stop's own route has
+// written and told its end. Answers whether it ran to its own end.
+async fn speak(
+  context: Arc<Context>,
+  events: Events,
+  id: i64,
+  voice: voices::VoiceRow,
+  words: Words,
+  stop: CancellationToken,
+) -> bool {
+  let ran = tokio::select! {
+    () = speak_line(&context, events, id, voice, words) => true,
+    () = stop.cancelled() => false,
+  };
+
+  context.stops.forget(id);
+
+  if !ran {
+    context.waits.set(id, None);
+    card::give_back_work(&context.units.arbiter, &context.settings.demands_folder(), &node::work_key(id))
+      .await;
+  }
+
+  ran
+}
+
 // One synthesis spoken on the card the arbiter's master grants it, its state, what it waits on and the event of its
-// end told as they come.
-async fn speak(context: Arc<Context>, events: Events, id: i64, voice: voices::VoiceRow, words: Words) {
+// end told as they come. A synthesis that ended meanwhile, stopped, takes no state and tells no end of its own.
+async fn speak_line(context: &Context, events: Events, id: i64, voice: voices::VoiceRow, words: Words) {
   let text = match words.spoken {
     Some(spoken) => spoken,
-    None => derived_words(&context, id, words.language, &words.text).await,
+    None => derived_words(context, id, words.language, &words.text).await,
   };
-  let out = sound_path(&context, id);
+  let out = sound_path(context, id);
   if let Some(folder) = out.parent().map(std::path::Path::to_path_buf) {
     let _ = tokio::fs::create_dir_all(folder).await;
   }
@@ -580,7 +623,7 @@ async fn speak(context: Arc<Context>, events: Events, id: i64, voice: voices::Vo
   let ask = Ask {
     service_name: node::SERVICE.to_owned(),
     count: 1,
-    work_key: Some(format!("{}{id}", node::WORK)),
+    work_key: Some(node::work_key(id)),
     reference: Some(format!("voice synthesis {id} in {}", voice.name)),
   };
   let speech = node::Speech {
@@ -635,17 +678,21 @@ async fn speak(context: Arc<Context>, events: Events, id: i64, voice: voices::Vo
     Err(why) => {
       eprintln!("voice: synthesis {id} failed: {why}");
 
-      let _ = store::syntheses::set_state(&context.db, id, SynthesisState::Failed, None).await;
-      let _ = ended_synthesis(events, context.db.clone(), id).await;
+      if let Ok(true) = store::syntheses::set_state(&context.db, id, SynthesisState::Failed, None).await {
+        let _ = ended_synthesis(events, context.db.clone(), id).await;
+      }
 
       return;
     }
   };
 
-  if let Err(why) = store::syntheses::set_state(&context.db, id, SynthesisState::Done, duration_ms).await {
-    eprintln!("voice: synthesis {id} was spoken but its state was not written: {why}");
+  match store::syntheses::set_state(&context.db, id, SynthesisState::Done, duration_ms).await {
+    Ok(true) => {
+      let _ = ended_synthesis(events, context.db.clone(), id).await;
+    }
+    Ok(false) => {}
+    Err(why) => eprintln!("voice: synthesis {id} was spoken but its state was not written: {why}"),
   }
-  let _ = ended_synthesis(events, context.db.clone(), id).await;
 }
 
 async fn ended_synthesis(events: Events, db: sea_orm::DatabaseConnection, id: i64) -> Result<(), Refused> {
@@ -781,16 +828,13 @@ async fn create_briefing(
     writing.record(BRIEFING_CREATED, &briefing).await?;
   }
 
-  let context = Arc::clone(&served.context);
-  let events = served.events.clone();
-
   let words = Words {
     text: script,
     spoken: spoken_words,
     language,
   };
 
-  tokio::spawn(brief(context, events, id, synthesis_id, voice, words));
+  speak_apart(Arc::clone(&served.context), served.events.clone(), synthesis_id, Some(id), voice, words);
 
   Ok((StatusCode::CREATED, Json(briefing)).into_response())
 }
@@ -830,20 +874,16 @@ pub async fn take_up(context: Arc<Context>, events: Events) -> Result<usize, Sto
       spoken: row.spoken,
       language,
     };
-    let context = Arc::clone(&context);
-    let events = events.clone();
 
-    match briefing {
-      Some(briefing) => tokio::spawn(brief(context, events, briefing, id, voice, words)),
-      None => tokio::spawn(speak(context, events, id, voice, words)),
-    };
+    speak_apart(Arc::clone(&context), events.clone(), id, briefing, voice, words);
     taken += 1;
   }
 
   Ok(taken)
 }
 
-// One briefing spoken as its synthesis is, and its end kept and told.
+// One briefing spoken as its synthesis is, and its end kept and told; a briefing stopped meanwhile keeps the end its
+// stop wrote.
 async fn brief(
   context: Arc<Context>,
   events: Events,
@@ -851,8 +891,11 @@ async fn brief(
   synthesis_id: i64,
   voice: voices::VoiceRow,
   words: Words,
+  stop: CancellationToken,
 ) {
-  speak(Arc::clone(&context), events.clone(), synthesis_id, voice, words).await;
+  if !speak(Arc::clone(&context), events.clone(), synthesis_id, voice, words, stop).await {
+    return;
+  }
 
   let db = &context.db;
   let spoken = store::syntheses::get(db, synthesis_id).await.ok().flatten();
@@ -862,8 +905,10 @@ async fn brief(
     .filter(|row| row.state == SynthesisState::Done)
     .map(|row| (row.duration_ms.unwrap_or(0) as f64 / 1_000.0, sound.as_str()));
 
-  if let Err(why) = store::briefings::ended(db, id, crate::now_ms(), done).await {
-    eprintln!("voice: briefing {id}'s end was not written: {why}");
+  match store::briefings::ended(db, id, crate::now_ms(), done).await {
+    Ok(true) => {}
+    Ok(false) => return,
+    Err(why) => eprintln!("voice: briefing {id}'s end was not written: {why}"),
   }
 
   match store::briefings::get(db, id).await {
@@ -936,6 +981,44 @@ async fn name_line(
   served.events.write().await.record(BRIEFING_CHANGED, &briefing).await?;
 
   Ok(Json(briefing))
+}
+
+/// `POST /briefings/stop`: every briefing of a room, or of every room, that has not ended stopped at once, its speaking
+/// ended where it runs, each told as it ends, and then the stop itself told for the listeners to fall silent.
+async fn stop_briefings(
+  State(served): State<Served>,
+  read: Result<Json<BriefingStop>, JsonRejection>,
+) -> Result<Json<Page<Briefing>>, Refused> {
+  let asked = body_of(read)?;
+  let db = &served.context.db;
+  let stopped = store::briefings::stop(db, asked.chat_id, crate::now_ms()).await?;
+
+  for one in &stopped {
+    served.context.stops.stop(one.synthesis);
+  }
+
+  let mut items = Vec::with_capacity(stopped.len());
+  let writing = served.events.write().await;
+
+  for one in &stopped {
+    if let Some(synthesis) = store::syntheses::get(db, one.synthesis).await? {
+      writing.record(SYNTHESIS_ENDED, &synthesis.synthesis()).await?;
+    }
+
+    let briefing = briefing_of(db, one.briefing).await?;
+
+    writing.record(BRIEFING_ENDED, &briefing).await?;
+    items.push(briefing);
+  }
+
+  let told = BriefingsStopped {
+    chat_id: asked.chat_id,
+    briefing_ids: stopped.iter().map(|one| one.briefing).collect(),
+  };
+
+  writing.record(BRIEFINGS_STOPPED, &told).await?;
+
+  Ok(Json(Page { items, more: false }))
 }
 
 /// `GET /briefings/{briefingId}/sound`.

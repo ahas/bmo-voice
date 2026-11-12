@@ -1,7 +1,9 @@
 //! The briefings (`docs/boundary-api.md`, 「Briefings」): a line spoken for a room is taken in at once and kept with
 //! its room and its line, its end is told on the event stream, a summary's line is named after it, a full reading
 //! names its line and keeps it, and the page narrows by room, line and kind; and the synthesis a line is spoken as
-//! waits for its card, saying why, and gives it back as it ends; and a caller's key takes a line in once.
+//! waits for its card, saying why, and gives it back as it ends; a caller's key takes a line in once; and a stop ends
+//! every briefing of a room, or of every room, that has not ended, gives back its card and tells it; and switching
+//! the briefings off ends a waiting line and a speaking one alike, neither of which plays or is spoken afterwards.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -87,7 +89,17 @@ impl Drop for Scratch {
 /// holds, so every line in it fails to be spoken; one, `voice-b`, under the voices root, whose lines ask the master
 /// `master` names; and one, `voice-c`, whose folder declares no engine, as a retired voice's does.
 async fn engine(scratch: &Scratch, master: Option<std::net::SocketAddr>) -> axum::Router {
+  router(served(scratch, master, None).await)
+}
+
+/// What the engine's routes stand on, as `engine` builds it, its node service the one `node` names.
+async fn served(
+  scratch: &Scratch,
+  master: Option<std::net::SocketAddr>,
+  node: Option<std::net::SocketAddr>,
+) -> Served {
   let master = master.map_or_else(|| "[::1]:9".to_owned(), |at| at.to_string());
+  let node = node.map_or_else(|| "[::1]:9".to_owned(), |at| at.to_string());
   let settings_path = scratch.root.join("env").join("voice.toml");
   let settings = format!(
     r#"listen = "127.0.0.1:0"
@@ -97,7 +109,7 @@ database = "{}"
 data_root = "{}"
 
 [units.node]
-address = "http://[::1]:9"
+address = "http://{node}"
 
 [units.arbiter]
 address = "http://{master}"
@@ -148,13 +160,14 @@ address = "http://[::1]:9"
     db: db.clone(),
     units,
     waits: Default::default(),
+    stops: Default::default(),
   };
 
-  router(Served {
+  Served {
     context: Arc::new(context),
     events: Events::new(db),
     token: Some(Arc::new(TOKEN.to_owned())),
-  })
+  }
 }
 
 use sea_orm::ConnectionTrait;
@@ -341,7 +354,7 @@ async fn a_retired_voice_is_listed_as_such_and_never_spoken() {
 }
 
 /// A stand-in master: a demand waits, its reads saying why, until the test lets it be granted on a node nothing
-/// reaches; every demand given back is kept.
+/// reaches; every demand given back is kept. Its one demand is asked with the first synthesis's work key.
 #[derive(Default)]
 struct Line {
   open: std::sync::atomic::AtomicBool,
@@ -352,10 +365,10 @@ const IN_USE: &str = "Every card of voice is in use: song.";
 
 fn line_demand(line: &Line) -> Value {
   if line.open.load(Ordering::SeqCst) {
-    json!({ "id": 9, "state": "granted", "taken": null, "reason": null,
+    json!({ "id": 9, "state": "granted", "taken": null, "reason": null, "workKey": "voice:synthesis:1",
       "cards": [{ "nodeName": "node-a" }] })
   } else {
-    json!({ "id": 9, "state": "waiting", "taken": null, "cards": [],
+    json!({ "id": 9, "state": "waiting", "taken": null, "cards": [], "workKey": "voice:synthesis:1",
       "reason": { "code": "in-use", "text": IN_USE } })
   }
 }
@@ -622,6 +635,314 @@ async fn a_key_takes_a_briefing_in_once_and_a_plain_synthesis_key_is_a_conflict(
     (StatusCode::CONFLICT, Some("conflict")),
     "{refused}"
   );
+}
+
+#[tokio::test]
+async fn a_stop_ends_a_rooms_waiting_briefings_gives_back_their_card_and_tells_it() {
+  let scratch = Scratch::new().await;
+  let line = Arc::new(Line::default());
+  let engine = engine(&scratch, Some(line_master(Arc::clone(&line)).await)).await;
+  let briefing = |room: i64, key: &str| {
+    json!({ "voiceName": "voice-b", "text": "The backup finished.", "spoken": SPOKEN, "chatId": room,
+            "kind": "summary", "key": key })
+  };
+  let (_, here) = call(&engine, "POST", "/briefings", Some(briefing(ROOM, "stop:here"))).await;
+  let (_, there) = call(&engine, "POST", "/briefings", Some(briefing(9, "stop:there"))).await;
+  let (here_id, there_id) = (here["id"].as_i64().expect("an id"), there["id"].as_i64().expect("an id"));
+
+  assert_eq!(here["synthesisId"], 1, "the stand-in master's demand names the first synthesis");
+
+  let mut read = Value::Null;
+
+  for _ in 0..400 {
+    (_, read) = call(&engine, "GET", "/syntheses/1", None).await;
+
+    if read["waitingOn"].is_string() {
+      break;
+    }
+
+    tokio::time::sleep(Duration::from_millis(25)).await;
+  }
+
+  assert_eq!(read["waitingOn"], IN_USE, "the line waits on its card: {read}");
+
+  let (status, stopped) = call(&engine, "POST", "/briefings/stop", Some(json!({ "chatId": ROOM }))).await;
+
+  assert_eq!(status, StatusCode::OK, "{stopped}");
+  assert_eq!(stopped["more"], false);
+  assert_eq!(stopped["items"].as_array().map(Vec::len), Some(1), "{stopped}");
+  assert_eq!(stopped["items"][0]["id"], here_id);
+  assert_eq!(stopped["items"][0]["state"], "stopped");
+  assert!(stopped["items"][0]["finishedAt"].is_i64());
+
+  let (_, other) = call(&engine, "GET", &format!("/briefings/{there_id}"), None).await;
+
+  assert_eq!(other["state"], "waiting", "another room's briefing goes on: {other}");
+
+  for _ in 0..400 {
+    if !line.given.lock().unwrap().is_empty() {
+      break;
+    }
+
+    tokio::time::sleep(Duration::from_millis(25)).await;
+  }
+
+  assert_eq!(*line.given.lock().unwrap(), [9], "the stopped line's card is given back");
+
+  let (_, synthesis) = call(&engine, "GET", "/syntheses/1", None).await;
+
+  assert_eq!((synthesis["state"].as_str(), &synthesis["waitingOn"]), (Some("stopped"), &Value::Null));
+
+  let (status, _) = call(&engine, "GET", &format!("/briefings/{here_id}/sound"), None).await;
+
+  assert_eq!(status, StatusCode::NOT_FOUND);
+
+  // Its key stays held: asked again, the stopped briefing answers and nothing is spoken anew.
+  let (status, again) = call(&engine, "POST", "/briefings", Some(briefing(ROOM, "stop:here"))).await;
+
+  assert_eq!(
+    (status, &again["id"], again["state"].as_str()),
+    (StatusCode::OK, &json!(here_id), Some("stopped"))
+  );
+
+  // A stop naming no room ends every room's, and a briefing already stopped is not stopped twice.
+  let (_, everywhere) = call(&engine, "POST", "/briefings/stop", Some(json!({}))).await;
+  let ids: Vec<&Value> =
+    everywhere["items"].as_array().expect("a page").iter().map(|one| &one["id"]).collect();
+
+  assert_eq!(ids, [&json!(there_id)], "{everywhere}");
+
+  let (_, page) =
+    call(&engine, "GET", "/events?kinds=synthesis.ended,briefing.ended,briefings.stopped", None).await;
+  let told: Vec<(String, Value)> = page["items"]
+    .as_array()
+    .expect("a page")
+    .iter()
+    .map(|event| (event["kind"].as_str().unwrap_or_default().to_owned(), event["data"].clone()))
+    .collect();
+  let kinds: Vec<&str> = told.iter().map(|(kind, _)| kind.as_str()).collect();
+
+  assert_eq!(
+    kinds,
+    [
+      "synthesis.ended",
+      "briefing.ended",
+      "briefings.stopped",
+      "synthesis.ended",
+      "briefing.ended",
+      "briefings.stopped"
+    ]
+  );
+  assert_eq!(told[1].1["state"], "stopped");
+  assert_eq!(told[2].1, json!({ "chatId": ROOM, "briefingIds": [here_id] }));
+  assert_eq!(told[5].1, json!({ "chatId": null, "briefingIds": [there_id] }));
+}
+
+/// A stand-in master holding a demand for each line that asks: the one asked with `granted` as its work key is
+/// granted a card on `node-a`, every other waits; each demand given back is kept.
+struct Cards {
+  granted: String,
+  asked: std::sync::Mutex<Vec<(i64, String)>>,
+  given: std::sync::Mutex<Vec<i64>>,
+}
+
+fn card_demand(cards: &Cards, id: i64, key: &str) -> Value {
+  if key == cards.granted {
+    json!({ "id": id, "state": "granted", "taken": null, "reason": null, "workKey": key,
+      "cards": [{ "nodeName": "node-a" }] })
+  } else {
+    json!({ "id": id, "state": "waiting", "taken": null, "cards": [], "workKey": key,
+      "reason": { "code": "in-use", "text": IN_USE } })
+  }
+}
+
+// The demands the master still holds, those given back left out.
+fn held_demands(cards: &Cards) -> Vec<Value> {
+  let given = cards.given.lock().unwrap().clone();
+
+  cards
+    .asked
+    .lock()
+    .unwrap()
+    .iter()
+    .filter(|(id, _)| !given.contains(id))
+    .map(|(id, key)| card_demand(cards, *id, key))
+    .collect()
+}
+
+async fn cards_master(cards: Arc<Cards>) -> std::net::SocketAddr {
+  use axum::extract::{Path, State};
+  use axum::routing::{get, post};
+
+  let router = axum::Router::new()
+    .route(
+      "/demands",
+      post(|State(cards): State<Arc<Cards>>, axum::Json(ask): axum::Json<Value>| async move {
+        let key = ask["workKey"].as_str().unwrap_or_default().to_owned();
+        let id = {
+          let mut asked = cards.asked.lock().unwrap();
+          let id = 100 + asked.len() as i64;
+
+          asked.push((id, key.clone()));
+          id
+        };
+
+        (StatusCode::ACCEPTED, axum::Json(card_demand(&cards, id, &key)))
+      })
+      .get(|State(cards): State<Arc<Cards>>| async move {
+        axum::Json(json!({ "items": held_demands(&cards), "more": false }))
+      }),
+    )
+    .route(
+      "/demands/{id}",
+      get(|State(cards): State<Arc<Cards>>, Path(id): Path<i64>| async move {
+        match held_demands(&cards).into_iter().find(|demand| demand["id"] == id) {
+          Some(demand) => (StatusCode::OK, axum::Json(demand)),
+          None => (StatusCode::NOT_FOUND, axum::Json(json!({ "code": "not-found", "error": "no demand" }))),
+        }
+      })
+      .delete(|State(cards): State<Arc<Cards>>, Path(id): Path<i64>| async move {
+        cards.given.lock().unwrap().push(id);
+
+        StatusCode::NO_CONTENT
+      }),
+    )
+    .with_state(cards);
+  let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("a port");
+  let at = listener.local_addr().expect("its address");
+
+  tokio::spawn(async move { axum::serve(listener, router).await });
+
+  at
+}
+
+/// A stand-in node service that is asked for a node's target and never answers, so a line granted its card stays
+/// `speaking` for as long as nothing ends it; whether it was asked is kept.
+async fn silent_nodes(asked: Arc<std::sync::atomic::AtomicBool>) -> std::net::SocketAddr {
+  use axum::extract::State;
+  use axum::routing::get;
+
+  let router = axum::Router::new()
+    .route(
+      "/nodes/{name}/target",
+      get(|State(asked): State<Arc<std::sync::atomic::AtomicBool>>| async move {
+        asked.store(true, Ordering::SeqCst);
+        std::future::pending::<StatusCode>().await
+      }),
+    )
+    .with_state(asked);
+  let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("a port");
+  let at = listener.local_addr().expect("its address");
+
+  tokio::spawn(async move { axum::serve(listener, router).await });
+
+  at
+}
+
+#[tokio::test]
+async fn switching_off_stops_a_waiting_and_a_speaking_briefing_and_neither_plays_afterwards() {
+  let scratch = Scratch::new().await;
+  let cards = Arc::new(Cards {
+    granted: "voice:synthesis:1".to_owned(),
+    asked: Default::default(),
+    given: Default::default(),
+  });
+  let node_asked = Arc::new(std::sync::atomic::AtomicBool::new(false));
+  let master = cards_master(Arc::clone(&cards)).await;
+  let nodes = silent_nodes(Arc::clone(&node_asked)).await;
+  let served = served(&scratch, Some(master), Some(nodes)).await;
+  let engine = router(served.clone());
+  let briefing = |room: i64| {
+    json!({ "voiceName": "voice-b", "text": "The backup finished.", "spoken": SPOKEN, "chatId": room,
+            "kind": "summary" })
+  };
+  let (_, speaking) = call(&engine, "POST", "/briefings", Some(briefing(ROOM))).await;
+  let (_, waiting) = call(&engine, "POST", "/briefings", Some(briefing(9))).await;
+  let ids = [speaking["id"].clone(), waiting["id"].clone()];
+
+  assert_eq!(speaking["synthesisId"], 1, "the stand-in master grants the first synthesis its card");
+
+  // The first is granted its card and speaks on a node that never answers; the second waits for its card.
+  let mut states = (Value::Null, Value::Null);
+
+  for _ in 0..400 {
+    states = (
+      call(&engine, "GET", "/syntheses/1", None).await.1,
+      call(&engine, "GET", "/syntheses/2", None).await.1,
+    );
+
+    if node_asked.load(Ordering::SeqCst)
+      && states.0["state"] == "speaking"
+      && states.1["waitingOn"].is_string()
+    {
+      break;
+    }
+
+    tokio::time::sleep(Duration::from_millis(25)).await;
+  }
+
+  assert_eq!(states.0["state"], "speaking", "{}", states.0);
+  assert!(node_asked.load(Ordering::SeqCst), "the speaking line reached its node");
+  assert_eq!((states.1["state"].as_str(), &states.1["waitingOn"]), (Some("waiting"), &json!(IN_USE)));
+
+  // Switching the briefings off stops every room's.
+  let (status, stopped) = call(&engine, "POST", "/briefings/stop", Some(json!({}))).await;
+
+  assert_eq!(status, StatusCode::OK, "{stopped}");
+
+  let items = stopped["items"].as_array().expect("a page");
+
+  assert_eq!(items.iter().map(|one| one["id"].clone()).collect::<Vec<_>>(), ids, "{stopped}");
+  assert!(
+    items.iter().all(|one| one["state"] == "stopped" && one["finishedAt"].is_i64()),
+    "{stopped}"
+  );
+
+  // Both lines' speaking ends: each gives its card back, the speaking one while its node never answered.
+  for _ in 0..400 {
+    if cards.given.lock().unwrap().len() == 2 {
+      break;
+    }
+
+    tokio::time::sleep(Duration::from_millis(25)).await;
+  }
+
+  let mut given = cards.given.lock().unwrap().clone();
+
+  given.sort_unstable();
+  assert_eq!(given, [100, 101], "both cards are given back");
+
+  // Their speaking over, neither is done, neither serves a sound, and the only ends told are the stop's.
+  for id in &ids {
+    let (_, read) = call(&engine, "GET", &format!("/briefings/{id}"), None).await;
+    let (status, _) = call(&engine, "GET", &format!("/briefings/{id}/sound"), None).await;
+
+    assert_eq!((read["state"].as_str(), status), (Some("stopped"), StatusCode::NOT_FOUND), "{read}");
+  }
+
+  let (_, page) = call(&engine, "GET", "/events?kinds=briefing.ended,briefings.stopped", None).await;
+  let told: Vec<(&str, &Value)> = page["items"]
+    .as_array()
+    .expect("a page")
+    .iter()
+    .map(|event| (event["kind"].as_str().unwrap_or_default(), &event["data"]))
+    .collect();
+
+  assert_eq!(told.len(), 3, "{page}");
+  assert!(
+    told[..2]
+      .iter()
+      .all(|(kind, data)| *kind == "briefing.ended" && data["state"] == "stopped"),
+    "{page}"
+  );
+  assert_eq!(told[2], ("briefings.stopped", &json!({ "chatId": null, "briefingIds": ids })));
+
+  // Switched on again, or started afresh, the engine takes up no line that was stopped.
+  let taken = bmo_voice::http::take_up(Arc::clone(&served.context), served.events.clone())
+    .await
+    .expect("the unspoken lines are read");
+
+  assert_eq!(taken, 0);
 }
 
 #[test]

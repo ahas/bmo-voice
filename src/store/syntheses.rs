@@ -163,21 +163,23 @@ pub async fn set_spoken(db: &DatabaseConnection, id: i64, spoken: &str) -> Resul
   Ok(())
 }
 
-/// A synthesis's state, and how long its sound runs where it is done.
+/// A synthesis's state, and how long its sound runs where it is done. Only a synthesis not yet ended, `waiting` or
+/// `speaking`, moves; answers whether it moved, which it does not once it ended, a stopped one among them.
 pub async fn set_state(
   db: &DatabaseConnection,
   id: i64,
   state: SynthesisState,
   duration_ms: Option<i64>,
-) -> Result<(), StoreError> {
-  run(
+) -> Result<bool, StoreError> {
+  let moved = run(
     db,
-    r#"UPDATE "voice_syntheses" SET "state" = $2, "duration_ms" = $3 WHERE "id" = $1"#,
+    r#"UPDATE "voice_syntheses" SET "state" = $2, "duration_ms" = $3
+       WHERE "id" = $1 AND "state" IN ('waiting', 'speaking')"#,
     vec![id.into(), state.as_str().into(), Value::BigInt(duration_ms)],
   )
   .await?;
 
-  Ok(())
+  Ok(moved > 0)
 }
 
 /// A voice's syntheses, newest first, past `after`.

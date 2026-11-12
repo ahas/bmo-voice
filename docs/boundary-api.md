@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.15.
+Fixed at 0.1.0-rev.26.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -48,12 +48,13 @@ asking `Accept: application/json`.
 | Event | Data |
 |---|---|
 | `synthesis.created` | the synthesis as `GET /syntheses/{synthesisId}` answers it, state `waiting` |
-| `synthesis.ended` | the synthesis, state `done` or `failed` |
+| `synthesis.ended` | the synthesis, state `done`, `failed` or `stopped` |
 | `transcription.ended` | the transcription, state `done` or `failed` |
 | `voice.changed` | a voice as `GET /voices/{voiceName}` answers it |
 | `briefing.created` | the briefing as `GET /briefings/{briefingId}` answers it, state `waiting` |
-| `briefing.ended` | the briefing, state `done` or `failed` |
+| `briefing.ended` | the briefing, state `done`, `failed` or `stopped` |
 | `briefing.changed` | the briefing, after its line was named or let go |
+| `briefings.stopped` | `chatId`, the room whose briefings were stopped or null for every room, and `briefingIds`, those it stopped |
 
 - **A frame's `event` is the kind,** its `id` the event number, a signed 64-bit integer that only grows,
   and its `data` is `{"id", "kind", "at", "data"}`, the inner `data` being the member.
@@ -92,7 +93,8 @@ asking `Accept: application/json`.
 - **A synthesis:** `id`, `voiceName`, `text` (the written words), `spoken` (the words the voice says, null until
   they stand; 「The spoken words」), `emotion`, `key` (the caller's key, null where none was given), `state`,
   `waitingOn`, `durationMs` (null until done) and `createdAt`. Its `state` is `waiting` (taken in, its card not yet granted), `speaking` (a voice
-  server is speaking it), `done` (its sound stands) or `failed`.
+  server is speaking it), `done` (its sound stands), `failed`, or `stopped` (its briefing was stopped before it
+  ended, 「Briefings」; it has no sound and is never spoken again).
 - **A synthesis is answered at once;** the speaking runs apart on the voice server of the card the arbiter's
   master grants it (「The voice servers and the card」), and the caller reads the member again until its
   state is `done` or `failed`. `done` carries `durationMs`, the sound's length read from its Ogg pages.
@@ -119,8 +121,8 @@ asking `Accept: application/json`.
   voice no list holds any more, or whose voice is not served, fails. Nothing a caller took in is left `waiting`
   with no process to speak it.
 - **A key makes a line once.** `key` is the caller's own name for a line, of at most 200 characters and not blank,
-  in whatever shape the caller keys its work by. A `POST` naming a key that a synthesis `waiting`, `speaking` or
-  `done` already holds takes nothing in and is answered 200 with that synthesis, whatever else the body says; once
+  in whatever shape the caller keys its work by. A `POST` naming a key that a synthesis `waiting`, `speaking`,
+  `done` or `stopped` already holds takes nothing in and is answered 200 with that synthesis, whatever else the body says; once
   the one holding it has `failed`, the key takes a new one in. Two calls with one key at once take in one synthesis
   between them. A key that is blank or longer is answered 400 `bad-request`.
 - **One synthesis speaks one text.** There is no list route: a caller that wants to know a synthesis it
@@ -212,6 +214,7 @@ server any other way.
 | `GET /briefings/{briefingId}` | | one briefing |
 | `POST /briefings/{briefingId}/line` | `messageId`, a number or null | the briefing |
 | `GET /briefings/{briefingId}/sound` | | the sound, OGG/Opus, with `Range` |
+| `POST /briefings/stop` | `chatId?` | the briefings it stopped, a page whose `more` is false |
 
 - **A briefing is a line spoken for a room in a voice,** kept with the room and the line it speaks: `id`,
   `chatId`, `messageId` (the line, null while it awaits one), `kind`, `title` (null where none was given),
@@ -236,6 +239,16 @@ server any other way.
   it was told. A listener plays by itself only a `summary` whose `plays` holds, once `briefing.ended` says it is
   `done`; it plays a `full` reading only when somebody asks for it, and shows a briefing it learns of more than
   two minutes after it ended rather than playing it.
+- **Stopping silences at once.** `POST /briefings/stop` stops every briefing of the room `chatId` names, or of
+  every room where the body names none, that has not ended: one `waiting` and one `speaking` alike, and one whose
+  synthesis is done but whose end is not yet told. Each is `stopped` from that moment, its `finishedAt` the
+  moment it was stopped; its speaking is ended where it runs, its card given back, and no sound of it is served. Each is told as `briefing.ended`, its synthesis as `synthesis.ended`, and then one `briefings.stopped`
+  names the room and the briefings it stopped, told even where it stopped none. A stopped briefing never plays and
+  is never spoken again, whatever its caller does next: its key stays held, so a `POST` naming the key answers it,
+  `stopped`, and a restart takes up no stopped line. A briefing that ended before the stop keeps its end.
+- **A listener hearing `briefings.stopped` falls silent for its room,** or for every room where `chatId` is null:
+  it stops the briefing of that room it plays, and plays by itself none of that room's briefings that ended
+  before the event.
 - **A summary may be spoken before its line stands.** One taken in with no `messageId` awaits its line, and
   `POST /briefings/{briefingId}/line` names it, or lets it go with null; either way it no longer awaits one, and
   `briefing.changed` says so. A full reading's line is never moved; asking is 409 `conflict`.

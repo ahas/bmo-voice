@@ -158,17 +158,18 @@ pub async fn of_synthesis(db: &DatabaseConnection, synthesis_id: i64) -> Result<
   .transpose()
 }
 
-/// A briefing's end: when, and where it is done, how long its sound runs and where the sound is kept.
+/// A briefing's end: when, and where it is done, how long its sound runs and where the sound is kept. Only a briefing
+/// not yet ended takes it; answers whether it did, which it does not once it was stopped.
 pub async fn ended(
   db: &DatabaseConnection,
   id: i64,
   at: i64,
   done: Option<(f64, &str)>,
-) -> Result<(), StoreError> {
-  run(
+) -> Result<bool, StoreError> {
+  let taken = run(
     db,
     r#"UPDATE "voice_briefings" SET "finished_at" = $2, "sent_at" = $3, "seconds" = $4, "sound_path" = $5
-       WHERE "run_id" = $1"#,
+       WHERE "run_id" = $1 AND "finished_at" IS NULL"#,
     vec![
       id.into(),
       at.into(),
@@ -179,5 +180,52 @@ pub async fn ended(
   )
   .await?;
 
-  Ok(())
+  Ok(taken > 0)
+}
+
+/// One briefing a stop ended, and the synthesis that spoke it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Stopped {
+  pub briefing: i64,
+  pub synthesis: i64,
+}
+
+/// Every briefing of a room, or of every room where none is named, that has not ended stopped at `at`: one whose
+/// synthesis waits, speaks, or is done with its end not yet kept. Each briefing ends and its synthesis is `stopped`
+/// in one statement, so a line ending this moment either keeps its own end or is stopped, never both. Answers those
+/// it stopped, oldest first.
+pub async fn stop(
+  db: &DatabaseConnection,
+  chat_id: Option<i64>,
+  at: i64,
+) -> Result<Vec<Stopped>, StoreError> {
+  let rows = all(
+    db,
+    r#"WITH "ended" AS (
+         UPDATE "voice_briefings" AS "b" SET "finished_at" = $2
+         FROM "voice_syntheses" AS "s"
+         WHERE "s"."id" = "b"."synthesis_id" AND "b"."finished_at" IS NULL
+           AND "s"."state" IN ('waiting', 'speaking', 'done')
+           AND ($1::bigint IS NULL OR "b"."chat_id" = $1)
+         RETURNING "b"."run_id", "b"."synthesis_id"
+       )
+       UPDATE "voice_syntheses" AS "s" SET "state" = $3
+       FROM "ended" WHERE "s"."id" = "ended"."synthesis_id"
+       RETURNING "ended"."run_id", "s"."id""#,
+    vec![Value::BigInt(chat_id), at.into(), SynthesisState::Stopped.as_str().into()],
+  )
+  .await?;
+  let mut stopped = rows
+    .iter()
+    .map(|row| {
+      Ok(Stopped {
+        briefing: row.try_get("", "run_id")?,
+        synthesis: row.try_get("", "id")?,
+      })
+    })
+    .collect::<Result<Vec<_>, StoreError>>()?;
+
+  stopped.sort_by_key(|one| one.briefing);
+
+  Ok(stopped)
 }

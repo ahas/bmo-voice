@@ -237,6 +237,23 @@ pub async fn give_back(arbiter: &Arbiter, ledger: &Path, demand: i64) {
   }
 }
 
+/// Every demand the master holds of one line's work key given back: a line stopped while it waited or spoke, whose own
+/// give-back never ran. One the master does not read or refuses to give back stays for the next start's sweep.
+pub async fn give_back_work(arbiter: &Arbiter, ledger: &Path, work_key: &str) {
+  let demands = match arbiter.demands().await {
+    Ok(demands) => demands,
+    Err(why) => {
+      eprintln!("voice: the master's demands were not read for a stopped line's: {why}");
+
+      return;
+    }
+  };
+
+  for demand in demands.into_iter().filter(|demand| demand.work_key.as_deref() == Some(work_key)) {
+    give_back(arbiter, ledger, demand.id).await;
+  }
+}
+
 /// Every demand an earlier process left given back once: each the ledger holds, and each the master holds whose work
 /// key starts with `work`, since none of this process's lines holds one yet. It runs before any line asks. One the
 /// master refuses to give back stays in the ledger for the next start. Answers how many were given back.

@@ -11,9 +11,9 @@ use serde_json::{Map, Value, json};
 use crate::events::KINDS;
 use crate::mcp::{ENTRY, MCP, PLUGIN, generator, tools};
 use crate::wire::{
-  Briefing, BriefingLine, BriefingQuery, Encoding, Event, EventQuery, Health, NewBriefing, NewEncoding,
-  NewScriptReading, NewSynthesis, NewTranscription, Page, ScriptReading, Synthesis, Transcription, Voice,
-  VoiceServer, WireError,
+  Briefing, BriefingLine, BriefingQuery, BriefingStop, Encoding, Event, EventQuery, Health, NewBriefing,
+  NewEncoding, NewScriptReading, NewSynthesis, NewTranscription, Page, ScriptReading, Synthesis,
+  Transcription, Voice, VoiceServer, WireError,
 };
 
 /// Where the schemas the routes refer to stand in the document.
@@ -328,6 +328,22 @@ pub fn openapi() -> Value {
       Asked {
         parameters: query::<BriefingQuery>(&mut generator),
         body: None,
+      },
+      200,
+      json_answer::<Page<Briefing>>(&mut generator),
+      &["unauthorized", "bad-request"],
+    ),
+  );
+  path(
+    "/briefings/stop",
+    "post",
+    operation(
+      "stopBriefings",
+      "briefings",
+      "Stop every briefing of a room, or of every room, that has not ended; each is stopped and told, and the stop is told for the listeners to fall silent.",
+      Asked {
+        parameters: Vec::new(),
+        body: Some(generator.subschema_for::<BriefingStop>().to_value()),
       },
       200,
       json_answer::<Page<Briefing>>(&mut generator),

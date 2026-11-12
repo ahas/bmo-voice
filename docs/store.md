@@ -78,7 +78,7 @@ briefings among them.
 | `seconds` | how long its sound runs, once it is done |
 | `sound_path` | its sound's place under the data root, once it is done; a row the engine did not speak keeps the place it was given |
 | `started_at` | when it was taken in, in epoch milliseconds |
-| `finished_at` | when it ended, done or failed |
+| `finished_at` | when it ended, done, failed or stopped |
 
 ### `voice_syntheses`
 
@@ -93,7 +93,7 @@ One row per text handed to the engine.
 | `language` | the language the line is said in, `ko` or `en`; null on a row taken in before lines named one, which is said in its voice's |
 | `emotion` | the emotion it was asked for; null where none was |
 | `key` | the caller's key for the line (`docs/boundary-api.md`, 「Syntheses」); null where none was given. No two rows that have not failed hold one key |
-| `state` | `waiting`, `speaking`, `done` or `failed` |
+| `state` | `waiting`, `speaking`, `done`, `failed` or `stopped` |
 | `duration_ms` | the sound's length once it is done; null before |
 | `created_at` | when it was taken in, in epoch milliseconds |
 

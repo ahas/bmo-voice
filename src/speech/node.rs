@@ -36,6 +36,11 @@ pub const SERVICE: &str = "voice";
 /// The start of every synthesis's work key, `voice:synthesis:<synthesisId>`: the key its demand is asked with.
 pub const WORK: &str = "voice:synthesis:";
 
+/// The work key a synthesis's demand for its card is asked with.
+pub fn work_key(synthesis: i64) -> String {
+  format!("{WORK}{synthesis}")
+}
+
 // Where everything lands on the node, relative to its home, the port the server listens on there, and the token
 // file beside the node's other configuration.
 const PLACE: &str = "bmo-voice";

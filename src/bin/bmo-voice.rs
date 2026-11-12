@@ -176,8 +176,10 @@ async fn brief(
     held = client.briefing(held.id).await.map_err(|why| why.to_string())?;
   }
 
-  if held.state == SynthesisState::Failed {
-    return Err(format!("briefing {} failed", held.id));
+  match held.state {
+    SynthesisState::Failed => return Err(format!("briefing {} failed", held.id)),
+    SynthesisState::Stopped => return Err(format!("briefing {} was stopped", held.id)),
+    _ => {}
   }
 
   if json {

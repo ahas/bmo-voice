@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "bmo-voice",
-    "version": "0.1.0-rev.25",
+    "version": "0.1.0-rev.26",
     "description": "The voice engine: trained voices, speech synthesis on the voice servers of the nodes, transcription, speaker encodings and scripts for the ear. A synthesis is answered at once and the sound follows. Bodies are JSON with camelCase keys, times are integers of epoch milliseconds and spans of milliseconds end in Ms. A list is a page, `after` being the last member's name. Every failure is a non-2xx answer whose body is `code` and `error`. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`. A briefing is a line spoken for a room, kept with the room and the line its caller names and told on the event stream for its listeners to play; when one is spoken, and what it says, is its caller's decision."
   },
   "servers": [
@@ -530,6 +530,44 @@
         ]
       }
     },
+    "/briefings/stop": {
+      "post": {
+        "operationId": "stopBriefings",
+        "tags": [
+          "briefings"
+        ],
+        "summary": "Stop every briefing of a room, or of every room, that has not ended; each is stopped and told, and the stop is told for the listeners to fall silent.",
+        "responses": {
+          "200": {
+            "description": "Stop every briefing of a room, or of every room, that has not ended; each is stopped and told, and the stop is told for the listeners to fall silent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefingPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-codes": [
+          "unauthorized",
+          "bad-request"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BriefingStop"
+              }
+            }
+          }
+        }
+      }
+    },
     "/briefings/{briefingId}": {
       "get": {
         "operationId": "readBriefing",
@@ -874,7 +912,8 @@
     "voice.changed",
     "briefing.created",
     "briefing.ended",
-    "briefing.changed"
+    "briefing.changed",
+    "briefings.stopped"
   ],
   "x-tools": [
     {
@@ -1141,7 +1180,7 @@
           },
           "kind": {
             "type": "string",
-            "description": "`synthesis.created`, `synthesis.ended`, `transcription.ended`, `voice.changed`, `briefing.created`,\n`briefing.ended` or `briefing.changed`."
+            "description": "`synthesis.created`, `synthesis.ended`, `transcription.ended`, `voice.changed`, `briefing.created`,\n`briefing.ended`, `briefing.changed` or `briefings.stopped`."
           },
           "at": {
             "type": "integer",
@@ -1383,6 +1422,11 @@
             "type": "string",
             "const": "failed",
             "description": "It could not be spoken."
+          },
+          {
+            "type": "string",
+            "const": "stopped",
+            "description": "Its briefing was stopped before it ended; it has no sound and is never spoken again."
           }
         ],
         "description": "Where a synthesis stands in its life."
@@ -1615,6 +1659,22 @@
           "more"
         ],
         "description": "One page of a list: its items, and whether anything stands past the last of them."
+      },
+      "BriefingStop": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "chatId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The room, as its caller numbers it; every room where absent.",
+            "default": null
+          }
+        },
+        "description": "The room whose briefings are stopped, or none to stop every room's."
       },
       "BriefingLine": {
         "type": "object",
