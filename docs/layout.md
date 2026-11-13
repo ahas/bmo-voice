@@ -29,6 +29,11 @@ stands, and no other.
 - **One manifest at the root,** `Cargo.toml`, for the crate and the workspace it heads, whose other members are
   the hosted tools' crates, each listed one line by its folder. A Bun or Python project keeps its own manifest
   and lockfile in its own folder, and is a project of its own to the testbed.
+- **A base library a Bun project depends on is packed into that project's `vendor/`,** so a clone of this
+  repository installs every project with no other checkout beside it: bmo-ui in `studio/client/vendor/`, as its
+  release verb wrote it, and bmo-text's TypeScript package in `scripts/vendor/`, packed with `bun pm pack` from a
+  scratch export (`git archive`) of bmo-text's committed main and named by its version and the commit it was
+  packed from. A newer copy replaces the old file, and the manifest and the lockfile name it.
 - **One crate,** split into modules. A part gets a crate of its own only where it truly has to stand apart: a
   hosted tool, an executable the tool host runs from a placed folder of its own, is one, and builds on the crate.
 - **No folder is named after its parent.** A folder's name says what it holds.

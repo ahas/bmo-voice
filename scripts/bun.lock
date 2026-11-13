@@ -5,7 +5,7 @@
     "": {
       "name": "bmo-voice-scripts",
       "dependencies": {
-        "bmo-text": "file:../../../base/text/package",
+        "bmo-text": "file:vendor/bmo-text-0.1.0-rev.5-f5874fb.tgz",
         "eventsource-parser": "^4.1.2",
         "leven": "^4.1.0",
         "music-metadata": "^12.2.3",
@@ -27,9 +27,7 @@
 
     "@types/node": ["@types/node@26.6.5", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg=="],
 
-    "binaryen": ["binaryen@132.0.0", "", { "bin": { "wasm-as": "bin/wasm-as", "wasm2js": "bin/wasm2js", "wasm-dis": "bin/wasm-dis", "wasm-opt": "bin/wasm-opt", "wasm-merge": "bin/wasm-merge", "wasm-shell": "bin/wasm-shell", "wasm-reduce": "bin/wasm-reduce", "wasm-metadce": "bin/wasm-metadce", "wasm-ctor-eval": "bin/wasm-ctor-eval" } }, "sha512-4Usg7yEvwO3FMso3Oov6qkOOHSod1IEv+boKkh77kTljM+eNBouqCTbqWswGzbG+vDNO/b/v2C4gfEh1WgB9Lg=="],
-
-    "bmo-text": ["bmo-text@file:../../../base/text/package", { "devDependencies": { "@types/bun": "^1.4.0", "binaryen": "132.0.0", "typescript": "5.9.3" } }],
+    "bmo-text": ["bmo-text@vendor/bmo-text-0.1.0-rev.5-f5874fb.tgz", {}, "sha512-C1O6+RXSYvnGELjahWwU78qX55DoFAz97CeFYKxVLG3WxfFe8wKzWhcrrSwSZ2+PhFGE1TdcHakQKgFRmPri+Q=="],
 
     "bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
