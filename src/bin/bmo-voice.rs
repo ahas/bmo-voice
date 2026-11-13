@@ -280,7 +280,10 @@ async fn brief_attach(
 
 // A bound as the minutes it is named in.
 fn minutes(within: Duration) -> String {
-  format!("{} minutes", within.as_secs() / 60)
+  match within.as_secs() / 60 {
+    1 => "1 minute".to_owned(),
+    count => format!("{count} minutes"),
+  }
 }
 
 // The service's `GET /health`, at its own address and with its token as the settings name them.
