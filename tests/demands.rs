@@ -471,6 +471,7 @@ async fn a_line_gives_its_card_back_however_it_ends_and_says_each_stage() {
       text: "A short line.",
       out: &out,
       ask: &ask,
+      service_within: Duration::from_secs(60),
       answer_within: Duration::from_secs(60),
       still_within: Duration::from_secs(600),
     },

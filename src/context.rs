@@ -118,7 +118,9 @@ impl Reads {
 pub struct Clocks {
   /// How long a synthesis its caller has not read waits before it fails.
   pub caller_gone: Duration,
-  /// How long one call to reach a line's node may take.
+  /// How long the node service may take to say how a line's node is reached.
+  pub node_service: Duration,
+  /// How long one command on a line's node may take.
   pub node_answer: Duration,
   /// How long a line on its node may stand still.
   pub node_still: Duration,
@@ -130,6 +132,7 @@ impl Default for Clocks {
 
     Self {
       caller_gone: Duration::from_secs(spans.caller_gone_seconds),
+      node_service: Duration::from_secs(spans.node_answer_seconds),
       node_answer: Duration::from_secs(spans.node_answer_seconds),
       node_still: Duration::from_secs(spans.node_still_seconds),
     }

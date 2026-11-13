@@ -779,6 +779,7 @@ async fn speak_line(context: &Context, events: Events, id: i64, voice: voices::V
     text: &text,
     out: &out,
     ask: &ask,
+    service_within: context.clocks.node_service,
     answer_within: context.clocks.node_answer,
     still_within: context.clocks.node_still,
   };
@@ -1394,6 +1395,7 @@ async fn list_voice_servers(
     let (state, loaded) = match node::node_shell(
       &served.context.units,
       name.clone(),
+      served.context.clocks.node_service,
       served.context.clocks.node_answer,
     )
     .await

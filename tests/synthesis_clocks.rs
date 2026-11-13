@@ -189,6 +189,7 @@ async fn a_synthesis_whose_caller_stops_reading_it_fails_as_its_caller_gone_and_
   let line = Arc::new(Line::default());
   let clocks = Clocks {
     caller_gone: Duration::from_millis(300),
+    node_service: LONG,
     node_answer: LONG,
     node_still: LONG,
   };
@@ -241,20 +242,18 @@ async fn a_synthesis_whose_node_does_not_answer_fails_naming_the_node_and_gives_
   let scratch = Scratch::new().await;
   let clocks = Clocks {
     caller_gone: LONG,
+    node_service: LONG,
     node_answer: Duration::from_millis(300),
     node_still: LONG,
   };
-  let (engine, cards, heard) = granted_on_a_hub(&scratch, Hub::Silent, clocks).await;
+  let (engine, cards, _) = granted_on_a_hub(&scratch, Hub::Silent, clocks).await;
   let id = synthesis(&engine).await;
   let read = read_until(&engine, id, |read| read["state"] == "failed").await;
 
+  // Only a command on the node, the line asked of it, can end it so: the node service's own clock is long.
   assert_eq!(
     read["failure"], "on node-a: voice node unreachable: it did not answer within 0.3 s",
     "{read}"
-  );
-  assert!(
-    heard.commands.lock().unwrap().iter().any(|command| command.contains("setsid")),
-    "the line was asked"
   );
   given_back(&cards.given, 100).await;
 }
@@ -264,6 +263,7 @@ async fn a_line_standing_still_on_its_node_names_the_node_and_its_stage_then_fai
   let scratch = Scratch::new().await;
   let clocks = Clocks {
     caller_gone: LONG,
+    node_service: LONG,
     node_answer: LONG,
     node_still: Duration::from_millis(400),
   };

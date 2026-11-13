@@ -327,13 +327,19 @@ pub fn span(span: Duration) -> String {
   }
 }
 
-/// The shell of a node by its name, as the node service says it is reached, every command on it answering within
-/// `within`. A name the service does not list, a node that cannot be reached as it stands, a node its role reserves
-/// for other services, and a node service that does not answer within `within` are all the node out of reach.
-pub async fn node_shell(units: &Units, name: String, within: Duration) -> Result<NodeShell, NodeError> {
+/// The shell of a node by its name, as the node service says it is reached within `service_within`, every command on
+/// it answering within `within`. A name the service does not list, a node that cannot be reached as it stands, a node
+/// its role reserves for other services, and a node service that does not answer within `service_within` are all the
+/// node out of reach.
+pub async fn node_shell(
+  units: &Units,
+  name: String,
+  service_within: Duration,
+  within: Duration,
+) -> Result<NodeShell, NodeError> {
   let silent =
-    || unreachable(format!("the node service did not answer for {name} within {}", span(within)));
-  let target = tokio::time::timeout(within, units.node.target(name.clone()))
+    || unreachable(format!("the node service did not answer for {name} within {}", span(service_within)));
+  let target = tokio::time::timeout(service_within, units.node.target(name.clone()))
     .await
     .map_err(|_| silent())?
     .map_err(|why| unreachable(format!("there is no reachable node called {name}: {why}")))?;
@@ -358,7 +364,7 @@ pub async fn node_shell(units: &Units, name: String, within: Duration) -> Result
       host, port, shell, ..
     } if shell.as_deref() == Some("powershell") => Reached::PowerShell(format!("{host}:{port}")),
     Reach::Ssh { host, .. } => {
-      let args = tokio::time::timeout(within, units.node.login(name.clone()))
+      let args = tokio::time::timeout(service_within, units.node.login(name.clone()))
         .await
         .map_err(|_| silent())?
         .map_err(|why| unreachable(why.to_string()))?
@@ -785,8 +791,8 @@ pub async fn health(shell: &NodeShell) -> Result<Health, NodeError> {
 }
 
 /// One line to speak on the card the master grants: the voice, the words, where the sound goes, the demand asked
-/// for the card, and the node's clocks: how long one call to reach the node may take and how long the line may stand
-/// still on it.
+/// for the card, and the node's clocks: how long the node service may take to say how the node is reached, how long
+/// one command on the node may take and how long the line may stand still on it.
 pub struct Speech<'a> {
   pub units: &'a Units,
   pub settings: &'a Settings,
@@ -794,6 +800,7 @@ pub struct Speech<'a> {
   pub text: &'a str,
   pub out: &'a Path,
   pub ask: &'a Ask,
+  pub service_within: Duration,
   pub answer_within: Duration,
   pub still_within: Duration,
 }
@@ -864,10 +871,11 @@ pub async fn speak_on_card(
 
     on_node(&staged(ASKED, "the line is asked of the node"));
 
-    let spoken = match node_shell(speech.units, node.clone(), speech.answer_within).await {
-      Ok(shell) => speak_on_node(&shell, &request, speech.still_within, &mut on_node).await,
-      Err(error) => Err(error),
-    };
+    let spoken =
+      match node_shell(speech.units, node.clone(), speech.service_within, speech.answer_within).await {
+        Ok(shell) => speak_on_node(&shell, &request, speech.still_within, &mut on_node).await,
+        Err(error) => Err(error),
+      };
 
     match spoken {
       Ok((wav, spoken)) => {
