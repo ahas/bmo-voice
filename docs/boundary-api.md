@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.28.
+Fixed at 0.1.0-rev.29.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -127,14 +127,18 @@ flowchart TD
   - `since`: when the synthesis began to wait on what it waits on now.
 - **`waitingOn` is an English sentence saying the same,** for a person or a log:
   - while its words are derived, how the derivation stands (「How the engine derives the spoken words」);
-  - while its card is not granted, the master's reason (every card in use, a card held by a claim or a lower tier,
-    the service starting), its place in the line, or the master not reached;
+  - while its card is not granted, that the card is being asked of the master until it first answers, then the
+    master's reason (every card in use, a card held by a claim or a lower tier, the service starting), its place in
+    the line, or the master not reached;
   - once the line is on its node, that node and where the line stands there: asked of the node, behind another
     line on its voice server, waiting for its turn on the card, waiting for room on the card for the model,
     loading the voice, the piece it speaks of how many, its sound carried back.
 - **Both are this process's:** a synthesis taken up by a new process names its wait again as that process waits.
+- **`state` and `wait` are answered as one:** a synthesis that has not ended is `speaking` while its `wait` is on
+  `node` and `waiting` while it is on anything else, in the same answer, whatever moment the read falls on.
 - **`failure` is an English sentence saying why a `failed` synthesis ended,** naming the node, the stage and the
-  clock where one of them ended it; null on every other.
+  clock where one of them ended it, or `its reason was not kept` where the engine never held one; null on every
+  other.
 
 ### The clocks
 

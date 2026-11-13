@@ -50,6 +50,16 @@ impl Wait {
     }
   }
 
+  /// A wait on its card, before the master first answers for it.
+  pub fn asking() -> Self {
+    Self {
+      on: WaitOn::Demand,
+      node: None,
+      demand: None,
+      said: "its card is being asked of the arbiter's master".to_owned(),
+    }
+  }
+
   /// Where a synthesis stood while it waited so, as the journal line of its end names it: the node and the demand
   /// once its line is on a node, and otherwise what it waited for.
   pub fn stood(&self) -> String {

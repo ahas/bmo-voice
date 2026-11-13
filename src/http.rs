@@ -424,7 +424,7 @@ async fn create_synthesis(
   eprintln!("voice: synthesis {id} taken in, in {} ({})", voice.name, words.language.code());
   speak_apart(Arc::clone(&served.context), served.events.clone(), id, None, voice, words);
 
-  Ok((StatusCode::CREATED, Json(synthesis)).into_response())
+  Ok((StatusCode::CREATED, Json(waited(&served.context, synthesis))).into_response())
 }
 
 // The longest key a caller may name a line by.
@@ -550,7 +550,8 @@ fn known_emotion(emotion: Option<&str>) -> Result<(), Refused> {
 }
 
 // The spoken words a synthesis taken in without them is derived (docs/boundary-api.md, 「How the engine derives the
-// spoken words」), kept as its own once they stand; what the derivation waits on is told as the synthesis's wait.
+// spoken words」), kept as its own once they stand; what the derivation waits on is told as the synthesis's wait, and
+// once they stand it waits for its card.
 async fn derived_words(context: &Context, id: i64, language: Language, text: &str) -> String {
   let mut told = |why: &str| {
     eprintln!("voice: synthesis {id} waits on its spoken words: {why}");
@@ -562,7 +563,7 @@ async fn derived_words(context: &Context, id: i64, language: Language, text: &st
     eprintln!("voice: synthesis {id}'s spoken words were not kept: {why}");
   }
 
-  context.waits.clear(id);
+  context.waits.set(id, Wait::asking());
 
   words
 }
@@ -579,6 +580,15 @@ fn speak_apart(
   words: Words,
 ) {
   let stop = context.stops.watch(synthesis);
+
+  // Named before the speaking first tells it, so no read finds a synthesis that has not ended waiting on nothing.
+  context.waits.set(
+    synthesis,
+    match words.spoken {
+      Some(_) => Wait::asking(),
+      None => Wait::words(crate::speech::spoken::DERIVING),
+    },
+  );
 
   match briefing {
     Some(briefing) => {
@@ -892,14 +902,21 @@ fn caller_read(context: &Context, row: &store::syntheses::Row) {
   }
 }
 
-// A synthesis as its caller reads it: what it waits on where it has not ended, and the read starting its caller's
-// clock again (docs/boundary-api.md, 「The clocks」).
+// A synthesis as its caller reads it: what it waits on where it has not ended, its state the one that wait makes it,
+// since the store's is written a moment after the wait changes, and the read starting its caller's clock again
+// (docs/boundary-api.md, 「What it waits on」, 「The clocks」).
 fn read_by_caller(context: &Context, row: &store::syntheses::Row) -> Synthesis {
-  let mut synthesis = row.synthesis();
-
   caller_read(context, row);
 
-  if let Some((wait, said)) = context.waits.of(row.id) {
+  waited(context, row.synthesis())
+}
+
+// A synthesis with what it waits on where it has not ended, its state the one that wait makes it.
+fn waited(context: &Context, mut synthesis: Synthesis) -> Synthesis {
+  if let Some((wait, said)) = context.waits.of(synthesis.id)
+    && matches!(synthesis.state, SynthesisState::Waiting | SynthesisState::Speaking)
+  {
+    synthesis.state = wait.on.state();
     synthesis.wait = Some(wait);
     synthesis.waiting_on = Some(said);
   }

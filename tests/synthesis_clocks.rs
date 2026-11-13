@@ -2,7 +2,8 @@
 //! waits on」, 「The clocks」): one whose caller stops reading it fails as its caller gone, naming its demand while it
 //! waits; one whose node does not answer fails naming the node; and one that stands still on its node names the node
 //! and its stage while it waits, then fails naming where it stood, its call ended on the node. Each gives its card
-//! back, and the line of its end names where it stood. The clocks are set short, so only the seconds go.
+//! back, and the line of its end names where it stood; a synthesis not ended is answered in the state its wait makes
+//! it. The clocks are set short, so only the seconds go.
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
@@ -12,6 +13,7 @@ use axum::http::StatusCode;
 use bmo_voice::context::{Clocks, Wait, Waits};
 use bmo_voice::http::router;
 use bmo_voice::store;
+use bmo_voice::store::syntheses::Taken;
 use bmo_voice::wire::{SynthesisState, WaitOn};
 use serde_json::{Value, json};
 
@@ -140,6 +142,11 @@ async fn granted_on_a_hub(
 }
 
 async fn synthesis(engine: &axum::Router) -> i64 {
+  taken_in(engine).await["id"].as_i64().expect("an id")
+}
+
+/// The synthesis `POST /syntheses` answers for a short line.
+async fn taken_in(engine: &axum::Router) -> Value {
   let (status, made) = call(
     engine,
     "POST",
@@ -150,7 +157,7 @@ async fn synthesis(engine: &axum::Router) -> i64 {
 
   assert_eq!(status, StatusCode::CREATED, "{made}");
 
-  made["id"].as_i64().expect("an id")
+  made
 }
 
 /// The synthesis read by its caller until `until` holds of it.
@@ -196,13 +203,25 @@ async fn a_synthesis_whose_caller_stops_reading_it_fails_as_its_caller_gone_and_
   let served = served_with(&scratch, Some(line_master(Arc::clone(&line)).await), None, clocks).await;
   let db = served.context.db.clone();
   let engine = router(served);
-  let id = synthesis(&engine).await;
+  let made = taken_in(&engine).await;
+  let id = made["id"].as_i64().expect("an id");
 
-  // While its caller reads it, it waits on its demand and says why.
-  let read = read_until(&engine, id, |read| read["wait"]["on"] == "demand").await;
+  // Taken in, it already names its wait: its card, asked of the master.
+  assert_eq!(
+    (&made["state"], &made["wait"]["on"], &made["waitingOn"]),
+    (
+      &json!("waiting"),
+      &json!("demand"),
+      &json!("its card is being asked of the arbiter's master")
+    ),
+    "{made}"
+  );
+
+  // While its caller reads it, it waits on its demand and says the master's reason.
+  let read = read_until(&engine, id, |read| read["waitingOn"] == IN_USE).await;
 
   assert_eq!(read["state"], "waiting", "{read}");
-  assert_eq!(read["waitingOn"], IN_USE, "{read}");
+  assert_eq!(read["wait"]["on"], "demand", "{read}");
   assert_eq!(
     (&read["wait"]["node"], &read["wait"]["demandId"]),
     (&Value::Null, &Value::Null),
@@ -330,4 +349,48 @@ fn the_end_of_a_waiting_synthesis_names_where_it_stood_and_nothing_once_it_waits
 
   waits.clear(7);
   assert_eq!(waits.stood(7), None);
+}
+
+#[tokio::test]
+async fn a_synthesis_is_answered_in_the_state_its_wait_makes_it_and_with_no_wait_once_ended() {
+  let scratch = Scratch::new().await;
+  let clocks = Clocks {
+    caller_gone: LONG,
+    node_service: LONG,
+    node_answer: LONG,
+    node_still: LONG,
+  };
+  let served = served_with(&scratch, None, None, clocks).await;
+  let context = Arc::clone(&served.context);
+  let engine = router(served);
+
+  // A row no process speaks, so the wait set here is the only one it holds, and its stored state stays `waiting`.
+  let Taken::New(id) =
+    store::syntheses::insert(&context.db, "voice-b", "A short line.", Some(SPOKEN), "en", None, None, 0)
+      .await
+      .expect("the store answers")
+  else {
+    panic!("a new synthesis is taken in");
+  };
+
+  context.waits.set(
+    id,
+    Wait {
+      on: WaitOn::Node,
+      node: Some("node-a".to_owned()),
+      demand: Some(100),
+      said: "node-a: loads the voice".to_owned(),
+    },
+  );
+
+  let (_, read) = call(&engine, "GET", &format!("/syntheses/{id}"), None).await;
+
+  assert_eq!((&read["state"], &read["wait"]["on"]), (&json!("speaking"), &json!("node")), "{read}");
+
+  // Ended while its wait is still held: the end stands and nothing is waited on.
+  store::syntheses::fail(&context.db, id, "it ended").await.expect("the store answers");
+
+  let (_, read) = call(&engine, "GET", &format!("/syntheses/{id}"), None).await;
+
+  assert_eq!((&read["state"], &read["wait"]), (&json!("failed"), &Value::Null), "{read}");
 }

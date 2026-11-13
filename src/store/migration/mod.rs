@@ -8,6 +8,7 @@ mod m20261101_000001_spoken;
 mod m20261101_000002_language;
 mod m20261102_000001_key;
 mod m20261113_000001_failure;
+mod m20261114_000001_failure_kept;
 
 use sea_orm_migration::prelude::*;
 
@@ -39,6 +40,7 @@ impl MigratorTrait for Migrator {
       Box::new(m20261101_000002_language::Migration),
       Box::new(m20261102_000001_key::Migration),
       Box::new(m20261113_000001_failure::Migration),
+      Box::new(m20261114_000001_failure_kept::Migration),
     ]
   }
 

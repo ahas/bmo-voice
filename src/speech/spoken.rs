@@ -19,6 +19,9 @@ use crate::units::agency::{Agency, Slot, SlotAsk};
 /// What the derivation's model is told, its system prompt.
 const INSTRUCTIONS: &str = include_str!("../../prompts/spoken-words.md");
 
+/// How a derivation stands as it begins, and each time it is asked again.
+pub const DERIVING: &str = "the spoken words are being derived";
+
 /// The most characters of spoken words a line holds, a caller's and a derived one's alike (docs/boundary-api.md,
 /// 「Syntheses」): the line a voice server is handed whole.
 pub const MOST_SPOKEN: usize = 30_000;
@@ -78,7 +81,7 @@ pub async fn derived(
   let mut held: Option<Held> = None;
 
   loop {
-    told("the spoken words are being derived");
+    told(DERIVING);
 
     let missed = match context.units.agency.as_ref() {
       None => {

@@ -447,7 +447,7 @@ async fn a_synthesis_waits_for_its_card_says_why_and_gives_it_back_as_it_ends() 
   for _ in 0..400 {
     (_, read) = call(&engine, "GET", &format!("/syntheses/{id}"), None).await;
 
-    if read["waitingOn"].is_string() {
+    if read["waitingOn"] == IN_USE {
       break;
     }
 
@@ -674,7 +674,7 @@ async fn a_stop_ends_a_rooms_waiting_briefings_gives_back_their_card_and_tells_i
   for _ in 0..400 {
     (_, read) = call(&engine, "GET", "/syntheses/1", None).await;
 
-    if read["waitingOn"].is_string() {
+    if read["waitingOn"] == IN_USE {
       break;
     }
 
@@ -890,7 +890,7 @@ async fn switching_off_stops_a_waiting_and_a_speaking_briefing_and_neither_plays
 
     if node_asked.load(Ordering::SeqCst)
       && states.0["state"] == "speaking"
-      && states.1["waitingOn"].is_string()
+      && states.1["waitingOn"] == IN_USE
     {
       break;
     }

@@ -94,7 +94,7 @@ One row per text handed to the engine.
 | `emotion` | the emotion it was asked for; null where none was |
 | `key` | the caller's key for the line (`docs/boundary-api.md`, 「Syntheses」); null where none was given. No two rows that have not failed hold one key |
 | `state` | `waiting`, `speaking`, `done`, `failed` or `stopped` |
-| `failure` | why a `failed` row ended, an English sentence naming the node, the stage and the clock where one of them ended it; null on every other |
+| `failure` | why a `failed` row ended, an English sentence naming the node, the stage and the clock where one of them ended it, or `its reason was not kept` where the engine never held one; null on every other |
 | `duration_ms` | the sound's length once it is done; null before |
 | `created_at` | when it was taken in, in epoch milliseconds |
 
@@ -161,6 +161,8 @@ The last 1,000 events are kept; every write past them lets the oldest go.
   read in, so rows copied in keep every column their readers name. Its record stands in
   `voice_migrations`, so the database may be shared with another service's tables. The `citext` extension is
   created where it is missing.
+- **A migration may also bring rows to what the tables state:** every `failed` synthesis holding no `failure`
+  is given `its reason was not kept`.
 - **A table's `rowid`** is the identity the rows already kept carry; nothing reads it.
 
 ## The folder

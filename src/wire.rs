@@ -189,6 +189,16 @@ pub enum WaitOn {
   Node,
 }
 
+impl WaitOn {
+  /// The state of a synthesis that waits so: `speaking` once its line is on its node, `waiting` before.
+  pub fn state(self) -> SynthesisState {
+    match self {
+      Self::Node => SynthesisState::Speaking,
+      Self::Words | Self::Demand => SynthesisState::Waiting,
+    }
+  }
+}
+
 /// A text to speak.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
