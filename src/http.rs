@@ -632,6 +632,8 @@ async fn speak(
     Ended::CallerGone => true,
   };
 
+  let stood = context.waits.stood(id);
+
   context.waits.clear(id);
   card::give_back_work(&context.units.arbiter, &context.settings.demands_folder(), &node::work_key(id))
     .await;
@@ -640,9 +642,9 @@ async fn speak(
     let why =
       format!("its caller has gone, not having read it for {}", node::span(context.clocks.caller_gone));
 
-    failed(&context, events, id, &why).await;
+    failed(&context, events, id, stood.as_deref(), &why).await;
   } else {
-    eprintln!("voice: synthesis {id} stopped");
+    eprintln!("voice: synthesis {id} stopped{}", standing(stood.as_deref()));
   }
 
   false
@@ -662,9 +664,16 @@ async fn caller_gone(context: &Context, id: i64) {
   }
 }
 
-// A synthesis failed with its reason, written to the journal and, where it had not ended meanwhile, told as its end.
-async fn failed(context: &Context, events: Events, id: i64, why: &str) {
-  eprintln!("voice: synthesis {id} failed: {why}");
+// Where a synthesis stood as it ended, as its journal line names it after its end's word; nothing where it waited on
+// nothing or its reason names the node itself.
+fn standing(stood: Option<&str>) -> String {
+  stood.map(|stood| format!(" {stood}")).unwrap_or_default()
+}
+
+// A synthesis failed with its reason, written to the journal with where it stood and, where it had not ended
+// meanwhile, told as its end.
+async fn failed(context: &Context, events: Events, id: i64, stood: Option<&str>, why: &str) {
+  eprintln!("voice: synthesis {id} failed{}: {why}", standing(stood));
 
   match store::syntheses::fail(&context.db, id, why).await {
     Ok(true) => {
@@ -813,6 +822,8 @@ async fn speak_line(context: &Context, events: Events, id: i64, voice: voices::V
     }
   };
 
+  let stood = context.waits.stood(id);
+
   context.waits.clear(id);
 
   let (heard, duration_ms) = match ended {
@@ -825,7 +836,12 @@ async fn speak_line(context: &Context, events: Events, id: i64, voice: voices::V
 
       (heard, Some((seconds * 1_000.0).round().max(0.0) as i64))
     }
-    Err(why) => return failed(context, events, id, &why.to_string()).await,
+    Err(why) => {
+      // A node's failure names its node in its reason; any other is told with where the line stood.
+      let stood = stood.as_deref().filter(|_| !matches!(why, node::NotSpoken::OnNode(..)));
+
+      return failed(context, events, id, stood, &why.to_string()).await;
+    }
   };
 
   match store::syntheses::set_state(&context.db, id, SynthesisState::Done, duration_ms).await {
@@ -1028,7 +1044,7 @@ pub async fn take_up(context: Arc<Context>, events: Events) -> Result<usize, Sto
     let (Some(voice), Some(language)) = (voice, language) else {
       let why = format!("its voice {} is gone or not served", row.voice_name);
 
-      failed(&context, events.clone(), id, &why).await;
+      failed(&context, events.clone(), id, None, &why).await;
 
       if let Ok(Some(briefing)) = store::briefings::of_synthesis(db, id).await {
         let _ = store::briefings::ended(db, briefing, crate::now_ms(), None).await;

@@ -49,6 +49,21 @@ impl Wait {
       said: said.to_owned(),
     }
   }
+
+  /// Where a synthesis stood while it waited so, as the journal line of its end names it: the node and the demand
+  /// once its line is on a node, and otherwise what it waited for.
+  pub fn stood(&self) -> String {
+    match (&self.node, self.demand) {
+      (Some(node), Some(demand)) => format!("on {node} (demand {demand})"),
+      (Some(node), None) => format!("on {node}"),
+      (None, _) => match self.on {
+        WaitOn::Words => "waiting on its spoken words",
+        WaitOn::Demand => "waiting for its card",
+        WaitOn::Node => "waiting on its node",
+      }
+      .to_owned(),
+    }
+  }
 }
 
 /// What each synthesis of this process that has not ended waits on, by its id, and since when: held in memory alone,
@@ -71,6 +86,13 @@ impl Waits {
   /// The synthesis waits on nothing any more.
   pub fn clear(&self, synthesis: i64) {
     self.0.lock().unwrap_or_else(PoisonError::into_inner).remove(&synthesis);
+  }
+
+  /// Where the synthesis stands while it waits (`Wait::stood`); none once it waits on nothing.
+  pub fn stood(&self, synthesis: i64) -> Option<String> {
+    let held = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+
+    held.get(&synthesis).map(|(wait, _)| wait.stood())
   }
 
   /// What the synthesis waits on as the wire answers it, and the sentence saying it, where it waits.

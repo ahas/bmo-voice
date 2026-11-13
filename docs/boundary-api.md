@@ -161,6 +161,9 @@ Three clocks end a synthesis that nothing else would end. Their spans are the po
   it waits on changes in kind (its words, its card's reason, the node granted and the line's stage there), and
   as it ends `done`, `failed` or `stopped`. Each line opens with `voice: synthesis <id>` and names the node and the
   demand where they stand; a piece of a long line does not take a line of its own.
+- **The line of its end says where it stood:** one a clock or its stop ends names the node and the demand its
+  line was on, or what it waited for where it had no node yet (its spoken words, its card); one its node failed
+  names that node in its reason.
 - **No line of the journal carries the words** of a synthesis.
 
 ### Taking a synthesis in

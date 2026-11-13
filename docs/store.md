@@ -104,11 +104,11 @@ A row's `state` moves as the boundary's state machine says (`docs/boundary-api.m
 flowchart TD
   W[waiting] -->|card granted| S[speaking]
   S -->|the node's arbiter gives no place| W
-  S --> D[done]
-  W --> F[failed]
-  S --> F
-  W --> X[stopped]
-  S --> X
+  S -->|sound kept| D[done]
+  W -->|refused, caller's clock| F[failed]
+  S -->|node's answer or progress clock, caller's clock| F
+  W -->|its briefing stopped| X[stopped]
+  S -->|its briefing stopped| X
 ```
 
 - **Only `waiting` and `speaking` move;** `done`, `failed` and `stopped` are ends, and a write that would move an

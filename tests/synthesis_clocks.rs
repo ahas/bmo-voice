@@ -2,17 +2,17 @@
 //! waits on」, 「The clocks」): one whose caller stops reading it fails as its caller gone, naming its demand while it
 //! waits; one whose node does not answer fails naming the node; and one that stands still on its node names the node
 //! and its stage while it waits, then fails naming where it stood, its call ended on the node. Each gives its card
-//! back. The clocks are set short, so only the seconds go.
+//! back, and the line of its end names where it stood. The clocks are set short, so only the seconds go.
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use axum::http::StatusCode;
-use bmo_voice::context::Clocks;
+use bmo_voice::context::{Clocks, Wait, Waits};
 use bmo_voice::http::router;
 use bmo_voice::store;
-use bmo_voice::wire::SynthesisState;
+use bmo_voice::wire::{SynthesisState, WaitOn};
 use serde_json::{Value, json};
 
 use super::briefings::{
@@ -304,4 +304,30 @@ async fn a_line_standing_still_on_its_node_names_the_node_and_its_stage_then_fai
   }
 
   panic!("the line's asker was never ended on its node");
+}
+
+#[test]
+fn the_end_of_a_waiting_synthesis_names_where_it_stood_and_nothing_once_it_waits_on_nothing() {
+  let waits = Waits::default();
+  let on_card = Wait {
+    on: WaitOn::Demand,
+    node: None,
+    demand: None,
+    said: IN_USE.to_owned(),
+  };
+  let on_node = Wait {
+    on: WaitOn::Node,
+    node: Some("node-a".to_owned()),
+    demand: Some(100),
+    said: "node-a: loads the voice".to_owned(),
+  };
+
+  waits.set(7, on_card);
+  assert_eq!(waits.stood(7).as_deref(), Some("waiting for its card"));
+
+  waits.set(7, on_node);
+  assert_eq!(waits.stood(7).as_deref(), Some("on node-a (demand 100)"));
+
+  waits.clear(7);
+  assert_eq!(waits.stood(7), None);
 }
