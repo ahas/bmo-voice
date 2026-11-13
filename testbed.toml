@@ -7,9 +7,11 @@ name = "bmo-voice"
 # stand in tests/ (README.md, 「Tests」), the repository-wide personal-data check among them.
 [test]
 languages = ["cargo", "bun"]
-# The Bun projects' packages, which their checks, the node scripts and the studio's tools and screen stand on; a
+# The mouth's tests' own interpreter, tests/.venv, made from tests/python-requirements.txt (README.md, 「Tests」),
+# and the Bun projects' packages, which their checks, the node scripts and the studio's tools and screen stand on; a
 # release runs them too.
 setup = [
+  "uv venv --quiet --allow-existing --python 3.12 tests/.venv && uv pip install --quiet --python tests/.venv/bin/python -r tests/python-requirements.txt",
   "cd scripts && bun install --frozen-lockfile",
   "cd studio && bun install --frozen-lockfile",
   "cd studio/client && bun install --frozen-lockfile",

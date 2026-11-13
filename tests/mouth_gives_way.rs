@@ -1,4 +1,4 @@
-//! The voice server's model as it gives the card way (`tests/mouth_gives_way.py`), run on the voice environment's
+//! The voice server's model as it gives the card way (`tests/mouth_gives_way.py`), run on the mouth's tests' own
 //! interpreter as the long line is (docs/voice-plan.md, 「How it holds the card」).
 
 use std::path::PathBuf;
@@ -11,7 +11,7 @@ fn the_model_is_let_go_whole_as_the_card_gives_way_and_never_under_a_line() {
   let python = voice_python();
   let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/mouth_gives_way.py");
   let ran = Command::new(&python).arg(&script).output().unwrap_or_else(|why| {
-    panic!("the voice environment's interpreter {} does not run: {why}", python.display())
+    panic!("the mouth's tests' interpreter {} does not run: {why}", python.display())
   });
 
   assert!(

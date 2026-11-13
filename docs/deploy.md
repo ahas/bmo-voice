@@ -6,7 +6,8 @@ How a commit of this repository goes live. The testbed deploys it from the repos
 ## What a deployment does
 
 - **The release:** the testbed builds the crate's three binaries and the hosted tool's into a release's `bin/`,
-  installs the Bun projects' packages (`scripts/`, `studio/` and `studio/client/`, the declaration's setup), links
+  runs the declaration's setup, which makes the mouth's tests' interpreter (README.md, 「Tests」) and installs the
+  Bun projects' packages (`scripts/`, `studio/` and `studio/client/`), links
   the settings from the data root's `env/voice.toml` as the release's `settings.toml`, and, before the flip,
   generates the script studio's screen into `studio/client/.output/public`, where the studio's server serves it
   from. The screen is generated in Korean, from the pack this repository holds, `studio/client/i18n/locales/ko.yaml`.

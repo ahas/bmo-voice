@@ -2,7 +2,7 @@
 and the card arbiter's turn client stood in for: a rest keeps the model, giving way lets it go whole and asks for no
 ticket, a line being spoken is never given way under, and letting it go empties every tensor on the card in place.
 
-Run on the voice environment's interpreter, which carries numpy and soundfile: `tests/mouth_gives_way.rs` runs it.
+Run on the mouth's tests' own interpreter, which carries numpy and soundfile (README.md, 「Tests」): `tests/mouth_gives_way.rs` runs it.
 """
 
 import importlib.util

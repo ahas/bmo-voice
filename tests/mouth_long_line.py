@@ -1,8 +1,8 @@
 """A long line through the voice server's own `POST /speak`, on the mouth's own pieces, levelling and joining, with
-only the model stood in for (docs/voice-plan.md, 「What it answers」, 「What a long line takes of the card」): a line of
+only the model and the card's driver stood in for (docs/voice-plan.md, 「What it answers」, 「What a long line takes of the card」): a line of
 any length the engine takes in comes back as one sound, every word of it spoken once and in order.
 
-Run on the voice environment's interpreter, which carries numpy and soundfile: `tests/mouth_long_line.rs` runs it.
+Run on the mouth's tests' own interpreter, which carries numpy and soundfile (README.md, 「Tests」): `tests/mouth_long_line.rs` runs it.
 """
 
 import importlib.util
@@ -11,6 +11,7 @@ import json
 import sys
 import tempfile
 import threading
+import types
 import unittest
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -24,6 +25,12 @@ HERE = Path(__file__).resolve().parent
 SPEC = importlib.util.spec_from_file_location("voice_fish", HERE.parent / "synth" / "voice-fish.py")
 fish = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(fish)
+
+# The card's driver, of which a piece reads only the shortfall it may raise and the cache it empties after one; the
+# piece stood in never raises it.
+DRIVER = types.ModuleType("torch")
+DRIVER.cuda = SimpleNamespace(OutOfMemoryError=type("OutOfMemoryError", (RuntimeError,), {}), empty_cache=lambda: None)
+sys.modules["torch"] = DRIVER
 
 # The most characters of spoken words a synthesis holds (docs/boundary-api.md, 「Syntheses」).
 MOST_SPOKEN = 30_000
