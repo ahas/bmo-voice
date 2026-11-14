@@ -24,7 +24,7 @@ use tower_http::services::ServeFile;
 use crate::context::{Context, Wait};
 use crate::events::{
   BRIEFING_CHANGED, BRIEFING_CREATED, BRIEFING_ENDED, BRIEFINGS_STOPPED, Events, SYNTHESIS_CREATED,
-  SYNTHESIS_ENDED, TRANSCRIPTION_ENDED,
+  SYNTHESIS_ENDED, TRANSCRIPTION_ENDED, Writing,
 };
 use crate::policy::POLICY;
 use crate::script::reading::Language;
@@ -371,6 +371,8 @@ async fn create_synthesis(
   let language = line_language(asked.language.as_deref(), &row)?;
   let spoken = checked_spoken(asked.spoken.as_deref(), language)?;
   let at = crate::now_ms();
+  // Held from the row's insert to its event, so no change told of it is numbered before its creation.
+  let writing = served.events.write().await;
   let id = match store::syntheses::insert(
     &served.context.db,
     &asked.voice_name,
@@ -386,6 +388,8 @@ async fn create_synthesis(
     store::syntheses::Taken::New(id) => id,
     // Another call with this key took its synthesis in in the moment between: that one is the answer.
     store::syntheses::Taken::Held(held) => {
+      drop(writing);
+
       return Ok((StatusCode::OK, Json(read_by_caller(&served.context, &held))).into_response());
     }
   };
@@ -404,7 +408,8 @@ async fn create_synthesis(
     created_at: at,
   };
 
-  served.events.write().await.record(SYNTHESIS_CREATED, &synthesis).await?;
+  writing.record(SYNTHESIS_CREATED, &synthesis).await?;
+  drop(writing);
 
   let mut voice = row;
   if let Some(style) = asked.style {
@@ -683,13 +688,15 @@ fn standing(stood: Option<&str>) -> String {
 }
 
 // A synthesis failed with its reason, written to the journal with where it stood and, where it had not ended
-// meanwhile, told as its end.
+// meanwhile, told as its end under the same hold of the event log as its failure is written.
 async fn failed(context: &Context, events: Events, id: i64, stood: Option<&str>, why: &str) {
   eprintln!("voice: synthesis {id} failed{}: {why}", standing(stood));
 
+  let writing = events.write().await;
+
   match store::syntheses::fail(&context.db, id, why).await {
     Ok(true) => {
-      let _ = ended_synthesis(events, context.db.clone(), id).await;
+      let _ = ended_synthesis(&writing, &context.db, id).await;
     }
     Ok(false) => {}
     Err(why) => eprintln!("voice: synthesis {id}'s failure was not written: {why}"),
@@ -854,6 +861,8 @@ async fn speak_line(context: &Context, events: Events, id: i64, voice: voices::V
     }
   };
 
+  let writing = events.write().await;
+
   match store::syntheses::set_state(&context.db, id, SynthesisState::Done, duration_ms).await {
     Ok(true) => {
       eprintln!(
@@ -862,19 +871,24 @@ async fn speak_line(context: &Context, events: Events, id: i64, voice: voices::V
         duration_ms.unwrap_or_default(),
         heard.waited_ms
       );
-      let _ = ended_synthesis(events, context.db.clone(), id).await;
+      let _ = ended_synthesis(&writing, &context.db, id).await;
     }
     Ok(false) => {}
     Err(why) => eprintln!("voice: synthesis {id} was spoken but its state was not written: {why}"),
   }
 }
 
-async fn ended_synthesis(events: Events, db: sea_orm::DatabaseConnection, id: i64) -> Result<(), Refused> {
-  let Some(row) = store::syntheses::get(&db, id).await? else {
+// A synthesis's end told as `synthesis.ended`, within the hold its end was written under.
+async fn ended_synthesis(
+  writing: &Writing<'_>,
+  db: &sea_orm::DatabaseConnection,
+  id: i64,
+) -> Result<(), Refused> {
+  let Some(row) = store::syntheses::get(db, id).await? else {
     return Ok(());
   };
 
-  events.write().await.record(SYNTHESIS_ENDED, &row.synthesis()).await?;
+  writing.record(SYNTHESIS_ENDED, &row.synthesis()).await?;
 
   Ok(())
 }
@@ -991,6 +1005,9 @@ async fn create_briefing(
   let script = spoken::finished_script(&spoken::spoken_script(&asked.text));
   let script = if script.trim().is_empty() { asked.text.trim().to_owned() } else { script };
   let at = crate::now_ms();
+  // Held from the rows' insert to their events, so no change told of them, a stop's above all, is numbered before
+  // their creation.
+  let writing = served.events.write().await;
   let synthesis_id = match store::syntheses::insert(
     db,
     &asked.voice_name,
@@ -1004,7 +1021,11 @@ async fn create_briefing(
   .await?
   {
     store::syntheses::Taken::New(id) => id,
-    store::syntheses::Taken::Held(held) => return held_briefing(&served, &held).await,
+    store::syntheses::Taken::Held(held) => {
+      drop(writing);
+
+      return held_briefing(&served, &held).await;
+    }
   };
   let id = store::briefings::insert(
     db,
@@ -1021,14 +1042,11 @@ async fn create_briefing(
   .await?;
   let briefing = briefing_of(db, id).await?;
 
-  {
-    let writing = served.events.write().await;
-
-    if let Some(synthesis) = store::syntheses::get(db, synthesis_id).await? {
-      writing.record(SYNTHESIS_CREATED, &synthesis.synthesis()).await?;
-    }
-    writing.record(BRIEFING_CREATED, &briefing).await?;
+  if let Some(synthesis) = store::syntheses::get(db, synthesis_id).await? {
+    writing.record(SYNTHESIS_CREATED, &synthesis.synthesis()).await?;
   }
+  writing.record(BRIEFING_CREATED, &briefing).await?;
+  drop(writing);
 
   let words = Words {
     text: script,
@@ -1064,7 +1082,7 @@ pub async fn take_up(context: Arc<Context>, events: Events) -> Result<usize, Sto
       failed(&context, events.clone(), id, None, &why).await;
 
       if let Ok(Some(briefing)) = store::briefings::of_synthesis(db, id).await {
-        let _ = store::briefings::ended(db, briefing, crate::now_ms(), None).await;
+        end_briefing(db, &events, briefing, None).await;
       }
 
       continue;
@@ -1094,7 +1112,7 @@ pub async fn take_up(context: Arc<Context>, events: Events) -> Result<usize, Sto
 }
 
 // One briefing spoken as its synthesis is, and its end kept and told; a briefing stopped meanwhile keeps the end its
-// stop wrote.
+// stop wrote and told.
 async fn brief(
   context: Arc<Context>,
   events: Events,
@@ -1116,15 +1134,31 @@ async fn brief(
     .filter(|row| row.state == SynthesisState::Done)
     .map(|row| (row.duration_ms.unwrap_or(0) as f64 / 1_000.0, sound.as_str()));
 
+  end_briefing(db, &events, id, done).await;
+}
+
+// A briefing's end written, done where `done` gives its sound's length and place, and told as `briefing.ended` under
+// the same hold of the event log; one that has ended already, by its stop, keeps that end and is not told again.
+async fn end_briefing(
+  db: &sea_orm::DatabaseConnection,
+  events: &Events,
+  id: i64,
+  done: Option<(f64, &str)>,
+) {
+  let writing = events.write().await;
+
   match store::briefings::ended(db, id, crate::now_ms(), done).await {
     Ok(true) => {}
     Ok(false) => return,
-    Err(why) => eprintln!("voice: briefing {id}'s end was not written: {why}"),
+    Err(why) => {
+      eprintln!("voice: briefing {id}'s end was not written: {why}");
+      return;
+    }
   }
 
   match store::briefings::get(db, id).await {
     Ok(Some(row)) => {
-      if let Err(why) = events.write().await.record(BRIEFING_ENDED, &row.briefing).await {
+      if let Err(why) = writing.record(BRIEFING_ENDED, &row.briefing).await {
         eprintln!("voice: briefing {id}'s end was not published: {why}");
       }
     }
@@ -1185,11 +1219,13 @@ async fn name_line(
     ));
   }
 
+  let writing = served.events.write().await;
+
   store::briefings::set_line(db, id, asked.message_id).await?;
 
   let briefing = briefing_of(db, id).await?;
 
-  served.events.write().await.record(BRIEFING_CHANGED, &briefing).await?;
+  writing.record(BRIEFING_CHANGED, &briefing).await?;
 
   Ok(Json(briefing))
 }
@@ -1202,6 +1238,7 @@ async fn stop_briefings(
 ) -> Result<Json<Page<Briefing>>, Refused> {
   let asked = body_of(read)?;
   let db = &served.context.db;
+  let writing = served.events.write().await;
   let stopped = store::briefings::stop(db, asked.chat_id, crate::now_ms()).await?;
 
   for one in &stopped {
@@ -1209,7 +1246,6 @@ async fn stop_briefings(
   }
 
   let mut items = Vec::with_capacity(stopped.len());
-  let writing = served.events.write().await;
 
   for one in &stopped {
     if let Some(synthesis) = store::syntheses::get(db, one.synthesis).await? {
@@ -1295,6 +1331,8 @@ async fn transcribe(context: Arc<Context>, events: Events, id: i64, language: St
     }
   };
 
+  let writing = events.write().await;
+
   if let Err(why) = store::transcriptions::set_state(&context.db, id, state, text.as_deref()).await {
     eprintln!("voice: transcription {id} was not written: {why}");
   }
@@ -1303,7 +1341,7 @@ async fn transcribe(context: Arc<Context>, events: Events, id: i64, language: St
     return;
   };
 
-  if let Err(why) = events.write().await.record(TRANSCRIPTION_ENDED, &row.transcription()).await {
+  if let Err(why) = writing.record(TRANSCRIPTION_ENDED, &row.transcription()).await {
     eprintln!("voice: transcription {id}'s end was not published: {why}");
   }
 }

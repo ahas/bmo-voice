@@ -9,7 +9,7 @@ members = [
 
 # One version for the whole repository (docs/boundary-api.md, 「Versions」).
 [workspace.package]
-version = "0.1.0-rev.29"
+version = "0.1.0-rev.30"
 edition = "2024"
 license = "MIT"
 publish = false

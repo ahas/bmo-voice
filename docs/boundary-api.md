@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.29.
+Fixed at 0.1.0-rev.30.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -58,6 +58,11 @@ asking `Accept: application/json`.
 
 - **A frame's `event` is the kind,** its `id` the event number, a signed 64-bit integer that only grows,
   and its `data` is `{"id", "kind", "at", "data"}`, the inner `data` being the member.
+- **Events run in the order of the changes they tell.** A change that is told is written and its event kept
+  under one hold of the event log, so each event's member is as that change left it, and a change made after
+  another is numbered after it: a briefing's `briefing.changed` comes after the `briefing.ended` of an end
+  written before its line was named, and a stop's events after any end its lines kept first. A route that makes
+  a change answers once its event is kept; a read of the member may show a change its event is a moment behind.
 - **A reader resumes** with `Last-Event-ID` or `?after=`, and narrows with `kinds`, a comma-separated list.
   A stream asked with neither reads on from the newest event kept, the live ones only, and a page asked with
   neither starts at the oldest kept. The last

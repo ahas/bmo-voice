@@ -981,3 +981,61 @@ fn a_reader_naming_no_cursor_starts_a_page_at_the_oldest_kept_and_a_stream_at_th
   assert_eq!(event_start(None, true, None, None), 0, "nothing kept yet");
   assert_eq!(event_start(None, false, None, None), 0);
 }
+
+#[tokio::test]
+async fn a_briefing_whose_voice_is_gone_as_it_is_taken_up_ends_failed_and_is_told() {
+  use bmo_voice::store::{self, syntheses::Taken};
+  use bmo_voice::wire::BriefingKind;
+
+  let scratch = Scratch::new().await;
+  let served = served(&scratch, None, None).await;
+  let context = Arc::clone(&served.context);
+  let db = &context.db;
+  let Taken::New(synthesis_id) =
+    store::syntheses::insert(db, "voice-gone", "Gone.", Some(SPOKEN), "ko", None, None, 0)
+      .await
+      .expect("the store answers")
+  else {
+    panic!("a new synthesis is taken in");
+  };
+  let id = store::briefings::insert(
+    db,
+    &store::briefings::Taken {
+      chat_id: ROOM,
+      message_id: None,
+      kind: BriefingKind::Summary,
+      title: None,
+      synthesis_id,
+      plays: true,
+      at: 0,
+    },
+  )
+  .await
+  .expect("the briefing a process left is written");
+  let taken = bmo_voice::http::take_up(Arc::clone(&context), served.events.clone())
+    .await
+    .expect("the left lines are read");
+
+  assert_eq!(taken, 0, "a line whose voice is gone is not spoken");
+
+  let engine = router(served);
+  let (_, page) = call(&engine, "GET", "/events?kinds=synthesis.ended,briefing.ended", None).await;
+  let told: Vec<(&str, i64, &str)> = page["items"]
+    .as_array()
+    .expect("a page")
+    .iter()
+    .map(|event| {
+      (
+        event["kind"].as_str().unwrap_or_default(),
+        event["data"]["id"].as_i64().unwrap_or_default(),
+        event["data"]["state"].as_str().unwrap_or_default(),
+      )
+    })
+    .collect();
+
+  assert_eq!(
+    told,
+    [("synthesis.ended", synthesis_id, "failed"), ("briefing.ended", id, "failed")],
+    "{page}"
+  );
+}
