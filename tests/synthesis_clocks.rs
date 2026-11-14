@@ -3,25 +3,86 @@
 //! waits; one whose node does not answer fails naming the node; and one that stands still on its node names the node
 //! and its stage while it waits, then fails naming where it stood, its call ended on the node. Each gives its card
 //! back, and the line of its end names where it stood; a synthesis not ended is answered in the state its wait makes
-//! it. The clocks are set short, so only the seconds go.
+//! it. The clocks are counted on a clock the test moves by hand, so none waits on the real one: a clock runs out as
+//! the test moves it past its span, never before.
 
 use std::net::SocketAddr;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use axum::http::StatusCode;
-use bmo_voice::context::{Clocks, Wait, Waits};
+use bmo_voice::context::{Clock, Clocks, Wait, Waits};
 use bmo_voice::http::router;
 use bmo_voice::store;
 use bmo_voice::store::syntheses::Taken;
 use bmo_voice::wire::{SynthesisState, WaitOn};
 use serde_json::{Value, json};
+use tokio::sync::watch;
+use tokio::time::Instant;
 
 use super::briefings::{
   Cards, IN_USE, Line, SPOKEN, Scratch, call, cards_master, line_master, served_with,
 };
 
 const LONG: Duration = Duration::from_secs(600);
+
+/// A clock that stands still until the test moves it.
+#[derive(Debug)]
+struct HandClock {
+  start: Instant,
+  moved: watch::Sender<Duration>,
+}
+
+impl HandClock {
+  fn new() -> Arc<Self> {
+    Arc::new(Self {
+      start: Instant::now(),
+      moved: watch::Sender::new(Duration::ZERO),
+    })
+  }
+
+  /// The clock moved on by `by`, waking every wait it reaches.
+  fn advance(&self, by: Duration) {
+    self.moved.send_modify(|moved| *moved += by);
+  }
+}
+
+impl Clock for HandClock {
+  fn now(&self) -> Instant {
+    self.start + *self.moved.borrow()
+  }
+
+  fn sleep_until(&self, due: Instant) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    let start = self.start;
+    let mut moved = self.moved.subscribe();
+
+    Box::pin(async move {
+      loop {
+        let now = start + *moved.borrow_and_update();
+
+        if now >= due {
+          return;
+        }
+
+        if moved.changed().await.is_err() {
+          std::future::pending::<()>().await;
+        }
+      }
+    })
+  }
+}
+
+/// Every clock that ends a synthesis long, counted on `hand`.
+fn long_on(hand: &Arc<HandClock>) -> Clocks {
+  Clocks {
+    caller_gone: LONG,
+    node_service: LONG,
+    node_answer: LONG,
+    node_still: LONG,
+    clock: Arc::clone(hand) as Arc<dyn Clock>,
+  }
+}
 
 /// What a stand-in hub does with the commands it is handed.
 #[derive(Clone, Copy)]
@@ -177,6 +238,19 @@ async fn read_until(engine: &axum::Router, id: i64, until: impl Fn(&Value) -> bo
   panic!("synthesis {id} never came to it: {read}");
 }
 
+/// The stand-in hub once it has heard a command `that` holds of.
+async fn heard_one(heard: &Heard, that: impl Fn(&str) -> bool, what: &str) {
+  for _ in 0..400 {
+    if heard.commands.lock().unwrap().iter().any(|command| that(command)) {
+      return;
+    }
+
+    tokio::time::sleep(Duration::from_millis(25)).await;
+  }
+
+  panic!("{what}");
+}
+
 /// The card given back once, as the line ends.
 async fn given_back(given: &Mutex<Vec<i64>>, demand: i64) {
   for _ in 0..400 {
@@ -194,11 +268,10 @@ async fn given_back(given: &Mutex<Vec<i64>>, demand: i64) {
 async fn a_synthesis_whose_caller_stops_reading_it_fails_as_its_caller_gone_and_gives_its_card_back() {
   let scratch = Scratch::new().await;
   let line = Arc::new(Line::default());
+  let hand = HandClock::new();
   let clocks = Clocks {
     caller_gone: Duration::from_millis(300),
-    node_service: LONG,
-    node_answer: LONG,
-    node_still: LONG,
+    ..long_on(&hand)
   };
   let served = served_with(&scratch, Some(line_master(Arc::clone(&line)).await), None, clocks).await;
   let db = served.context.db.clone();
@@ -228,7 +301,9 @@ async fn a_synthesis_whose_caller_stops_reading_it_fails_as_its_caller_gone_and_
     "{read}"
   );
 
-  // Its caller goes: the store is looked at, which reads nothing for the caller.
+  // Its caller goes and its clock runs out: the store is looked at, which reads nothing for the caller.
+  hand.advance(Duration::from_millis(300));
+
   let mut row = None;
 
   for _ in 0..400 {
@@ -259,14 +334,18 @@ async fn a_synthesis_whose_caller_stops_reading_it_fails_as_its_caller_gone_and_
 #[tokio::test]
 async fn a_synthesis_whose_node_does_not_answer_fails_naming_the_node_and_gives_its_card_back() {
   let scratch = Scratch::new().await;
+  let hand = HandClock::new();
   let clocks = Clocks {
-    caller_gone: LONG,
-    node_service: LONG,
     node_answer: Duration::from_millis(300),
-    node_still: LONG,
+    ..long_on(&hand)
   };
-  let (engine, cards, _) = granted_on_a_hub(&scratch, Hub::Silent, clocks).await;
+  let (engine, cards, heard) = granted_on_a_hub(&scratch, Hub::Silent, clocks).await;
   let id = synthesis(&engine).await;
+
+  // The line's first command reaches the node, which never answers, and the node's answer clock runs out.
+  heard_one(&heard, |_| true, "no command ever reached the node").await;
+  hand.advance(Duration::from_millis(300));
+
   let read = read_until(&engine, id, |read| read["state"] == "failed").await;
 
   // Only a command on the node, the line asked of it, can end it so: the node service's own clock is long.
@@ -280,11 +359,10 @@ async fn a_synthesis_whose_node_does_not_answer_fails_naming_the_node_and_gives_
 #[tokio::test]
 async fn a_line_standing_still_on_its_node_names_the_node_and_its_stage_then_fails_and_is_ended_there() {
   let scratch = Scratch::new().await;
+  let hand = HandClock::new();
   let clocks = Clocks {
-    caller_gone: LONG,
-    node_service: LONG,
-    node_answer: LONG,
     node_still: Duration::from_millis(400),
+    ..long_on(&hand)
   };
   let (engine, cards, heard) = granted_on_a_hub(&scratch, Hub::Still, clocks).await;
   let id = synthesis(&engine).await;
@@ -304,7 +382,9 @@ async fn a_line_standing_still_on_its_node_names_the_node_and_its_stage_then_fai
   assert_eq!(read["waitingOn"], "node-a: waits for room on the card for the model", "{read}");
   assert!(read["wait"]["since"].is_i64(), "{read}");
 
-  // Nothing on the node moves: the line ends on the node's progress clock, its asker ended there.
+  // Nothing on the node moves and the node's progress clock runs out: the line ends, its asker ended there.
+  hand.advance(Duration::from_millis(400));
+
   let read = read_until(&engine, id, |read| read["state"] == "failed").await;
 
   assert_eq!(
@@ -313,16 +393,12 @@ async fn a_line_standing_still_on_its_node_names_the_node_and_its_stage_then_fai
     "{read}"
   );
   given_back(&cards.given, 100).await;
-
-  for _ in 0..400 {
-    if heard.commands.lock().unwrap().iter().any(|command| command.contains("kill -TERM")) {
-      return;
-    }
-
-    tokio::time::sleep(Duration::from_millis(25)).await;
-  }
-
-  panic!("the line's asker was never ended on its node");
+  heard_one(
+    &heard,
+    |command| command.contains("kill -TERM"),
+    "the line's asker was never ended on its node",
+  )
+  .await;
 }
 
 #[test]
@@ -354,13 +430,7 @@ fn the_end_of_a_waiting_synthesis_names_where_it_stood_and_nothing_once_it_waits
 #[tokio::test]
 async fn a_synthesis_is_answered_in_the_state_its_wait_makes_it_and_with_no_wait_once_ended() {
   let scratch = Scratch::new().await;
-  let clocks = Clocks {
-    caller_gone: LONG,
-    node_service: LONG,
-    node_answer: LONG,
-    node_still: LONG,
-  };
-  let served = served_with(&scratch, None, None, clocks).await;
+  let served = served_with(&scratch, None, None, long_on(&HandClock::new())).await;
   let context = Arc::clone(&served.context);
   let engine = router(served);
 

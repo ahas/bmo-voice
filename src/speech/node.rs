@@ -24,6 +24,7 @@ use serde_json::{Value, json};
 use tokio::io::AsyncWriteExt;
 
 use super::{card, shell_word, synth};
+use crate::context::Clocks;
 use crate::now_ms;
 use crate::settings::Settings;
 use crate::store::voices::VoiceRow;
@@ -185,20 +186,25 @@ enum Reached {
 }
 
 /// A node's own shell: a command run there as bash runs it, with bytes on its standing input, each command answering
-/// within the node's answer clock or failing as the node not answering.
+/// within the node's answer clock or failing as the node not answering, and a line on it ending on its progress
+/// clock.
 #[derive(Clone)]
 pub struct NodeShell {
   reached: Reached,
-  within: Duration,
+  clocks: Clocks,
 }
 
 impl NodeShell {
   // A failure to reach the node at all, or a command it did not answer within the clock, as the call's error; a
   // command that ran and failed is a run.
   async fn run(&self, command: &str, input: Option<&[u8]>) -> Result<ShellRun, String> {
-    tokio::time::timeout(self.within, self.reached.run(command, input))
+    let within = self.clocks.node_answer;
+
+    self
+      .clocks
+      .within(within, self.reached.run(command, input))
       .await
-      .unwrap_or_else(|_| Err(format!("it did not answer within {}", span(self.within))))
+      .unwrap_or_else(|| Err(format!("it did not answer within {}", span(within))))
   }
 
   // A whole file on the node, carried back as its bytes a slice to a command, each slice inside what one command
@@ -327,21 +333,18 @@ pub fn span(span: Duration) -> String {
   }
 }
 
-/// The shell of a node by its name, as the node service says it is reached within `service_within`, every command on
-/// it answering within `within`. A name the service does not list, a node that cannot be reached as it stands, a node
-/// its role reserves for other services, and a node service that does not answer within `service_within` are all the
-/// node out of reach.
-pub async fn node_shell(
-  units: &Units,
-  name: String,
-  service_within: Duration,
-  within: Duration,
-) -> Result<NodeShell, NodeError> {
+/// The shell of a node by its name, as the node service says it is reached within the node service's clock, every
+/// command on it answering within the node's answer clock, both counted on `clocks`. A name the service does not
+/// list, a node that cannot be reached as it stands, a node its role reserves for other services, and a node service
+/// that does not answer within its clock are all the node out of reach.
+pub async fn node_shell(units: &Units, name: String, clocks: &Clocks) -> Result<NodeShell, NodeError> {
+  let service_within = clocks.node_service;
   let silent =
     || unreachable(format!("the node service did not answer for {name} within {}", span(service_within)));
-  let target = tokio::time::timeout(service_within, units.node.target(name.clone()))
+  let target = clocks
+    .within(service_within, units.node.target(name.clone()))
     .await
-    .map_err(|_| silent())?
+    .ok_or_else(silent)?
     .map_err(|why| unreachable(format!("there is no reachable node called {name}: {why}")))?;
 
   if let Some(role) =
@@ -364,9 +367,10 @@ pub async fn node_shell(
       host, port, shell, ..
     } if shell.as_deref() == Some("powershell") => Reached::PowerShell(format!("{host}:{port}")),
     Reach::Ssh { host, .. } => {
-      let args = tokio::time::timeout(service_within, units.node.login(name.clone()))
+      let args = clocks
+        .within(service_within, units.node.login(name.clone()))
         .await
-        .map_err(|_| silent())?
+        .ok_or_else(silent)?
         .map_err(|why| unreachable(why.to_string()))?
         .ok_or_else(|| unreachable(format!("{name} has no SSH route")))?;
 
@@ -374,7 +378,10 @@ pub async fn node_shell(
     }
   };
 
-  Ok(NodeShell { reached, within })
+  Ok(NodeShell {
+    reached,
+    clocks: clocks.clone(),
+  })
 }
 
 // A path as a name under the voices root, or none where it stands outside.
@@ -543,16 +550,18 @@ fn look_of(lines: &[&str]) -> Look {
 
 // Waits on the node, a piece at a time, until the asker has ended: what it wrote, or how it ended without it. Each
 // stage the server writes for the line is handed to `told` as it changes; a line whose stage and whose server's
-// every line stand still for `still` fails, naming where it stood.
+// every line stand still for the node's progress clock fails, naming where it stood. A move is counted before it is
+// told, so whoever hears of it finds the progress clock already started again.
 async fn ask_after(
   shell: &NodeShell,
   dir: &str,
   id: &str,
-  still: Duration,
   told: &mut (dyn FnMut(&Staged) + Send),
 ) -> Result<Asked, NodeError> {
+  let clocks = &shell.clocks;
+  let still = clocks.node_still;
   let mut seen = Look::default();
-  let mut moved_at = tokio::time::Instant::now();
+  let mut moved_at = clocks.now();
 
   loop {
     let polled = shell.run(&await_command(dir, id, ASK_WAIT_SECONDS), None).await.map_err(unreachable)?;
@@ -593,13 +602,14 @@ async fn ask_after(
     let look = look_of(&lines[1..]);
 
     if look != seen {
+      moved_at = clocks.now();
+
       if let Some(stage) = look.stage.as_ref().filter(|stage| seen.stage.as_ref() != Some(*stage)) {
         told(stage);
       }
 
       seen = look;
-      moved_at = tokio::time::Instant::now();
-    } else if moved_at.elapsed() >= still {
+    } else if clocks.now() - moved_at >= still {
       let at = seen
         .stage
         .as_ref()
@@ -660,11 +670,10 @@ impl Drop for Call {
 }
 
 // One line spoken on the node, as the wav it answered, waited for until the asker on the node has ended or the line
-// stands still for `still`; each stage the server writes is handed to `told`.
+// stands still for the node's progress clock; each stage the server writes is handed to `told`.
 async fn speak_on_node(
   shell: &NodeShell,
   request: &Value,
-  still: Duration,
   told: &mut (dyn FnMut(&Staged) + Send),
 ) -> Result<(Vec<u8>, Spoken), NodeError> {
   let id = format!("{:x}-{:08x}", now_ms(), rand::random::<u32>());
@@ -702,7 +711,7 @@ async fn speak_on_node(
     ));
   }
 
-  let asked = ask_after(shell, &named, &id, still, told).await?;
+  let asked = ask_after(shell, &named, &id, told).await?;
 
   told(&staged(CARRIED, "its sound is carried back"));
 
@@ -791,8 +800,8 @@ pub async fn health(shell: &NodeShell) -> Result<Health, NodeError> {
 }
 
 /// One line to speak on the card the master grants: the voice, the words, where the sound goes, the demand asked
-/// for the card, and the node's clocks: how long the node service may take to say how the node is reached, how long
-/// one command on the node may take and how long the line may stand still on it.
+/// for the card, and the clocks of the node and the clock they are counted on: how long the node service may take to
+/// say how the node is reached, how long one command on the node may take and how long the line may stand still on it.
 pub struct Speech<'a> {
   pub units: &'a Units,
   pub settings: &'a Settings,
@@ -800,9 +809,7 @@ pub struct Speech<'a> {
   pub text: &'a str,
   pub out: &'a Path,
   pub ask: &'a Ask,
-  pub service_within: Duration,
-  pub answer_within: Duration,
-  pub still_within: Duration,
+  pub clocks: &'a Clocks,
 }
 
 /// Where a line stands on its way to a node, as it changes: waiting for its card, with what it waits on, or on the
@@ -871,11 +878,10 @@ pub async fn speak_on_card(
 
     on_node(&staged(ASKED, "the line is asked of the node"));
 
-    let spoken =
-      match node_shell(speech.units, node.clone(), speech.service_within, speech.answer_within).await {
-        Ok(shell) => speak_on_node(&shell, &request, speech.still_within, &mut on_node).await,
-        Err(error) => Err(error),
-      };
+    let spoken = match node_shell(speech.units, node.clone(), speech.clocks).await {
+      Ok(shell) => speak_on_node(&shell, &request, &mut on_node).await,
+      Err(error) => Err(error),
+    };
 
     match spoken {
       Ok((wav, spoken)) => {

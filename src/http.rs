@@ -420,7 +420,7 @@ async fn create_synthesis(
     language,
   };
 
-  served.context.reads.read(id);
+  served.context.reads.read(id, served.context.clocks.now());
   eprintln!("voice: synthesis {id} taken in, in {} ({})", voice.name, words.language.code());
   speak_apart(Arc::clone(&served.context), served.events.clone(), id, None, voice, words);
 
@@ -662,15 +662,17 @@ async fn speak(
 
 // Ends once the synthesis's caller has not read it for the caller's clock, counted from its last read.
 async fn caller_gone(context: &Context, id: i64) {
-  loop {
-    let last = context.reads.last(id).unwrap_or_else(tokio::time::Instant::now);
-    let due = last + context.clocks.caller_gone;
+  let clocks = &context.clocks;
 
-    if tokio::time::Instant::now() >= due {
+  loop {
+    let now = clocks.now();
+    let due = context.reads.last(id).unwrap_or(now) + clocks.caller_gone;
+
+    if now >= due {
       return;
     }
 
-    tokio::time::sleep_until(due).await;
+    clocks.until(due).await;
   }
 }
 
@@ -798,9 +800,7 @@ async fn speak_line(context: &Context, events: Events, id: i64, voice: voices::V
     text: &text,
     out: &out,
     ask: &ask,
-    service_within: context.clocks.node_service,
-    answer_within: context.clocks.node_answer,
-    still_within: context.clocks.node_still,
+    clocks: &context.clocks,
   };
   // Each stage is handed over as it changes and written here, since the speaking cannot wait on the store.
   let (said, mut heard) = tokio::sync::mpsc::unbounded_channel::<Told>();
@@ -898,7 +898,7 @@ async fn read_synthesis(
 // A read of a synthesis that has not ended starts its caller's clock again; an ended one has no clock left.
 fn caller_read(context: &Context, row: &store::syntheses::Row) {
   if matches!(row.state, SynthesisState::Waiting | SynthesisState::Speaking) {
-    context.reads.read(row.id);
+    context.reads.read(row.id, context.clocks.now());
   }
 }
 
@@ -1072,7 +1072,7 @@ pub async fn take_up(context: Arc<Context>, events: Events) -> Result<usize, Sto
 
     let _ = store::syntheses::set_state(db, id, SynthesisState::Waiting, None).await;
 
-    context.reads.read(id);
+    context.reads.read(id, context.clocks.now());
     eprintln!(
       "voice: synthesis {id} taken up from an earlier process, in {} ({})",
       voice.name,
@@ -1425,20 +1425,14 @@ async fn list_voice_servers(
   let mut items = Vec::new();
 
   for name in chosen {
-    let (state, loaded) = match node::node_shell(
-      &served.context.units,
-      name.clone(),
-      served.context.clocks.node_service,
-      served.context.clocks.node_answer,
-    )
-    .await
-    {
-      Ok(shell) => match node::health(&shell).await {
-        Ok(health) => ("running", health.loaded),
+    let (state, loaded) =
+      match node::node_shell(&served.context.units, name.clone(), &served.context.clocks).await {
+        Ok(shell) => match node::health(&shell).await {
+          Ok(health) => ("running", health.loaded),
+          Err(_) => ("absent", None),
+        },
         Err(_) => ("absent", None),
-      },
-      Err(_) => ("absent", None),
-    };
+      };
     let voice_names = match loaded {
       Some(loaded) => rows
         .iter()

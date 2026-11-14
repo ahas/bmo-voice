@@ -3,6 +3,8 @@
 //! process speaks is stopped by.
 
 use std::collections::HashMap;
+use std::fmt;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
@@ -128,9 +130,9 @@ impl Waits {
 pub struct Reads(Arc<Mutex<HashMap<i64, Instant>>>);
 
 impl Reads {
-  /// The synthesis read by its caller this moment.
-  pub fn read(&self, synthesis: i64) {
-    self.0.lock().unwrap_or_else(PoisonError::into_inner).insert(synthesis, Instant::now());
+  /// The synthesis read by its caller at `at`, as the synthesis clocks count it.
+  pub fn read(&self, synthesis: i64, at: Instant) {
+    self.0.lock().unwrap_or_else(PoisonError::into_inner).insert(synthesis, at);
   }
 
   /// When its caller last read it, where it was read.
@@ -144,9 +146,33 @@ impl Reads {
   }
 }
 
-/// The spans of the clocks that end a synthesis (`docs/boundary-api.md`, 「The clocks」): the policy's, or shorter
-/// where a test sets them.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// The time the clocks that end a synthesis are counted on: the runtime's own, or one a test moves by hand, so a
+/// test of a clock never waits on the real one.
+pub trait Clock: fmt::Debug + Send + Sync {
+  /// This moment.
+  fn now(&self) -> Instant;
+
+  /// Ends once this clock reaches `due`.
+  fn sleep_until(&self, due: Instant) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+}
+
+/// The runtime's own clock, the one the service runs on.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RuntimeClock;
+
+impl Clock for RuntimeClock {
+  fn now(&self) -> Instant {
+    Instant::now()
+  }
+
+  fn sleep_until(&self, due: Instant) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    Box::pin(tokio::time::sleep_until(due))
+  }
+}
+
+/// The clocks that end a synthesis (`docs/boundary-api.md`, 「The clocks」): their spans, the policy's or shorter
+/// where a test sets them, and the clock they are counted on.
+#[derive(Clone, Debug)]
 pub struct Clocks {
   /// How long a synthesis its caller has not read waits before it fails.
   pub caller_gone: Duration,
@@ -156,6 +182,30 @@ pub struct Clocks {
   pub node_answer: Duration,
   /// How long a line on its node may stand still.
   pub node_still: Duration,
+  /// The clock every span is counted on.
+  pub clock: Arc<dyn Clock>,
+}
+
+impl Clocks {
+  /// This moment, as the spans are counted.
+  pub fn now(&self) -> Instant {
+    self.clock.now()
+  }
+
+  /// Ends once the clock reaches `due`.
+  pub async fn until(&self, due: Instant) {
+    self.clock.sleep_until(due).await;
+  }
+
+  /// What `work` comes to, or nothing where the clock runs `span` first, counted from the first poll.
+  pub async fn within<T>(&self, span: Duration, work: impl Future<Output = T>) -> Option<T> {
+    let due = self.now() + span;
+
+    tokio::select! {
+      done = work => Some(done),
+      () = self.until(due) => None,
+    }
+  }
 }
 
 impl Default for Clocks {
@@ -167,6 +217,7 @@ impl Default for Clocks {
       node_service: Duration::from_secs(spans.node_answer_seconds),
       node_answer: Duration::from_secs(spans.node_answer_seconds),
       node_still: Duration::from_secs(spans.node_still_seconds),
+      clock: Arc::new(RuntimeClock),
     }
   }
 }

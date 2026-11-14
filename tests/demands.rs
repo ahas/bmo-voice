@@ -16,6 +16,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
+use bmo_voice::context::Clocks;
 use bmo_voice::settings::Settings;
 use bmo_voice::speech::card::{self, Held};
 use bmo_voice::speech::node::{self, NotSpoken, Speech, Stage};
@@ -471,9 +472,7 @@ async fn a_line_gives_its_card_back_however_it_ends_and_says_each_stage() {
       text: "A short line.",
       out: &out,
       ask: &ask,
-      service_within: Duration::from_secs(60),
-      answer_within: Duration::from_secs(60),
-      still_within: Duration::from_secs(600),
+      clocks: &Clocks::default(),
     },
     &mut |stage| {
       stages.push(match stage {
