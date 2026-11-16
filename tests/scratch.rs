@@ -10,6 +10,10 @@ use sqlx::{Connection, Executor, Row};
 
 /// What every scratch database's name starts with, followed by the harness's process id and a count.
 const PREFIX: &str = "bmo_voice_test_";
+/// What the sweep drops besides `PREFIX`: the names a checkout behind this module still makes its store tests'
+/// databases under, each followed by the process id and a count as `PREFIX` is.
+const OTHER_PREFIXES: [&str; 3] =
+  ["bmo_voice_briefings_test_", "bmo_voice_spoken_test_", "bmo_item_1923_voice_test_"];
 /// How many times a drop clears the database's sessions and tries again before it gives up.
 const DROP_ATTEMPTS: usize = 3;
 
@@ -123,26 +127,29 @@ async fn drop_database(admin: &mut PgConnection, name: &str) -> Result<(), sqlx:
   }
 }
 
-/// Drops every scratch database a dead process of this harness left, and its data root. A database is left alone while
-/// its process lives or any session is on it, so a run of another checkout's harness against the same server keeps its
-/// own; this process has made none yet, so its own id counts as dead.
+/// Drops every scratch database a dead process of this harness left, under any of the names it sweeps, and its data
+/// root. A database is left alone while its process lives or any session is on it, so a run of another checkout's
+/// harness against the same server keeps its own; this process has made none yet, so its own id counts as dead.
 async fn sweep() {
   let Ok(mut admin) = PgConnection::connect(&address_of("postgres")).await else {
     return;
   };
-  let left = sqlx::query(
-    "SELECT datname FROM pg_database d WHERE starts_with(datname, $1) \
-     AND NOT EXISTS (SELECT 1 FROM pg_stat_activity a WHERE a.datname = d.datname)",
+  let unattended = sqlx::query(
+    "SELECT datname FROM pg_database d \
+     WHERE NOT EXISTS (SELECT 1 FROM pg_stat_activity a WHERE a.datname = d.datname)",
   )
-  .bind(PREFIX)
   .fetch_all(&mut admin)
   .await
   .unwrap_or_default();
 
-  for row in left {
+  for row in unattended {
     let name: String = row.get("datname");
 
-    if process_of(&name).is_some_and(lives) {
+    let Some(process) = process_of(&name) else {
+      continue;
+    };
+
+    if lives(process) {
       continue;
     }
 
@@ -154,9 +161,12 @@ async fn sweep() {
   let _ = admin.close().await;
 }
 
-/// The process id a scratch database's name carries, if the name is one this harness makes.
+/// The process id a scratch database's name carries, if the name is one the sweep drops.
 fn process_of(name: &str) -> Option<u32> {
-  let (process, count) = name.strip_prefix(PREFIX)?.split_once('_')?;
+  let rest = std::iter::once(PREFIX)
+    .chain(OTHER_PREFIXES)
+    .find_map(|prefix| name.strip_prefix(prefix))?;
+  let (process, count) = rest.split_once('_')?;
   count.parse::<u32>().ok()?;
 
   process.parse().ok()

@@ -102,6 +102,8 @@ else the local socket's, together with a data root of the same name under the te
 `bmo_voice_test_` followed by the harness's process id and a count. The test drops both when it ends, and fails if
 the drop does: the drop first ends the suite role's own sessions on the database and then drops it without forcing,
 since forcing needs the right to end other roles' processes, an autovacuum worker's among them, which the suite's
-role need not hold. Before a harness process makes its first database it drops every one of that name whose process
-no longer runs on this machine and that no session is on, with its data root, so a harness killed before its
-teardown leaves nothing behind past the next run.
+role need not hold. Before a harness process makes its first database it drops every one whose process no longer
+runs on this machine and that no session is on, with its data root, so a harness killed before its teardown leaves
+nothing behind past the next run. The sweep reads that name and the three a checkout behind this rule still makes
+its store tests' databases under, `bmo_voice_briefings_test_`, `bmo_voice_spoken_test_` and
+`bmo_item_1923_voice_test_`, each followed by a process id and a count, and no other.
