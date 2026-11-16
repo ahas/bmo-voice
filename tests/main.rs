@@ -10,6 +10,7 @@ mod mouth_stages;
 mod narration;
 mod node_target;
 mod personal_data;
+mod scratch;
 mod script_figures;
 mod spoken_words;
 mod synthesis_clocks;

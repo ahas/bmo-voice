@@ -25,66 +25,9 @@ use sqlx::postgres::PgConnection;
 use sqlx::{Connection, Executor, Row};
 use tower::ServiceExt;
 
-static MADE: AtomicU32 = AtomicU32::new(0);
+use super::scratch::{Scratch, address_of};
 
 const TOKEN: &str = "a-test-token";
-
-fn server() -> String {
-  std::env::var("BMO_TEST_POSTGRES")
-    .ok()
-    .filter(|named| !named.is_empty())
-    .unwrap_or_else(|| "postgres:///bmo_test?host=/var/run/postgresql".into())
-}
-
-fn address_of(database: &str) -> String {
-  let mut address = url::Url::parse(&server()).expect("the server's address reads");
-  address.set_path(&format!("/{database}"));
-
-  address.to_string()
-}
-
-/// A database and a data root of this test's own, made empty and dropped when the test ends.
-struct Scratch {
-  name: String,
-  root: std::path::PathBuf,
-}
-
-impl Scratch {
-  async fn new() -> Scratch {
-    let made = MADE.fetch_add(1, Ordering::SeqCst);
-    let name = format!("bmo_voice_spoken_test_{}_{made}", std::process::id());
-    let mut admin = PgConnection::connect(&address_of("postgres")).await.expect("the server answers");
-    let _ = admin.execute(format!("DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)").as_str()).await;
-    admin
-      .execute(format!("CREATE DATABASE \"{name}\" TEMPLATE template0").as_str())
-      .await
-      .expect("the database is made");
-    admin.close().await.expect("the server connection closes");
-
-    let root = std::env::temp_dir().join(&name);
-
-    std::fs::create_dir_all(root.join("env")).expect("the data root is made");
-
-    Scratch { name, root }
-  }
-}
-
-impl Drop for Scratch {
-  fn drop(&mut self) {
-    let name = std::mem::take(&mut self.name);
-    let _ = std::fs::remove_dir_all(&self.root);
-    let _ = std::thread::spawn(move || {
-      let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("a runtime");
-      runtime.block_on(async move {
-        if let Ok(mut admin) = PgConnection::connect(&address_of("postgres")).await {
-          let _ = admin.execute(format!("DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)").as_str()).await;
-          let _ = admin.close().await;
-        }
-      });
-    })
-    .join();
-  }
-}
 
 /// The engine's routes on the scratch store with one served voice, its master out of reach so no line it takes in is
 /// ever spoken, and its agency the one `agency` names, or none.

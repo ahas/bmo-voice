@@ -6,7 +6,7 @@
 //! the briefings off ends a waiting line and a speaking one alike, neither of which plays or is spoken afterwards.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use axum::body::Body;
@@ -21,69 +21,12 @@ use sqlx::postgres::PgConnection;
 use sqlx::{Connection, Executor};
 use tower::ServiceExt;
 
-static MADE: AtomicU32 = AtomicU32::new(0);
+use super::scratch::{Scratch, address_of};
 
 pub(crate) const TOKEN: &str = "a-test-token";
 const ROOM: i64 = -500;
 /// Spoken words a Korean voice says as they stand, given beside each line so none waits on a derivation.
 pub(crate) const SPOKEN: &str = "백업이 끝났습니다.";
-
-fn server() -> String {
-  std::env::var("BMO_TEST_POSTGRES")
-    .ok()
-    .filter(|named| !named.is_empty())
-    .unwrap_or_else(|| "postgres:///bmo_test?host=/var/run/postgresql".into())
-}
-
-fn address_of(database: &str) -> String {
-  let mut address = url::Url::parse(&server()).expect("the server's address reads");
-  address.set_path(&format!("/{database}"));
-
-  address.to_string()
-}
-
-/// A database and a data root of this test's own, made empty and dropped when the test ends.
-pub(crate) struct Scratch {
-  name: String,
-  pub(crate) root: std::path::PathBuf,
-}
-
-impl Scratch {
-  pub(crate) async fn new() -> Scratch {
-    let made = MADE.fetch_add(1, Ordering::SeqCst);
-    let name = format!("bmo_voice_briefings_test_{}_{made}", std::process::id());
-    let mut admin = PgConnection::connect(&address_of("postgres")).await.expect("the server answers");
-    let _ = admin.execute(format!("DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)").as_str()).await;
-    admin
-      .execute(format!("CREATE DATABASE \"{name}\" TEMPLATE template0").as_str())
-      .await
-      .expect("the database is made");
-    admin.close().await.expect("the server connection closes");
-
-    let root = std::env::temp_dir().join(&name);
-
-    std::fs::create_dir_all(root.join("env")).expect("the data root is made");
-
-    Scratch { name, root }
-  }
-}
-
-impl Drop for Scratch {
-  fn drop(&mut self) {
-    let name = std::mem::take(&mut self.name);
-    let _ = std::fs::remove_dir_all(&self.root);
-    let _ = std::thread::spawn(move || {
-      let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("a runtime");
-      runtime.block_on(async move {
-        if let Ok(mut admin) = PgConnection::connect(&address_of("postgres")).await {
-          let _ = admin.execute(format!("DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)").as_str()).await;
-          let _ = admin.close().await;
-        }
-      });
-    })
-    .join();
-  }
-}
 
 /// The engine's routes on the scratch store, with one voice whose folder stands outside the voices root, nowhere a node
 /// holds, so every line in it fails to be spoken; one, `voice-b`, under the voices root, whose lines ask the master

@@ -21,9 +21,8 @@ use serde_json::{Value, json};
 use tokio::sync::watch;
 use tokio::time::Instant;
 
-use super::briefings::{
-  Cards, IN_USE, Line, SPOKEN, Scratch, call, cards_master, line_master, served_with,
-};
+use super::briefings::{Cards, IN_USE, Line, SPOKEN, call, cards_master, line_master, served_with};
+use super::scratch::Scratch;
 
 const LONG: Duration = Duration::from_secs(600);
 

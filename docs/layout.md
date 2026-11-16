@@ -96,3 +96,12 @@ stands, and no other.
 Tests live in `tests/`, never beside the code they test, and a hosted tool's in its own folder's `tests/`. The
 repository-wide personal-data check is `personal_data.rs` there (`PERSONAL-DATA.md`); `docs/inventory.md` records
 the behaviour the tests are to keep.
+
+A test that needs a store makes a database of its own on the suite's server, the one `BMO_TEST_POSTGRES` names or
+else the local socket's, together with a data root of the same name under the temporary folder; the name is
+`bmo_voice_test_` followed by the harness's process id and a count. The test drops both when it ends, and fails if
+the drop does: the drop first ends the suite role's own sessions on the database and then drops it without forcing,
+since forcing needs the right to end other roles' processes, an autovacuum worker's among them, which the suite's
+role need not hold. Before a harness process makes its first database it drops every one of that name whose process
+no longer runs on this machine and that no session is on, with its data root, so a harness killed before its
+teardown leaves nothing behind past the next run.

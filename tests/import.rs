@@ -2,73 +2,11 @@
 //! `awaits_line` at its default, the refusal of a store already holding rows, the dry run, and the
 //! count-and-sample compare.
 
-use std::path::Path;
-use std::sync::atomic::{AtomicU32, Ordering};
-
+use sqlx::Connection;
 use sqlx::postgres::PgConnection;
-use sqlx::{Connection, Executor};
+use std::path::Path;
 
-static MADE: AtomicU32 = AtomicU32::new(0);
-
-/// The test server's address, as the suite names it.
-fn server() -> String {
-  std::env::var("BMO_TEST_POSTGRES")
-    .ok()
-    .filter(|named| !named.is_empty())
-    .unwrap_or_else(|| "postgres:///bmo_test?host=/var/run/postgresql".into())
-}
-
-fn address_of(database: &str) -> String {
-  let mut address = url::Url::parse(&server()).expect("the server's address reads");
-  address.set_path(&format!("/{database}"));
-
-  address.to_string()
-}
-
-/// A database of this test's own, made empty and dropped when the test ends.
-struct Scratch {
-  name: String,
-}
-
-impl Scratch {
-  async fn new() -> Scratch {
-    let name = format!(
-      "bmo_item_1923_voice_test_{}_{}",
-      std::process::id(),
-      MADE.fetch_add(1, Ordering::SeqCst)
-    );
-    let mut admin = PgConnection::connect(&address_of("postgres")).await.expect("the server answers");
-    let _ = admin.execute(format!("DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)").as_str()).await;
-    admin
-      .execute(format!("CREATE DATABASE \"{name}\" TEMPLATE template0").as_str())
-      .await
-      .expect("the database is made");
-    admin.close().await.expect("the server connection closes");
-
-    Scratch { name }
-  }
-
-  fn address(&self) -> String {
-    address_of(&self.name)
-  }
-}
-
-impl Drop for Scratch {
-  fn drop(&mut self) {
-    let name = std::mem::take(&mut self.name);
-    // A copy is dropped on a thread of its own: a guard dropped inside the runtime may not block on it.
-    let _ = std::thread::spawn(move || {
-      let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("a runtime");
-      runtime.block_on(async move {
-        if let Ok(mut admin) = PgConnection::connect(&address_of("postgres")).await {
-          let _ = admin.execute(format!("DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)").as_str()).await;
-          let _ = admin.close().await;
-        }
-      });
-    })
-    .join();
-  }
-}
+use super::scratch::Scratch;
 
 const VOICE: &str = r#"{"name":"bmo-005-e-1000","checkpoint":"/data/voices/bmo-005-e-1000","reference":"/data/voices/reference/one.wav","cfg":1.5,"steps":16,"current":1,"set_at":1791866256,"style":"calm","seed":0,"by_sentence":1,"prompt_clip":"","prompt_words":"","prompt_en_clip":"","prompt_en_words":"","rowid":1}"#;
 const NAME: &str = r#"{"written":"BMO","ko":"비모","en":"Beemo","set_at":1791866256,"rowid":1}"#;
