@@ -32,7 +32,6 @@ only the base libraries `bmo-chat`, `bmo-chat-client`, `bmo-ui` and `bmo-text` m
 | `data/` | Language material the code reads by language, `data/<language>/`; every Korean line of it is in `korean-ledger.json` |
 | `deploy/` | The units the testbed's deployment keeps, the voice service and the script studio, and the studio's proxy locations |
 | `docs/` | The documents, which come before the code: start with `docs/layout.md` |
-| `.graph/` | The code dependency graph: one node per feature with its files and the features it needs, and the APIs this repository exposes and calls, written only by `bmo graph` |
 | `plugin/` | The harness plugin's skill, `plugin/skills/bmo-voice/` |
 | `policy/` | The engine's own policy values, `policy/voice.toml` |
 | `prompts/` | What the engine's own model runs are told: the training lines' writer, in English |
