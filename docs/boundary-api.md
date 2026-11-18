@@ -215,7 +215,10 @@ server any other way.
 - **`spoken` is the words the voice says:** the same words as a reader of the line's language says them aloud.
   Every foreign name, acronym, product name and model name stands in that language's reading, every number,
   date, time and unit in the words a reader says, and a web address, a file path, code and markup are said in a
-  few words for what they are or left out. Nothing else differs from the written words.
+  few words for what they are or left out. What is said in one breath stands as one word with no space inside it,
+  a decimal, a version and an acronym read by its letters among them, since a voice pauses at every space. An
+  identifier that is no word, a commit hash among them, is said by its first four characters alone. A time zone's
+  abbreviation is said as the place it names, before its time. Nothing else differs from the written words.
 - **A language model makes them, with judgement; no table and no rule of the engine's does.** Context decides how
   a name, an acronym or a number is read aloud, so no reading table, substitution or romanisation produces them,
   and the engine's own reading rules (「Script readings」, `docs/voice-plan.md`) unfold markup into the written
@@ -256,7 +259,9 @@ server any other way.
 - **A reading the model chose is kept:** its answer names each name it read that the readings did not hold, and
   each is written into the voice name table, so the same spelling is read the same way next time. A spelling
   the table holds is never written over: the owner's correction of a row (`scripts/voice-names.ts --set`) wins
-  from then on. A chosen reading that holds what the check finds is not kept.
+  from then on. A chosen reading that holds what the check finds is not kept, and neither is one for an
+  identifier, a run of seven or more hexadecimal characters holding a digit: it names one commit or one digest and
+  is never read again.
 - **A slot waits in its role's line while the engine asks for its admission,** again every two seconds until it
   is let in, with no bound on how long: the line lets in only a request whose owner is asking now. Each
   admission answers the request's `state`: `waiting` or `reserved` is asked again, `active` is let in, and

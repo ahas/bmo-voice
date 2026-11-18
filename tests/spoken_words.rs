@@ -451,7 +451,7 @@ async fn written_words_alone_are_derived_on_a_slot_the_agreed_readings_first_and
 
   *asked.answers.lock().unwrap() = vec![
     r#"{"spoken": "넉스트와 Qwen 모델", "readings": []}"#.to_owned(),
-    r#"{"spoken": "넉스트와 퀜 모델", "readings": [{"written": "Qwen", "said": "퀜"}, {"written": "Nuxt", "said": "눅스트"}]}"#
+    r#"{"spoken": "넉스트와 퀜 모델", "readings": [{"written": "Qwen", "said": "퀜"}, {"written": "Nuxt", "said": "눅스트"}, {"written": "7dae3520e72b", "said": "칠디에이이"}]}"#
       .to_owned(),
   ];
 
@@ -535,6 +535,14 @@ async fn written_words_alone_are_derived_on_a_slot_the_agreed_readings_first_and
 
   assert_eq!(qwen, "퀜");
   assert_eq!(nuxt, "넉스트", "a row that stands is never written over");
+
+  let hashes: i64 = store
+    .fetch_one(r#"SELECT count(*) AS "rows" FROM "voice_names" WHERE "written" = '7dae3520e72b'"#)
+    .await
+    .expect("the table is read")
+    .get("rows");
+
+  assert_eq!(hashes, 0, "an identifier is no name and gets no row");
 
   store.close().await.expect("the store connection closes");
 }

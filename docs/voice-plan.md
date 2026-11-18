@@ -142,7 +142,8 @@ the voice nodes. What a caller does with the sound is the caller's.
   readings to apply as they stand, and the model reads whatever else the line needs with its own judgement. No
   row is applied to a line by the engine itself.
 - **A reading the model chose is written in as a row,** for a spelling the table does not hold, so the same name is
-  read the same way next time. A spelling the table holds is never written over.
+  read the same way next time. A spelling the table holds is never written over. An identifier, a commit hash or
+  a digest, is no name and gets no row.
 - **A row is the owner's to correct,** and a correction wins from then on: `scripts/voice-names.ts` lists the table,
   `--set <spelling> <korean> <english>` writes a row, `--remove <spelling>` takes one off. A Korean reading carries
   no roman letter and an English one no Hangul.

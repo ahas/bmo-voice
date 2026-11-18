@@ -235,14 +235,14 @@ fn reading_of(name: VoiceName, language: Language) -> Option<(String, String)> {
   (!said.trim().is_empty()).then_some((name.written, said))
 }
 
-// Each reading the model chose kept in the voice name table, where its spelling stands in no row and its reading
-// passes the check; a row the table holds is left as it stands.
+// Each reading the model chose kept in the voice name table, where its spelling stands in no row, is no identifier
+// and its reading passes the check; a row the table holds is left as it stands.
 async fn keep_readings(context: &Context, language: Language, chosen: &[Chosen]) {
   for reading in chosen {
     let written = reading.written.trim();
     let said = reading.said.trim();
 
-    if written.is_empty() || unconverted(said, language).is_some() {
+    if written.is_empty() || is_identifier(written) || unconverted(said, language).is_some() {
       continue;
     }
 
@@ -250,6 +250,17 @@ async fn keep_readings(context: &Context, language: Language, chosen: &[Chosen])
       eprintln!("voice: the reading of {written} was not kept: {why}");
     }
   }
+}
+
+// The shortest run of hexadecimal characters taken for an identifier: a commit hash as git abbreviates it.
+const IDENTIFIER_LEAST: usize = 7;
+
+// Whether a spelling is an identifier rather than a name: a run of hexadecimal characters as long as an abbreviated
+// commit hash, holding a digit. It names one commit or one digest, so a reading of it would never be read again.
+fn is_identifier(written: &str) -> bool {
+  written.len() >= IDENTIFIER_LEAST
+    && written.chars().all(|letter| letter.is_ascii_hexdigit())
+    && written.chars().any(|letter| letter.is_ascii_digit())
 }
 
 // A slot asked under the synthesis's owner and a key drawn for it, let in, and a role's session started on it,
