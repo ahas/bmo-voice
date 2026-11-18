@@ -698,6 +698,7 @@ class Mouth:
             parts.append(f"graph {graph:.1f} s")
 
         parts.append("frame kept" if self.keeps else "frame not kept")
+        parts.append("on its delivery clip" if self.reference is not None else "no delivery clip")
 
         return ", ".join(parts)
 
