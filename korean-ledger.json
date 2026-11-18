@@ -10,5 +10,5 @@
   "tests/import.rs": 2,
   "tests/mouth_long_line.py": 1,
   "tests/script_figures.rs": 23,
-  "tests/spoken_words.rs": 34
+  "tests/spoken_words.rs": 35
 }

@@ -177,6 +177,17 @@ fn an_answer_is_read_out_of_the_text_round_it_and_held_to_the_check() {
   assert!(prompt.contains("The line's language: Korean"), "{prompt}");
   assert!(prompt.contains("- Nuxt: 넉스트"), "{prompt}");
   assert!(prompt.contains("Nuxt and Qwen"), "{prompt}");
+  assert!(
+    prompt.contains("- 오점오: 오쩌모"),
+    "a Korean turn shows runs written as they sound: {prompt}"
+  );
+
+  let english = testing::prompt(Language::En, &[], "Nuxt and Qwen", None);
+
+  assert!(
+    !english.contains("as it sounds"),
+    "the Korean examples stay out of an English turn: {english}"
+  );
 }
 
 #[tokio::test]

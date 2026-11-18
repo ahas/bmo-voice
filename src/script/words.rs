@@ -30,6 +30,7 @@ pub struct SpokenWords {
   pub address: String,
   pub address_words: Vec<String>,
   pub polite_endings: Vec<String>,
+  pub sounded: Vec<[String; 2]>,
   pub attached: String,
   pub attached_polite: String,
   pub attached_english: String,

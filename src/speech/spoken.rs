@@ -204,6 +204,14 @@ fn turn_prompt(
     prompt.push_str(&format!("- {written}: {said}\n"));
   }
 
+  if language == Language::Ko {
+    prompt.push_str("\nRuns said in one breath, each as its parts are spelled and then as it is written, the way it sounds:\n");
+
+    for [parts, sounded] in &crate::script::words::VOICE_SCRIPT.spoken.sounded {
+      prompt.push_str(&format!("- {parts}: {sounded}\n"));
+    }
+  }
+
   prompt.push_str("\nThe written words, between the lines of three equals signs:\n===\n");
   prompt.push_str(text.trim());
   prompt.push_str("\n===\n");

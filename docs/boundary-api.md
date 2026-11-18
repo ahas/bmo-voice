@@ -216,7 +216,9 @@ server any other way.
   Every foreign name, acronym, product name and model name stands in that language's reading, every number,
   date, time and unit in the words a reader says, and a web address, a file path, code and markup are said in a
   few words for what they are or left out. What is said in one breath stands as one word with no space inside it,
-  a decimal, a version and an acronym read by its letters among them, since a voice pauses at every space. An
+  a decimal, a version and an acronym read by its letters among them, since a voice pauses at every space, and
+  inside it the syllables are written as they sound in that breath, a final consonant carried onto the vowel after
+  it, since a voice says what is spelled. An
   identifier that is no word, a commit hash among them, is said by its first four characters alone. A time zone's
   abbreviation is said as the place it names, before its time. Nothing else differs from the written words.
 - **A language model makes them, with judgement; no table and no rule of the engine's does.** Context decides how
@@ -246,7 +248,8 @@ server any other way.
   runs as the slot's role on the provider, model and effort the slot was let in on; on the runner line
   `[spoken]` names, `search` where it names none, its instructions the engine's own (`prompts/spoken-words.md`)
   and no tool allowed. Each try is one turn in it, handing the model the line's language, the agreed readings,
-  the written words, and, where the answer before failed the check, the word it failed on; a turn names no
+  the written words, in a Korean line the language's examples of runs written as they sound
+  (`data/ko/voice-script.yaml`), and, where the answer before failed the check, the word it failed on; a turn names no
   road of its own. The session is ended and the slot given back once the spoken words stand; a slot or a
   session agency no longer holds is given up and a new one asked, and no try leaves a session of its own
   standing.

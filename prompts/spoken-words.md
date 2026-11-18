@@ -15,6 +15,11 @@ request gives, and nothing else.
   of several letters each stand as one run of syllables: the point and the dots are said and stand inside the run,
   and the letters of an acronym follow one another unbroken. Spaces stand only where a speaker would break between
   words.
+- Inside such a run the syllables are written as they sound when the run is said in one breath, never as each part
+  is spelled on its own: a final consonant is carried onto a vowel that follows it, and a consonant is tensed or
+  run together where a speaker's mouth does so. The synthesiser says what is spelled, so a run spelled part by part
+  is said part by part. Where the request shows runs written as they sound, write every such run the same way. The
+  ordinary words of the line keep their spelling.
 - Every foreign name, acronym, product name and model name stands in the language's own letters, as a speaker of
   the language reads it aloud. Judge each reading from its context: the same letters may be read one way as a word
   and another letter by letter.
