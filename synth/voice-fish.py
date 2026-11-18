@@ -76,6 +76,8 @@ RATE = 48000
 ENGINE = "fish-s2-pro"
 # The file a voice's delivery clip stands in, in the voice's folder (docs/voice-plan.md, 「The voices」).
 REFERENCE_CLIP = "reference.wav"
+# A first capture longer than this, in seconds, compiled the step: a capture alone takes under one.
+RECOMPILED_S = 5.0
 
 # The base weights on this machine, as `scripts/voice-node.ts setup` places them (docs/voice-plan.md, 「Where the
 # weights live」), where the caller names none.
@@ -255,6 +257,34 @@ def delivery(style) -> str:
 def styled(style: str, text: str) -> str:
     """The instruction as S2-Pro reads one: a tag in brackets before the words, never spoken aloud."""
     return f"[{style}] {text}" if style else text
+
+
+def refill(frame, loaded) -> None:
+    """A loaded model's weights put into a kept frame of the same model: every parameter, every buffer and every
+    tensor a module keeps as a plain attribute handed over by name, none copied. A frame whose modules, parameters or
+    buffers are not the loaded model's by name is refused."""
+    import torch
+
+    kept, new = dict(frame.named_modules()), dict(loaded.named_modules())
+
+    if kept.keys() != new.keys():
+        raise RuntimeError("the kept frame's modules are not the loaded model's")
+
+    for listed in ("named_parameters", "named_buffers"):
+        into, held = dict(getattr(frame, listed)()), dict(getattr(loaded, listed)())
+
+        if into.keys() != held.keys():
+            raise RuntimeError(f"the kept frame's {listed.removeprefix('named_')} are not the loaded model's")
+
+        for name, tensor in into.items():
+            tensor.data = held[name].data
+
+    for name, module in new.items():
+        for attribute, value in vars(module).items():
+            if isinstance(value, torch.Tensor):
+                setattr(kept[name], attribute, value)
+
+    frame._cache_setup_done = False
 
 
 def declared(folder: Path) -> dict:
@@ -481,6 +511,8 @@ class FrameStep:
         self.uncompiled = uncompiled
         self.compiled = torch.compile(frame, mode="default", fullgraph=True, dynamic=False)
         self.broken = False
+        # How long the first capture since it was last asked took, in seconds: one that compiled is told by it.
+        self.captured_s: float | None = None
         self.forget()
 
     def forget(self) -> None:
@@ -533,6 +565,7 @@ class FrameStep:
         twice on a side stream first, as a capture asks, then captured; the generator's state put back after."""
         import torch
 
+        started = time.monotonic()
         self.forget()
         inputs = [tensor.clone() for tensor in (x, input_pos, previous_tokens, temperature, top_p, semantic_logit_bias)]
         frame_x, frame_pos, frame_previous, frame_temperature, frame_top_p, frame_bias = inputs
@@ -554,13 +587,19 @@ class FrameStep:
         self.graph, self.inputs, self.out, self.top_k = graph, inputs, out, top_k
         self.sampling = (temperature, top_p, semantic_logit_bias)
 
+        if self.captured_s is None:
+            torch.cuda.synchronize()
+            self.captured_s = time.monotonic() - started
+
 
 class Mouth:
     """S2-Pro with one voice's adapter folded into its weights, loaded on the first line, on the first after it was let
     go, and for another voice.
 
-    Loaded, the model stands on the card and nowhere else, and is let go whole (`release`): no copy of it is kept in
-    host memory, so giving the card away leaves the node's memory to the others, and the next line loads it again.
+    Loaded, the model stands on the card and nowhere else, and its weights are let go whole (`release`): no copy of
+    them is kept in host memory, so giving the card away leaves the node's memory to the others, and the next line
+    loads them again. The model's own modules are kept without their weights, with the step compiled for them, and
+    the next load puts its weights into them (`refilled`), so that step is not compiled again.
 
     torch and fish_speech are imported inside rather than at the top of the file because they are what makes starting
     slow, and neither the encode hand-off nor the server's own start needs them.
@@ -576,6 +615,14 @@ class Mouth:
         self.reference: tuple | None = None
         # The frame step every piece is generated through (`FrameStep`), made with the first model.
         self.step: FrameStep | None = None
+        # The model's modules kept without their weights while the card is elsewhere, None where none are kept.
+        self.frame = None
+        # Whether a frame is kept at all: off once keeping it was seen to buy nothing in this process.
+        self.keeps = True
+        # Whether the model that stands was put into a kept frame, until its first capture has been judged.
+        self.refilled_now = False
+        # What the last load took, in seconds: the weights and the codec.
+        self.took = {"weights": 0.0, "codec": 0.0}
 
     def ready(self, checkpoint: Path) -> float:
         """The model holding this voice's weights; answers the seconds it took to get there."""
@@ -584,14 +631,75 @@ class Mouth:
         if self.model is None or self.checkpoint != checkpoint:
             said = declared(checkpoint)
             self.release()
-            self.model = self.slow(checkpoint / "lora.pt")
+            self.model = self.refilled(self.slow(checkpoint / "lora.pt"))
+            self.took["weights"] = time.monotonic() - started
             self.codec = self.decoder()
+            self.took["codec"] = time.monotonic() - started - self.took["weights"]
             self.reference = self.delivery_clip(checkpoint, said)
-            self.step = FrameStep()
+
+            if self.step is None:
+                self.step = FrameStep()
+
+            self.step.captured_s = None
             self.sampling = {"temperature": float(said.get("temperature", 0.7)), "top_p": float(said.get("top_p", 0.7))}
             self.checkpoint = checkpoint
 
         return time.monotonic() - started
+
+    def refilled(self, loaded):
+        """The model that speaks: the kept frame with the loaded model's weights put into it, so the step compiled for
+        the frame still stands for it, or the loaded model itself where no frame is kept. A frame the weights do not
+        fit is forsaken with what was compiled for it, and the loaded model speaks."""
+        frame, self.frame = self.frame, None
+        self.refilled_now = False
+
+        if frame is None:
+            return loaded
+
+        try:
+            refill(frame, loaded)
+        except Exception as failure:
+            print(f"voice-fish: the loaded weights did not go into the kept frame, so it is let go with what was compiled for it: {type(failure).__name__}: {failure}", file=sys.stderr, flush=True)
+            self.forsake()
+
+            return loaded
+
+        self.refilled_now = True
+
+        return frame
+
+    def forsake(self) -> None:
+        """No frame kept from here on in this process, and what was compiled let go."""
+        import torch._dynamo
+
+        self.keeps = False
+        self.frame = None
+        self.step = None
+        torch._dynamo.reset()
+
+    def judge_capture(self) -> None:
+        """The first capture after weights went into a kept frame, judged once: one that took as long as compiling
+        does means the step was compiled again, so keeping the frame buys nothing and is given up."""
+        if not self.refilled_now or self.step is None or self.step.captured_s is None:
+            return
+
+        self.refilled_now = False
+
+        if self.step.captured_s > RECOMPILED_S:
+            print(f"voice-fish: the step was compiled again for a kept frame ({self.step.captured_s:.1f} s), so no frame is kept from here on", file=sys.stderr, flush=True)
+            self.keeps = False
+
+    def account(self) -> str:
+        """What the last load and the line's first capture took, as the line's asker is told."""
+        graph = self.step.captured_s if self.step is not None else None
+        parts = [f"weights {self.took['weights']:.1f} s", f"codec {self.took['codec']:.1f} s"]
+
+        if graph is not None:
+            parts.append(f"graph {graph:.1f} s")
+
+        parts.append("frame kept" if self.keeps else "frame not kept")
+
+        return ", ".join(parts)
 
     def slow(self, adapter: Path):
         """The two autoregressive models with the adapter folded in, on the card in bf16.
@@ -871,6 +979,8 @@ class Mouth:
         if self.model is not None:
             self.drop_caches()
 
+        kept = self.model if self.keeps and self.step is not None and not getattr(self.step, "broken", False) else None
+
         for tensor in list(self.held()):
             if tensor.is_cuda:
                 try:
@@ -878,13 +988,17 @@ class Mouth:
                 except RuntimeError as failure:
                     print(f"voice-fish: a tensor could not be emptied, so it stands until its last reference goes: {failure}", file=sys.stderr, flush=True)
 
+        if self.model is not None:
+            self.frame = kept
+
         self.model = None
         self.codec = None
         self.reference = None
         self.checkpoint = None
 
-        if self.step is not None:
-            # What was compiled for the models let go is let go with them; the kernels stay on the disk.
+        if self.step is not None and self.frame is None:
+            # With no frame kept, what was compiled for the models let go is let go with them; the kernels stay on the
+            # disk.
             import torch._dynamo
 
             self.step = None
@@ -1078,7 +1192,12 @@ class Service:
                     checkpoint, text.strip(), int(request.get("seed", 0)), style, by_sentence, told=stage.piece,
                 )
                 spoke = time.monotonic() - started
+                self.mouth.judge_capture()
             except BaseException:
+                if getattr(self.mouth, "refilled_now", False):
+                    # The first line on a kept frame failed: whatever failed it, the frame is not trusted again.
+                    self.mouth.forsake()
+
                 self.let_go()
                 raise
 
@@ -1094,6 +1213,7 @@ class Service:
             "X-Voice-Seconds": f"{len(audio) / rate:.2f}",
             "X-Voice-Load-Seconds": f"{loaded:.2f}",
             "X-Voice-Speak-Seconds": f"{spoke:.2f}",
+            "X-Voice-Load-Parts": self.mouth.account(),
             "X-Voice-Checkpoint": checkpoint.name,
         }
 
@@ -1477,6 +1597,7 @@ def ask(args: argparse.Namespace) -> int:
                 said["seconds"] = float(answer.headers.get("X-Voice-Seconds") or 0)
                 said["loadSeconds"] = float(answer.headers.get("X-Voice-Load-Seconds") or 0)
                 said["speakSeconds"] = float(answer.headers.get("X-Voice-Speak-Seconds") or 0)
+                said["loadParts"] = answer.headers.get("X-Voice-Load-Parts") or ""
                 said["checkpoint"] = answer.headers.get("X-Voice-Checkpoint") or ""
     except urllib.error.HTTPError as refusal:
         said["status"] = refusal.code

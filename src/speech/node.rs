@@ -489,6 +489,7 @@ struct Asked {
   seconds: Option<f64>,
   load_seconds: Option<f64>,
   speak_seconds: Option<f64>,
+  load_parts: Option<String>,
   checkpoint: Option<String>,
 }
 
@@ -630,6 +631,9 @@ pub struct Spoken {
   pub seconds: f64,
   pub load_seconds: f64,
   pub speak_seconds: f64,
+  /// What the load and the line's first capture took part by part, in the node's own words; empty where it says
+  /// none.
+  pub load_parts: String,
   pub checkpoint: String,
 }
 
@@ -750,6 +754,7 @@ async fn carried(
       seconds: asked.seconds.unwrap_or_default(),
       load_seconds: asked.load_seconds.unwrap_or_default(),
       speak_seconds: asked.speak_seconds.unwrap_or_default(),
+      load_parts: asked.load_parts.clone().unwrap_or_default(),
       checkpoint: asked.checkpoint.clone().unwrap_or_default(),
     },
   ))

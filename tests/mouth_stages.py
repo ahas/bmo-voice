@@ -42,6 +42,12 @@ class StoodInMouth:
             told(at, 2)
         return np.zeros(10, dtype=np.float32), fish.RATE
 
+    def judge_capture(self) -> None:
+        pass
+
+    def account(self) -> str:
+        return "weights 0.0 s, codec 0.0 s, frame kept"
+
     def release(self) -> None:
         self.model = None
         self.checkpoint = None

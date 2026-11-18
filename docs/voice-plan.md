@@ -241,12 +241,24 @@ the voice nodes. What a caller does with the sound is the caller's.
     1,664-character line in 181 seconds against 352.
   - **What it costs:** compiling takes two to three minutes the first time on a node and about half a minute
     after that, which reads the compiled kernels back from `bmo-voice/compiled/` on the node's home disk (the
-    unit's `TORCHINDUCTOR_CACHE_DIR`). The first line of every load pays it: after a start, after another voice is
-    asked for, and after the server gave way. The graph takes about 50 MiB of the card beside the model.
+    unit's `TORCHINDUCTOR_CACHE_DIR`). The first line after a start pays it. A load after the server gave way, or for
+    another voice, does not (「The model's frame stays」 below). The graph takes about 50 MiB of the card beside the
+    model.
   - **The graph reads the weights and the key-value caches where they stood when it was captured,** so it is let go
     before either is let go, before a long piece's codec pass and as the model is let go, and captured again by the
-    next frame, in under a second. What was compiled stays across the lines of every thread for as long as the model
-    stands, and is let go with it.
+    next frame, in under a second. What was compiled stays across the lines of every thread for as long as the
+    server's process does.
+  - **The model's frame stays when its weights go.** Giving the card away empties every tensor the model holds and
+    lets the codec go, and keeps the model's own modules, which then hold no weight, with the step compiled for
+    them. The next load reads the weights as any load does and puts them into those same modules, so the compiled
+    step still stands for them and only the graph is captured again: a load after giving way costs the weights and
+    under a second more, where compiling again cost about thirteen seconds a line. The frame holds nothing on the
+    card and next to nothing on the host.
+  - **A server whose step is compiled again all the same goes back to letting everything go.** Where the first
+    capture after such a load takes more than five seconds, the step was compiled again, so keeping the frame bought
+    nothing: from then on that process lets the frame and what was compiled go with the weights, as a load that
+    could not put its weights into the kept frame does at once, and as a first line on a kept frame that fails
+    does, said once in the server's log.
   - **A frame step that fails to compile is taken uncompiled** for the rest of the process, said once in the
     journal, its attention on the card's fused kernels rather than the plain one fish-speech's generator asks for,
     which uncompiled is about 3% faster.
@@ -437,8 +449,9 @@ the voice nodes. What a caller does with the sound is the caller's.
   model, and are made again, on the card, by the next piece.
 - **After each line** the server asks the arbiter whether the next line waiting still stands first; while it does,
   that line is spoken with the model still up. **With no line waiting the turn rests,** the model and the lock kept.
-- **It gives way the moment another occupant asks** or a claim begins: the model is let go whole, off the card and
-  out of host memory, the C heap trimmed, and the lock and the ticket are given back. With no model left
+- **It gives way the moment another occupant asks** or a claim begins: the model's weights are let go whole, off
+  the card and out of host memory, its frame kept without them (「How the model is loaded」), the C heap trimmed, and
+  the lock and the ticket are given back. With no model left
   to rest on the card, the server asks for no ticket until its next line comes.
 - **A line being spoken is never given way under:** the model is let go only between lines, under the line's own lock,
   once the line in hand has ended. A line that was waiting behind it when the card went elsewhere asks in line for

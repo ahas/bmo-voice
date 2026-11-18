@@ -76,6 +76,12 @@ class StoodInMouth:
         self.speaking()
         return np.zeros(10, dtype=np.float32), fish.RATE
 
+    def judge_capture(self) -> None:
+        pass
+
+    def account(self) -> str:
+        return "weights 0.0 s, codec 0.0 s, frame kept"
+
     def release(self) -> None:
         self.releases += 1
         self.model = None
@@ -211,6 +217,27 @@ class StoodInModule:
         return [self]
 
 
+class NamedModel:
+    """A model as `refill` reads one: itself as its only module, one parameter, no buffer, and a tensor it keeps as a
+    plain attribute."""
+
+    def __init__(self, holds: str, extra: bool = False) -> None:
+        self.weight = StoodInTensor(True)
+        self.weight.data = holds
+        self.table = StoodInTensor(True)
+        self.extra = extra
+        self._cache_setup_done = True
+
+    def named_modules(self):
+        return [("", self)]
+
+    def named_parameters(self):
+        return [("weight", self.weight)] + ([("more", StoodInTensor(True))] if self.extra else [])
+
+    def named_buffers(self):
+        return []
+
+
 class LettingGo(unittest.TestCase):
     def setUp(self) -> None:
         self.calls: list[str] = []
@@ -258,8 +285,62 @@ class LettingGo(unittest.TestCase):
         self.assertIsNone(mouth.model)
         self.assertIsNone(mouth.codec)
         self.assertIsNone(mouth.checkpoint)
+        self.assertIs(mouth.frame, model, "the model's modules are kept without their weights")
+        self.assertIsNotNone(mouth.step, "and the step compiled for them")
+        self.assertEqual(self.calls, ["forgot", "emptied"])
+
+        mouth.release()
+
+        self.assertIs(mouth.frame, model, "letting go again keeps the frame")
+        self.assertEqual(self.calls, ["forgot", "emptied", "emptied"])
+
+    def test_a_mouth_that_keeps_no_frame_lets_what_was_compiled_go_with_the_model(self) -> None:
+        mouth = fish.Mouth(Path("."))
+        model = StoodInModule(StoodInTensor(True))
+        model.layers = []
+        model.fast_layers = []
+        mouth.model = model
+        mouth.keeps = False
+        mouth.step = SimpleNamespace(forget=lambda: self.calls.append("forgot"))
+
+        mouth.release()
+
+        self.assertIsNone(mouth.frame)
         self.assertIsNone(mouth.step)
         self.assertEqual(self.calls, ["forgot", "reset", "emptied"])
+
+    def test_loaded_weights_go_into_a_kept_frame_and_a_frame_they_do_not_fit_is_forsaken(self) -> None:
+        mouth = fish.Mouth(Path("."))
+        frame, loaded, other = NamedModel("empty"), NamedModel("the weights"), NamedModel("the weights", extra=True)
+        mouth.frame = frame
+        mouth.step = SimpleNamespace(forget=lambda: None)
+
+        self.assertIs(mouth.refilled(loaded), frame)
+        self.assertEqual(frame.weight.data, "the weights")
+        self.assertIs(frame.table, loaded.table, "a tensor kept as a plain attribute is handed over too")
+        self.assertFalse(frame._cache_setup_done)
+        self.assertTrue(mouth.refilled_now)
+
+        mouth.frame = NamedModel("empty")
+
+        self.assertIs(mouth.refilled(other), other, "weights that do not fit speak from their own model")
+        self.assertFalse(mouth.keeps)
+        self.assertIsNone(mouth.step)
+        self.assertEqual(self.calls, ["reset"])
+
+    def test_a_first_capture_as_long_as_compiling_gives_the_frame_up(self) -> None:
+        mouth = fish.Mouth(Path("."))
+        mouth.refilled_now = True
+        mouth.step = SimpleNamespace(captured_s=0.4)
+        mouth.judge_capture()
+
+        self.assertTrue(mouth.keeps, "a capture alone keeps the frame")
+
+        mouth.refilled_now = True
+        mouth.step = SimpleNamespace(captured_s=fish.RECOMPILED_S + 1)
+        mouth.judge_capture()
+
+        self.assertFalse(mouth.keeps)
 
     def test_a_mouth_with_no_model_lets_go_of_what_a_failed_load_left(self) -> None:
         fish.Mouth(Path(".")).release()
