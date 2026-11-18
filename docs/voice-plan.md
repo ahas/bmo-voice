@@ -172,12 +172,17 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **A trained voice is a LoRA fine-tune of S2-Pro** on an agent's recorded lines: an adapter on each attention and
   feed-forward linear of the slow autoregressive model, the fast one and the codec left as they are. Its folder
   under the voices folder holds two files:
-  - **`voice.toml`,** which says what the voice is: its engine, the run and step its adapter was trained at, that it
-    speaks with no reference clip, and the temperature and top-p every line of it is sampled with;
-  - **`lora.pt`,** the adapter: its two matrices for each linear it names, and the scale they are added at.
-- **A voice speaks with no reference clip.** Its lines are asked of the model as a bare conversation, the text and
-  nothing more, and the adapter carries the voice; a voice trained that way says so in its `voice.toml`, and the
-  row holds no reference.
+  - **`voice.toml`,** which says what the voice is: its engine, the run and step its adapter was trained at, the
+    words of its delivery clip where it has one, and the temperature and top-p every line of it is sampled with;
+  - **`lora.pt`,** the adapter: its two matrices for each linear it names, and the scale they are added at;
+  - **`reference.wav`,** where the voice has one: its delivery clip, one sentence the voice itself spoke.
+- **The adapter carries the voice, and a delivery clip carries how it speaks.** The adapter alone gives the
+  timbre; the pitch, pace and mood of a line asked bare are whatever the model draws for that text, so two lines
+  differ. A voice whose folder holds `reference.wav`, with the words it says as `reference_words` in its
+  `voice.toml`, has every piece of every line asked with that clip in the place S2-Pro reads a reference from, so
+  every line and every piece of it is spoken the way the clip is. The clip is a take of the voice's own, asked
+  bare, so it ends on the voice's own fall. A voice with no clip speaks its first piece bare. The row holds no
+  reference either way.
 - **The voices table says which one speaks** (`docs/store.md`): one row per voice, at most one current. The current
   voice is the chat agent's where its registration names none.
 - **The instruction is the row's to change:** `scripts/voice-install.ts --style <name> '<words>'`. The mouth puts it
@@ -464,16 +469,20 @@ the voice nodes. What a caller does with the sound is the caller's.
   graph stands for the whole of a card turn. They are let go, with the graph, and the allocator's cache emptied,
   only before the codec pass of a piece of more than 600 frames: on a 4070 the sound of 750 frames fits beside the
   caches and 800 does not, and 600 leaves a fifth of that to spare.
-- **Every piece carries the line's first piece, and only that one.** The first piece of a line is asked as a bare
-  conversation, its text and nothing more. Every later piece is asked with the first piece as its reference: its
+- **Every piece carries one reference, the same through the line.** Where the voice has a delivery clip
+  (「The voices」), that clip is the reference of every piece, the first among them: its words and the codes the
+  codec reads from it as the model is loaded. Where it has none, the first piece of a line is asked as a bare
+  conversation, its text and nothing more, and every later piece is asked with the first piece as its reference: its
   words and the codes the model generated for them, in the place S2-Pro reads a reference from. The model ends a
   piece the way its reference ends, so a reference cut short makes the piece after it stop short too; a piece asked
   bare ends on the voice's own fall, so only such a piece is ever carried. One sentence's sound is all the prompt
   holds, inside the 1,024 tokens the context leaves it; a piece whose text would not fit beside the first piece is
   asked bare. Every piece is spoken on the line's seed.
-- **A piece that stops short is spoken again bare.** A piece whose voice is still loud in its last 30 ms, within
+- **A piece that stops short is spoken again.** A piece whose voice is still loud in its last 30 ms, within
   30 dB of its loudest frame, with under 100 ms after its last loud frame, was ended by the model before its last
-  syllable fell away; it is asked once more with no reference, on the same seed, and that one is kept.
+  syllable fell away. It is asked once more on the same reference, on the seed after the line's, so its delivery
+  stays the line's; only where that take stops short too is it asked with no reference, on the line's seed, and
+  that one is kept.
 - **A piece the card runs out of memory for is spoken once more,** as its sentences one by one on an emptied cache,
   each cut at its clauses into parts of at most 170 characters; only a second shortfall fails the line.
 

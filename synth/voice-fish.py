@@ -74,6 +74,8 @@ RATE = 48000
 
 # The engine a voice folder must name in its `voice.toml` to be spoken here: the policy's (`policy/voice.toml`).
 ENGINE = "fish-s2-pro"
+# The file a voice's delivery clip stands in, in the voice's folder (docs/voice-plan.md, 「The voices」).
+REFERENCE_CLIP = "reference.wav"
 
 # The base weights on this machine, as `scripts/voice-node.ts setup` places them (docs/voice-plan.md, 「Where the
 # weights live」), where the caller names none.
@@ -570,6 +572,8 @@ class Mouth:
         self.codec = None
         self.checkpoint: Path | None = None
         self.sampling = {"temperature": 0.7, "top_p": 0.7}
+        # The voice's delivery clip as its words and its codes (`delivery_clip`), None for a voice that has none.
+        self.reference: tuple | None = None
         # The frame step every piece is generated through (`FrameStep`), made with the first model.
         self.step: FrameStep | None = None
 
@@ -582,6 +586,7 @@ class Mouth:
             self.release()
             self.model = self.slow(checkpoint / "lora.pt")
             self.codec = self.decoder()
+            self.reference = self.delivery_clip(checkpoint, said)
             self.step = FrameStep()
             self.sampling = {"temperature": float(said.get("temperature", 0.7)), "top_p": float(said.get("top_p", 0.7))}
             self.checkpoint = checkpoint
@@ -627,6 +632,34 @@ class Mouth:
         model._cache_setup_done = False
 
         return model
+
+    def delivery_clip(self, checkpoint: Path, said: dict) -> tuple | None:
+        """The voice's delivery clip as S2-Pro reads a reference: the words `voice.toml` says it speaks and the codes
+        the codec reads from `reference.wav`, mixed to one channel at the codec's rate. A voice whose folder holds no
+        clip, or names no words for it, has none; a clip that cannot be read is told and the voice speaks without it,
+        since a line is worth more than its delivery."""
+        words = said.get("reference_words")
+        clip = checkpoint / REFERENCE_CLIP
+
+        if not isinstance(words, str) or not words.strip() or not clip.exists():
+            return None
+
+        try:
+            import torch
+            import torchaudio
+
+            audio, rate = sf.read(clip, dtype="float32", always_2d=True)
+            mono = torchaudio.functional.resample(torch.from_numpy(audio.mean(axis=1))[None], rate, self.codec.sample_rate)
+
+            with torch.inference_mode():
+                heard = mono[None].to(device="cuda", dtype=torch.bfloat16)
+                codes, _ = self.codec.encode(heard, torch.tensor([heard.shape[2]], device="cuda", dtype=torch.long))
+
+            return words.strip(), (codes[0] if codes.ndim == 3 else codes).cpu()
+        except Exception as failure:
+            print(f"voice-fish: the delivery clip of {checkpoint.name} could not be read, so the voice speaks without it: {failure}", file=sys.stderr, flush=True)
+
+            return None
 
     def decoder(self):
         """The codec, with each of its transformers' attention mask made at that transformer's own block length
@@ -683,13 +716,14 @@ class Mouth:
 
     def pieces(self, checkpoint: Path, text: str, seed: int, style: str = "", by_sentence: bool = False, told=None):
         """The line's pieces at the codec's rate, each levelled (`levelled`) and faded at both edges (`faded`): a
-        sentence at a time where asked (`sentences`), in passes the context holds otherwise (`passes`). Each piece
-        after the first is spoken on from the first (`piece`), and every piece on the same seed, so the same line gives
-        back the same samples every time."""
+        sentence at a time where asked (`sentences`), in passes the context holds otherwise (`passes`). Every piece
+        is spoken on from the voice's delivery clip where it has one, and else each piece after the first on from the
+        first (`piece`); every piece on the same seed, so the same line gives back the same samples every time."""
         self.ready(checkpoint)
         rate = self.codec.sample_rate
-        # The line's first piece, as its words and the codes the model made for them, once it is spoken.
-        carried: dict = {"first": None}
+        # What every piece of the line is spoken on from: the voice's delivery clip, or else the line's first piece,
+        # as its words and the codes the model made for them, once it is spoken.
+        carried: dict = {"first": self.reference}
         out: list[np.ndarray] = []
 
         parts = sentences(text) if by_sentence else passes(text)
@@ -724,19 +758,20 @@ class Mouth:
         return [say(part) for start, end in sentence_spans(piece) for part in clauses(piece[start:end], MOST_PIECE // 2)]
 
     def piece(self, words: str, seed: int, carried: dict) -> np.ndarray:
-        """One piece on the line's seed, asked with the line's first piece as its reference once that one is spoken:
-        its words and its generated codes, which carry its timbre, pitch and pace into this one. Where the two would
-        not fit the prompt's share of the context, the piece is asked bare; and a piece that stops short
-        (`stops_short`) is asked once more bare and that one is kept. The first piece, always asked bare, is carried for
-        the rest of the line."""
+        """One piece on the line's seed, asked with what the line carries as its reference: the voice's delivery clip,
+        or the line's first piece once that one is spoken, as words and codes, which carry its timbre, pitch and pace
+        into this one. Where the two would not fit the prompt's share of the context, the piece is asked bare. A piece
+        that stops short (`stops_short`) is asked once more on the same reference on the seed after the line's, and
+        only where that stops short too is it asked bare, and that one is kept. With no clip, the first piece is asked
+        bare and carried for the rest of the line."""
         import torch
         from fish_speech.models.text2semantic.errors import InvalidInputError
         from fish_speech.models.text2semantic.inference import generate_long
 
-        def spoken(reference) -> tuple:
-            random.seed(seed)
-            np.random.seed(seed)
-            torch.manual_seed(seed)
+        def spoken(reference, on: int = seed) -> tuple:
+            random.seed(on)
+            np.random.seed(on)
+            torch.manual_seed(on)
             asked = {} if reference is None else {"prompt_text": [reference[0]], "prompt_tokens": [reference[1]]}
             codes = []
             answers = generate_long(
@@ -778,8 +813,12 @@ class Mouth:
                 made, audio = spoken(None)
 
             if first is not None and stops_short(audio, self.codec.sample_rate):
-                print("voice-fish: a piece stopped short on its reference, so it is spoken again bare", file=sys.stderr, flush=True)
-                made, audio = spoken(None)
+                print("voice-fish: a piece stopped short on its reference, so it is spoken again on the next seed", file=sys.stderr, flush=True)
+                made, audio = spoken(first, seed + 1)
+
+                if stops_short(audio, self.codec.sample_rate):
+                    print("voice-fish: the piece stopped short again, so it is spoken bare", file=sys.stderr, flush=True)
+                    made, audio = spoken(None)
 
         if carried["first"] is None:
             carried["first"] = (words, made.cpu())
@@ -841,6 +880,7 @@ class Mouth:
 
         self.model = None
         self.codec = None
+        self.reference = None
         self.checkpoint = None
 
         if self.step is not None:

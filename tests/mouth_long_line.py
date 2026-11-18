@@ -152,6 +152,14 @@ class LongLine(unittest.TestCase):
         self.assertEqual(len(audio), tones + pauses, "the pieces joined, a pause between each two")
         self.assertAlmostEqual(float(np.max(np.abs(audio))), fish.PEAK, places=3)
 
+    def test_a_voice_with_a_delivery_clip_speaks_every_piece_on_from_it_the_first_among_them(self) -> None:
+        self.service.mouth.reference = ("the clip's words", None)
+        status, _ = self.spoken(line_of(2_000, "The index fell three point five percent."), by_sentence=True)
+
+        self.assertEqual(status, 200)
+        self.assertGreater(len(self.service.mouth.said), 1)
+        self.assertEqual(self.service.mouth.carried_into, [True] * len(self.service.mouth.said))
+
     def test_a_9000_character_line_comes_back_as_one_sound(self) -> None:
         text = line_of(9_000, "The index fell three point five percent to five thousand seven hundred and thirty.")
 

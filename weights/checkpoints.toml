@@ -3,8 +3,8 @@
 # read it (docs/voice-plan.md, 「The voices」).
 
 # Under the runtime data root on the operations machine: every installed voice, a folder per voice holding its
-# `voice.toml` (its engine, where it was trained, that it speaks with no reference) and its adapter `lora.pt`. The
-# retired VoxCPM2 voices keep their LoRA settings, weights and continuation prompt clips there, never served.
+# `voice.toml` (its engine, where it was trained, the words of its delivery clip), its adapter `lora.pt` and, where it
+# has one, its delivery clip `reference.wav`. The retired VoxCPM2 voices keep their LoRA settings, weights and continuation prompt clips there, never served.
 voices = "voice/voices"
 
 # Under the same root: the retired VoxCPM2 voices' reference clips, one `<key>.wav` each.
