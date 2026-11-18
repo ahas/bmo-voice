@@ -27,7 +27,7 @@ impl Web {
     let request = self
       .caller
       .request(Method::POST, &["sumida", "auth", "session"])
-      .json(&json!({ "name": name, "password": password }));
+      .json(&json!({ "username": name, "password": password }));
     let answer = match self.caller.send(request).await {
       Ok(answer) => answer,
       Err(UnitError::Refused { status: 401, .. }) => return Ok(false),

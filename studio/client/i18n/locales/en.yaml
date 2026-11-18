@@ -132,12 +132,16 @@ script:
     time_format: Write a time as 02:13.450.
     wait_download: The video plays once its download has finished.
   error:
+    bad_sign_in: Enter a name and a password.
     episode_failed: The episode could not be loaded.
     load_failed: The studio could not be loaded.
     reload_failed: The list could not be read again.
     request_failed: The request could not be handled.
     save_failed: It could not be saved.
+    sign_in_throttled: Too many sign-ins; try again in a moment.
+    sign_in_unavailable: The sign-in could not be checked.
     video_unplayable: The video cannot be played.
+    wrong_sign_in: The name or the password does not match.
 common:
   title:
     discard_changes: Discard unsaved changes?

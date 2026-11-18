@@ -132,12 +132,16 @@ script:
     time_format: 시각은 02:13.450처럼 적습니다.
     wait_download: 다운로드가 끝나야 영상이 재생됩니다.
   error:
+    bad_sign_in: 이름과 비밀번호를 입력해 주세요.
     episode_failed: 에피소드를 불러오지 못했습니다.
     load_failed: 스튜디오를 불러오지 못했습니다.
     reload_failed: 목록을 다시 읽지 못했습니다.
     request_failed: 요청을 처리하지 못했습니다.
     save_failed: 저장하지 못했습니다.
+    sign_in_throttled: 로그인 시도가 많아 잠시 후 다시 시도해 주세요.
+    sign_in_unavailable: 로그인을 확인하지 못했습니다.
     video_unplayable: 영상을 재생할 수 없습니다.
+    wrong_sign_in: 이름 또는 비밀번호가 일치하지 않습니다.
 common:
   title:
     discard_changes: 저장하지 않은 변경을 버릴까요?
