@@ -140,7 +140,8 @@ script:
     video_unplayable: 영상을 재생할 수 없습니다.
 common:
   title:
-    share_link: 링크 공유
+    discard_changes: 저장하지 않은 변경을 버릴까요?
+    share: 공유
   action:
     cancel: 취소
     choose_all: 모두 선택
@@ -149,17 +150,38 @@ common:
     close_all_tabs: 모든 탭 닫기
     close_other_tabs: 다른 탭 닫기
     close_right_tabs: 오른쪽 탭 닫기
+    collapse: 축소
     copy: 복사
     create_link: 링크 만들기
     discard: 버리기
+    exit_fullscreen: 전체 화면 종료
+    expand: 확장
     fit_screen: 화면에 맞추기
+    fullscreen: 전체 화면
     more: 더보기
+    mute: 음소거
+    next_month: 다음 달
     next_picture: 다음 그림
+    next_year: 다음 연도
+    next_years: 다음 연도 범위
+    page_back: 이전
+    page_forward: 다음
     pause: 일시 정지
     pin: 고정
     play: 재생
+    play_now: 지금 재생
+    previous_month: 이전 달
     previous_picture: 이전 그림
+    previous_year: 이전 연도
+    previous_years: 이전 연도 범위
     save: 저장
+    see_all: 모두 보기
+    share: 공유
+    skip_back: "{n}초 뒤로"
+    skip_forward: "{n}초 앞으로"
+    subtitles: 자막
+    turn_picture: 화면 회전
+    unmute: 음소거 해제
     unpin: 고정 해제
     unshare: 공유 해제
     zoom_in: 확대
@@ -171,12 +193,22 @@ common:
     download_named: "{name} 내려받기"
     image_zoom: "{title} 확대"
     increase: 늘리기
+    member_permission: "{name} 권한"
     more_notices: "알림 {n}개 더"
     pinned_named: "{name}, 고정됨"
+    play_named: "{name} 재생"
+    player_named: "{name} 플레이어"
     share_address: 공유 주소
+    speed_named: "재생 속도 {speed}"
+    window_move: 창 이동 · 방향키
+    window_resize: 창 크기 조절 · 방향키
   error:
     editor_failed: 편집기를 불러오지 못했습니다.
     link_copy_failed: 링크를 복사하지 못했습니다.
+    member_change_failed: 권한을 바꾸지 못했습니다.
+    member_search_failed: 사람을 검색하지 못했습니다.
+    member_share_failed: 공유하지 못했습니다.
+    members_read_failed: 공유 대상을 읽지 못했습니다.
     picture_failed: 그림을 불러오지 못했습니다.
     share_create_failed: 링크를 만들지 못했습니다.
     share_read_failed: 링크를 읽지 못했습니다.
@@ -197,6 +229,7 @@ common:
     left_minutes: "{n}분 남음"
     left_under_minute: 1분 미만 남음
     link: 링크
+    members: 사람
     minutes: "{m}분"
     minutes_seconds: "{m}분 {s}초"
     palette_forest: 숲
@@ -205,31 +238,50 @@ common:
     palette_sunset: 노을
     palette_teal: 청록
     palette_violet: 보라
+    permission_edit: 편집
+    permission_read: 읽기
     play_position: 재생 위치
     properties: 속성
     seconds: "{n}초"
     share_until: "{date}까지"
     short_day_format: M월 D일
+    speed_normal: "{speed} 보통"
+    subtitles_off: 꺼짐
     theme_forest: 숲
     theme_sea: 바다
     theme_sunset: 노을
     theme_teal: 청록
     theme_violet: 보라
     unplayable: 재생할 수 없음
+    volume: 볼륨
   message:
-    discard_confirm: 변경을 버릴까요?
     link_copied: 링크를 복사했습니다.
     preview_badge: 배지
     preview_field: 입력란
     preview_link: 링크
     preview_meta: 세부 정보
     preview_note: 메모
+  placeholder:
+    member_search: 이름으로 찾기
   status:
+    brightness: "밝기 {n}%"
     copied: 복사함
     loading: 불러오는 중…
+    members_loading: 공유 대상 불러오는 중…
+    muted: 음소거됨
+    next_in: "{n}초 후 재생"
+    no_members: 공유 대상 없음
     picture_loading: 그림을 불러오는 중…
     share_loading: 링크를 불러오는 중…
+    speed: "속도 {speed}"
+    subtitles_off: 자막 꺼짐
+    subtitles_on: "자막 {name}"
+    turned: "{degrees}도 회전됨"
+    unmuted: 음소거 해제됨
     video_loading: 영상을 불러오는 중…
+    volume: "볼륨 {n}%"
+    went_back: "{n}초 뒤로"
+    went_forward: "{n}초 앞으로"
 files:
   action:
     keep_both: 둘 다 두기

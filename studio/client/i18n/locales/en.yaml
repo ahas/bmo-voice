@@ -140,7 +140,8 @@ script:
     video_unplayable: The video cannot be played.
 common:
   title:
-    share_link: Share link
+    discard_changes: Discard unsaved changes?
+    share: Share
   action:
     cancel: Cancel
     choose_all: Choose all
@@ -149,17 +150,38 @@ common:
     close_all_tabs: Close all tabs
     close_other_tabs: Close other tabs
     close_right_tabs: Close tabs to the right
+    collapse: Collapse
     copy: Copy
     create_link: Create link
     discard: Discard
+    exit_fullscreen: Exit full screen
+    expand: Expand
     fit_screen: Fit to screen
+    fullscreen: Full screen
     more: More
+    mute: Mute
+    next_month: Next month
     next_picture: Next picture
+    next_year: Next year
+    next_years: Later years
+    page_back: Previous
+    page_forward: Next
     pause: Pause
     pin: Pin
     play: Play
+    play_now: Play now
+    previous_month: Previous month
     previous_picture: Previous picture
+    previous_year: Previous year
+    previous_years: Earlier years
     save: Save
+    see_all: See all
+    share: Share
+    skip_back: "Back {n} seconds"
+    skip_forward: "Forward {n} seconds"
+    subtitles: Subtitles
+    turn_picture: Turn the picture
+    unmute: Unmute
     unpin: Unpin
     unshare: Stop sharing
     zoom_in: Zoom in
@@ -171,12 +193,22 @@ common:
     download_named: "Download {name}"
     image_zoom: "Zoom of {title}"
     increase: Increase
+    member_permission: "Permission of {name}"
     more_notices: "{n} more notices"
     pinned_named: "{name}, pinned"
+    play_named: "Play {name}"
+    player_named: "{name} player"
     share_address: Share address
+    speed_named: "Playback speed {speed}"
+    window_move: Move the window · arrow keys
+    window_resize: Resize the window · arrow keys
   error:
     editor_failed: The editor could not be loaded.
     link_copy_failed: The link could not be copied.
+    member_change_failed: The permission could not be changed.
+    member_search_failed: People could not be searched.
+    member_share_failed: It could not be shared.
+    members_read_failed: The members could not be read.
     picture_failed: The picture could not be loaded.
     share_create_failed: The link could not be made.
     share_read_failed: The link could not be read.
@@ -186,12 +218,9 @@ common:
     # A dayjs format the day is written in.
     day_format: MMM D, YYYY
     days: "{d} d"
-    expiry: Expires
-    link: Link
-    share_until: "Until {date}"
-    short_day_format: MMM D
     days_hours: "{d} d {h} h"
     expired: Expired
+    expiry: Expires
     forever: Forever
     hours: "{h} h"
     hours_minutes: "{h} h {m} min"
@@ -199,6 +228,8 @@ common:
     left_hours: "{n} hours left"
     left_minutes: "{n} minutes left"
     left_under_minute: Under a minute left
+    link: Link
+    members: Members
     minutes: "{m} min"
     minutes_seconds: "{m} min {s} s"
     palette_forest: Forest
@@ -207,29 +238,50 @@ common:
     palette_sunset: Sunset
     palette_teal: Teal
     palette_violet: Violet
+    permission_edit: Edit
+    permission_read: Read
     play_position: Play position
     properties: Properties
     seconds: "{n} s"
+    share_until: "Until {date}"
+    short_day_format: MMM D
+    speed_normal: "{speed} normal"
+    subtitles_off: "Off"
     theme_forest: Forest
     theme_sea: Sea
     theme_sunset: Sunset
     theme_teal: Teal
     theme_violet: Violet
     unplayable: Cannot be played
+    volume: Volume
   message:
-    discard_confirm: Discard the changes?
     link_copied: Link copied.
     preview_badge: Badge
     preview_field: Field
     preview_link: Link
     preview_meta: Details
     preview_note: A note
+  placeholder:
+    member_search: Search by name
   status:
+    brightness: "Brightness {n}%"
     copied: Copied
     loading: Loading…
-    share_loading: Loading the link…
+    members_loading: Loading the members…
+    muted: Muted
+    next_in: "Playing in {n} seconds"
+    no_members: Shared with nobody
     picture_loading: Loading the picture…
+    share_loading: Loading the link…
+    speed: "Speed {speed}"
+    subtitles_off: Subtitles off
+    subtitles_on: "Subtitles {name}"
+    turned: "Turned to {degrees} degrees"
+    unmuted: Unmuted
     video_loading: Loading the video…
+    volume: "Volume {n}%"
+    went_back: "Back {n} seconds"
+    went_forward: "Forward {n} seconds"
 files:
   action:
     keep_both: Keep both

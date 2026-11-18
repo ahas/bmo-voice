@@ -38,6 +38,10 @@ A studio for checking the provided source material and recording the line spans 
   static files. The server hands them
   out as they are and answers every other GET under the prefix, a deep link included, with the app's `index.html`.
   Paths under `api/`, `media/` and `subtitle/` are the server's own.
+- **bmo-ui's patches** stand in `studio/client/patches/`, copied from bmo-ui's main for the version packed, and
+  are applied to the very versions they name, as bmo-ui asks of a host. The screen pins the component library to
+  the exact version bmo-ui is built on, so its install resolves the patched versions of the libraries beneath it;
+  a pin left to float lets the install take a newer version the patches never reach.
 - **The screen's words** are keys: the studio's own under `script.*`, and every key bmo-ui reads. The repository
   carries both packs, English and Korean, `studio/client/i18n/locales/en.yaml` and
   `studio/client/i18n/locales/ko.yaml`; every key bmo-ui reads is answered in each, the keys its share-link
