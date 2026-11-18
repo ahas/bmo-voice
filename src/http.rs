@@ -866,10 +866,12 @@ async fn speak_line(context: &Context, events: Events, id: i64, voice: voices::V
   match store::syntheses::set_state(&context.db, id, SynthesisState::Done, duration_ms).await {
     Ok(true) => {
       eprintln!(
-        "voice: synthesis {id} done on {}: {} ms of sound, {} ms waited for its card",
+        "voice: synthesis {id} done on {}: {} ms of sound, {} ms waited for its card, the node loaded the voice in {:.1} s and spoke in {:.1} s",
         heard.node,
         duration_ms.unwrap_or_default(),
-        heard.waited_ms
+        heard.waited_ms,
+        heard.spoken.load_seconds,
+        heard.spoken.speak_seconds
       );
       let _ = ended_synthesis(&writing, &context.db, id).await;
     }
