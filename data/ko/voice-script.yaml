@@ -44,7 +44,8 @@ spoken:
   # line, and in a line holding English and no Korean.
   # Runs said in one breath, each as its reading spelled part by part and then as it is written for the voice, the
   # way it sounds: a final consonant carried onto the vowel after it, the decimal point tensed, a doubled letter
-  # name run together. The model that writes a line's spoken words is shown them as examples.
+  # name run together; and a number too long for one breath, broken after its hundreds with its counter written
+  # onto its last run. The model that writes a line's spoken words is shown them as examples.
   sounded:
     - [오점오, 오쩌모]
     - [칠점이, 칠쩌미]
@@ -52,6 +53,9 @@ spoken:
     - [구십구점오, 구십꾸쩌모]
     - [브이엘엘엠, 브이에레렘]
     - [유알엘, 유아렐]
+    - [삼천오백십 번, 삼천오백 십번]
+    - [삼천오백이십삼 번, 삼천오백 이십삼번]
+    - [만이천삼백사십오 개, 만이천삼백 사십오개]
   attached: "주소는 첨부했어."
   attached_polite: "주소는 첨부했어요."
   attached_english: "I've attached the link."

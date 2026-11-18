@@ -218,7 +218,8 @@ server any other way.
   few words for what they are or left out. What is said in one breath stands as one word with no space inside it,
   a decimal, a version and an acronym read by its letters among them, since a voice pauses at every space, and
   inside it the syllables are written as they sound in that breath, a final consonant carried onto the vowel after
-  it, since a voice says what is spelled. An
+  it, since a voice says what is spelled. A number of four digits or more is two runs, broken after its
+  hundreds, with its counter written onto the last. An
   identifier that is no word, a commit hash among them, is said by its first four characters alone. A time zone's
   abbreviation is said as the place it names, before its time. Nothing else differs from the written words.
 - **A language model makes them, with judgement; no table and no rule of the engine's does.** Context decides how

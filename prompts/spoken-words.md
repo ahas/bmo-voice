@@ -20,6 +20,10 @@ request gives, and nothing else.
   run together where a speaker's mouth does so. The synthesiser says what is spelled, so a run spelled part by part
   is said part by part. Where the request shows runs written as they sound, write every such run the same way. The
   ordinary words of the line keep their spelling.
+- A number of four digits or more is too long for one breath, and a voice handed it as one run breaks it in the
+  wrong place. Write it as two runs with one space between them, broken where a speaker breaks it: the thousands
+  and the hundreds together, then the tens and the ones. A counter or a unit that follows the number is written
+  onto the last run, with no space before it.
 - Every foreign name, acronym, product name and model name stands in the language's own letters, as a speaker of
   the language reads it aloud. Judge each reading from its context: the same letters may be read one way as a word
   and another letter by letter.
