@@ -76,7 +76,7 @@ script:
   placeholder:
     annotated_line: "<슬픔> …"
     english_line: 들리는 대로 적은 영어 대사
-    episode_pick: 에피소드 검색 후 선택
+    episode_pick: 에피소드 선택
     events: 웃음, 울음 같은 소리 선택
     notes: 배경음, 화자 겹침, 불확실한 전사
     review_note: 확인한 장면, 출처, 무발화 등장
@@ -203,6 +203,7 @@ common:
     window_move: 창 이동 · 방향키
     window_resize: 창 크기 조절 · 방향키
   error:
+    choices_find_failed: 검색하지 못했습니다.
     editor_failed: 편집기를 불러오지 못했습니다.
     link_copy_failed: 링크를 복사하지 못했습니다.
     member_change_failed: 권한을 바꾸지 못했습니다.
@@ -263,6 +264,7 @@ common:
     preview_note: 메모
   placeholder:
     member_search: 이름으로 찾기
+    search: 검색
   status:
     brightness: "밝기 {n}%"
     copied: 복사함
@@ -270,6 +272,8 @@ common:
     members_loading: 공유 대상 불러오는 중…
     muted: 음소거됨
     next_in: "{n}초 후 재생"
+    no_choices: 항목 없음
+    no_match: 찾은 항목 없음
     no_members: 공유 대상 없음
     picture_loading: 그림을 불러오는 중…
     share_loading: 링크를 불러오는 중…

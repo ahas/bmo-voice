@@ -45,7 +45,8 @@ only the base libraries `bmo-chat`, `bmo-chat-client`, `bmo-ui` and `bmo-text` m
 
 ## Tests
 
-Tests live in `tests/`, never beside the code, and a hosted tool's in its own folder's `tests/`. The repository-wide personal-data check stands there
+Tests live in `tests/`, never beside the code, a hosted tool's in its own folder's `tests/` and the studio screen's in
+`studio/client/tests/`, which its project's own check runs after its type check. The repository-wide personal-data check stands there
 (`tests/personal_data.rs`, `docs/PERSONAL-DATA.md`): no tracked file holds a mail address, a home path, a
 telephone number, a token or a private network address. `docs/inventory.md` records the behaviour the tests are
 to keep.
@@ -64,7 +65,7 @@ a neutral name, and `tests/personal_data.rs` holds the rule `docs/PERSONAL-DATA.
 - `cargo check --workspace --all-targets`: the static check, of the crate and the hosted tools.
 - `cargo test --test main personal_data::`: the repository-wide personal-data check.
 - `bunx tsc --noEmit` in `scripts/`: the scripts' static check.
-- `bunx nuxi typecheck` in `studio/client/`: the studio screen's static check.
+- `bun run check` in `studio/client/`: the studio screen's static check, then its tests.
 - `bunx tsc --noEmit` in `studio/` and `python3 -m py_compile studio/scripts/*.py`: the studio tools' static
   checks.
 - `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`: the review.

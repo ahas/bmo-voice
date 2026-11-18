@@ -71,7 +71,10 @@ A studio for checking the provided source material and recording the line spans 
 
 ## Layout
 
-- **Mobile:** a searchable episode menu and a vertical editing screen; the line list opens as a closable panel.
+- **Choosing from a list:** every value the screen chooses from a list, a filter's and a tag's among them, stands in
+  bmo-ui's one select, which searches once its list holds more than seven choices and never at seven or fewer, so no
+  list of the screen decides its own search.
+- **Mobile:** an episode menu and a vertical editing screen; the line list opens as a closable panel.
 - **Desktop, three panels:** episodes on the left, video and editing in the middle, the line list on the right. The
   splitters show as a 1px line with a wide grabbable area around it; width is changed by dragging and by the arrow
   keys and remembered by the browser. A widened panel is reached by scrolling the work area sideways. The video stays
