@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "bmo-voice",
-    "version": "0.1.0-rev.31",
+    "version": "0.1.0-rev.32",
     "description": "The voice engine: trained voices, speech synthesis on the voice servers of the nodes, transcription, speaker encodings and scripts for the ear. A synthesis is answered at once and the sound follows. Bodies are JSON with camelCase keys, times are integers of epoch milliseconds and spans of milliseconds end in Ms. A list is a page, `after` being the last member's name. Every failure is a non-2xx answer whose body is `code` and `error`. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`. A briefing is a line spoken for a room, kept with the room and the line its caller names and told on the event stream for its listeners to play; when one is spoken, and what it says, is its caller's decision."
   },
   "servers": [
@@ -536,10 +536,10 @@
         "tags": [
           "briefings"
         ],
-        "summary": "Stop every briefing of a room, or of every room, that has not ended; each is stopped and told, and the stop is told for the listeners to fall silent.",
+        "summary": "Stop every briefing of a room and a kind, or of every room and every kind, that has not ended; each is stopped and told, and the stop is told for the listeners to fall silent.",
         "responses": {
           "200": {
-            "description": "Stop every briefing of a room, or of every room, that has not ended; each is stopped and told, and the stop is told for the listeners to fall silent.",
+            "description": "Stop every briefing of a room and a kind, or of every room and every kind, that has not ended; each is stopped and told, and the stop is told for the listeners to fall silent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1745,9 +1745,21 @@
             "format": "int64",
             "description": "The room, as its caller numbers it; every room where absent.",
             "default": null
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BriefingKind"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The kind; every kind where absent.",
+            "default": null
           }
         },
-        "description": "The room whose briefings are stopped, or none to stop every room's."
+        "description": "The room and the kind whose briefings are stopped, or none to stop every room's and every kind's."
       },
       "BriefingLine": {
         "type": "object",

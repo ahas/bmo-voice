@@ -190,13 +190,14 @@ pub struct Stopped {
   pub synthesis: i64,
 }
 
-/// Every briefing of a room, or of every room where none is named, that has not ended stopped at `at`: one whose
-/// synthesis waits, speaks, or is done with its end not yet kept. Each briefing ends and its synthesis is `stopped`
-/// in one statement, so a line ending this moment either keeps its own end or is stopped, never both. Answers those
-/// it stopped, oldest first.
+/// Every briefing of a room and a kind, or of every room and every kind where none is named, that has not ended
+/// stopped at `at`: one whose synthesis waits, speaks, or is done with its end not yet kept. Each briefing ends and
+/// its synthesis is `stopped` in one statement, so a line ending this moment either keeps its own end or is stopped,
+/// never both. Answers those it stopped, oldest first.
 pub async fn stop(
   db: &DatabaseConnection,
   chat_id: Option<i64>,
+  kind: Option<BriefingKind>,
   at: i64,
 ) -> Result<Vec<Stopped>, StoreError> {
   let rows = all(
@@ -206,13 +207,18 @@ pub async fn stop(
          FROM "voice_syntheses" AS "s"
          WHERE "s"."id" = "b"."synthesis_id" AND "b"."finished_at" IS NULL
            AND "s"."state" IN ('waiting', 'speaking', 'done')
-           AND ($1::bigint IS NULL OR "b"."chat_id" = $1)
+           AND ($1::bigint IS NULL OR "b"."chat_id" = $1) AND ($4::text IS NULL OR "b"."kind" = $4)
          RETURNING "b"."run_id", "b"."synthesis_id"
        )
        UPDATE "voice_syntheses" AS "s" SET "state" = $3
        FROM "ended" WHERE "s"."id" = "ended"."synthesis_id"
        RETURNING "ended"."run_id", "s"."id""#,
-    vec![Value::BigInt(chat_id), at.into(), SynthesisState::Stopped.as_str().into()],
+    vec![
+      Value::BigInt(chat_id),
+      at.into(),
+      SynthesisState::Stopped.as_str().into(),
+      Value::String(kind.map(|kind| Box::new(kind.as_str().to_owned()))),
+    ],
   )
   .await?;
   let mut stopped = rows

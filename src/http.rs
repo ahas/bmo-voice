@@ -1233,8 +1233,9 @@ async fn name_line(
   Ok(Json(briefing))
 }
 
-/// `POST /briefings/stop`: every briefing of a room, or of every room, that has not ended stopped at once, its speaking
-/// ended where it runs, each told as it ends, and then the stop itself told for the listeners to fall silent.
+/// `POST /briefings/stop`: every briefing of a room and a kind, or of every room and every kind, that has not ended
+/// stopped at once, its speaking ended where it runs, each told as it ends, and then the stop itself told for the
+/// listeners to fall silent.
 async fn stop_briefings(
   State(served): State<Served>,
   read: Result<Json<BriefingStop>, JsonRejection>,
@@ -1242,7 +1243,7 @@ async fn stop_briefings(
   let asked = body_of(read)?;
   let db = &served.context.db;
   let writing = served.events.write().await;
-  let stopped = store::briefings::stop(db, asked.chat_id, crate::now_ms()).await?;
+  let stopped = store::briefings::stop(db, asked.chat_id, asked.kind, crate::now_ms()).await?;
 
   for one in &stopped {
     served.context.stops.stop(one.synthesis);
@@ -1263,6 +1264,7 @@ async fn stop_briefings(
 
   let told = BriefingsStopped {
     chat_id: asked.chat_id,
+    kind: asked.kind,
     briefing_ids: stopped.iter().map(|one| one.briefing).collect(),
   };
 

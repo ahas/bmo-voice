@@ -414,13 +414,16 @@ pub struct BriefingQuery {
   pub limit: Option<u32>,
 }
 
-/// The room whose briefings are stopped, or none to stop every room's.
+/// The room and the kind whose briefings are stopped, or none to stop every room's and every kind's.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BriefingStop {
   /// The room, as its caller numbers it; every room where absent.
   #[serde(default)]
   pub chat_id: Option<i64>,
+  /// The kind; every kind where absent.
+  #[serde(default)]
+  pub kind: Option<BriefingKind>,
 }
 
 /// What a stop came to, told as `briefings.stopped` for the listeners to fall silent.
@@ -429,6 +432,8 @@ pub struct BriefingStop {
 pub struct BriefingsStopped {
   /// The room whose briefings were stopped; null for every room.
   pub chat_id: Option<i64>,
+  /// The kind of briefing stopped; null for every kind.
+  pub kind: Option<BriefingKind>,
   /// The briefings it stopped, oldest first.
   pub briefing_ids: Vec<i64>,
 }

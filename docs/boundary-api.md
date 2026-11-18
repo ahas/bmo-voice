@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.31.
+Fixed at 0.1.0-rev.32.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -54,7 +54,7 @@ asking `Accept: application/json`.
 | `briefing.created` | the briefing as `GET /briefings/{briefingId}` answers it, state `waiting` |
 | `briefing.ended` | the briefing, state `done`, `failed` or `stopped` |
 | `briefing.changed` | the briefing, after its line was named or let go |
-| `briefings.stopped` | `chatId`, the room whose briefings were stopped or null for every room, and `briefingIds`, those it stopped |
+| `briefings.stopped` | `chatId`, the room whose briefings were stopped or null for every room, `kind`, the kind stopped or null for every kind, and `briefingIds`, those it stopped |
 
 - **A frame's `event` is the kind,** its `id` the event number, a signed 64-bit integer that only grows,
   and its `data` is `{"id", "kind", "at", "data"}`, the inner `data` being the member.
@@ -295,7 +295,7 @@ server any other way.
 | `GET /briefings/{briefingId}` | | one briefing |
 | `POST /briefings/{briefingId}/line` | `messageId`, a number or null | the briefing |
 | `GET /briefings/{briefingId}/sound` | | the sound, OGG/Opus, with `Range` |
-| `POST /briefings/stop` | `chatId?` | the briefings it stopped, a page whose `more` is false |
+| `POST /briefings/stop` | `chatId?`, `kind?` | the briefings it stopped, a page whose `more` is false |
 
 - **A briefing is a line spoken for a room in a voice,** kept with the room and the line it speaks: `id`,
   `chatId`, `messageId` (the line, null while it awaits one), `kind`, `title` (null where none was given),
@@ -321,15 +321,17 @@ server any other way.
   `done`; it plays a `full` reading only when somebody asks for it, and shows a briefing it learns of more than
   two minutes after it ended rather than playing it.
 - **Stopping silences at once.** `POST /briefings/stop` stops every briefing of the room `chatId` names, or of
-  every room where the body names none, that has not ended: one `waiting` and one `speaking` alike, and one whose
-  synthesis is done but whose end is not yet told. Each is `stopped` from that moment, its `finishedAt` the
+  every room where the body names none, of the kind `kind` names, or of every kind where it names none, that has
+  not ended: one `waiting` and one `speaking` alike, and one whose synthesis is done but whose end is not yet told.
+  A `kind` other than `summary` and `full` is answered 400 `bad-request`. Each is `stopped` from that moment, its `finishedAt` the
   moment it was stopped; its speaking is ended where it runs, its card given back, and no sound of it is served. Each is told as `briefing.ended`, its synthesis as `synthesis.ended`, and then one `briefings.stopped`
-  names the room and the briefings it stopped, told even where it stopped none. A stopped briefing never plays and
+  names the room, the kind and the briefings it stopped, told even where it stopped none. A stopped briefing never plays and
   is never spoken again, whatever its caller does next: its key stays held, so a `POST` naming the key answers it,
   `stopped`, and a restart takes up no stopped line. A briefing that ended before the stop keeps its end.
-- **A listener hearing `briefings.stopped` falls silent for its room,** or for every room where `chatId` is null:
-  it stops the briefing of that room it plays, and plays by itself none of that room's briefings that ended
-  before the event.
+- **A listener hearing `briefings.stopped` falls silent for its room and its kind,** for every room where `chatId`
+  is null and for every kind where `kind` is null: it stops the briefing of that room and kind it plays, and plays
+  by itself none of that room's briefings of that kind that ended before the event. A stop of summaries leaves a
+  full reading somebody asked for playing.
 - **A summary may be spoken before its line stands.** One taken in with no `messageId` awaits its line, and
   `POST /briefings/{briefingId}/line` names it, or lets it go with null; either way it no longer awaits one, and
   `briefing.changed` says so. A full reading's line is never moved; asking is 409 `conflict`.

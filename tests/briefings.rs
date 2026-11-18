@@ -2,8 +2,9 @@
 //! its room and its line, its end is told on the event stream, a summary's line is named after it, a full reading
 //! names its line and keeps it, and the page narrows by room, line and kind; and the synthesis a line is spoken as
 //! waits for its card, saying why, and gives it back as it ends; a caller's key takes a line in once; and a stop ends
-//! every briefing of a room, or of every room, that has not ended, gives back its card and tells it; and switching
-//! the briefings off ends a waiting line and a speaking one alike, neither of which plays or is spoken afterwards.
+//! every briefing of a room, or of every room, that has not ended, gives back its card and tells it; a stop of one
+//! kind leaves the other going and tells its kind; and switching the briefings off ends a waiting line and a speaking
+//! one of either kind alike, neither of which plays or is spoken afterwards.
 
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -694,8 +695,83 @@ async fn a_stop_ends_a_rooms_waiting_briefings_gives_back_their_card_and_tells_i
     ]
   );
   assert_eq!(told[1].1["state"], "stopped");
-  assert_eq!(told[2].1, json!({ "chatId": ROOM, "briefingIds": [here_id] }));
-  assert_eq!(told[5].1, json!({ "chatId": null, "briefingIds": [there_id] }));
+  assert_eq!(told[2].1, json!({ "chatId": ROOM, "kind": null, "briefingIds": [here_id] }));
+  assert_eq!(told[5].1, json!({ "chatId": null, "kind": null, "briefingIds": [there_id] }));
+}
+
+#[tokio::test]
+async fn a_stop_naming_a_kind_no_briefing_has_is_refused() {
+  let scratch = Scratch::new().await;
+  let engine = engine(&scratch, None).await;
+  let (status, refused) = call(&engine, "POST", "/briefings/stop", Some(json!({ "kind": "song" }))).await;
+
+  assert_eq!(
+    (status, refused["code"].as_str()),
+    (StatusCode::BAD_REQUEST, Some("bad-request")),
+    "{refused}"
+  );
+}
+
+#[tokio::test]
+async fn a_stop_of_summaries_leaves_a_waiting_full_reading_going_and_tells_its_kind() {
+  let scratch = Scratch::new().await;
+  let engine = engine(&scratch, Some(line_master(Arc::default()).await)).await;
+  let briefing = |kind: &str| {
+    json!({ "voiceName": "voice-b", "text": "The backup finished.", "spoken": SPOKEN, "chatId": ROOM,
+            "messageId": 7, "kind": kind, "key": format!("kind:{kind}") })
+  };
+  let (_, summary) = call(&engine, "POST", "/briefings", Some(briefing("summary"))).await;
+  let (_, full) = call(&engine, "POST", "/briefings", Some(briefing("full"))).await;
+  let (summary_id, full_id) = (summary["id"].as_i64().expect("an id"), full["id"].as_i64().expect("an id"));
+
+  let (status, stopped) =
+    call(&engine, "POST", "/briefings/stop", Some(json!({ "chatId": ROOM, "kind": "summary" }))).await;
+  let ids: Vec<&Value> =
+    stopped["items"].as_array().expect("a page").iter().map(|one| &one["id"]).collect();
+
+  assert_eq!((status, ids), (StatusCode::OK, vec![&json!(summary_id)]), "{stopped}");
+
+  // The full reading goes on: it still asks for its card after the stop.
+  let synthesis = format!("/syntheses/{}", full["synthesisId"]);
+  let mut read = Value::Null;
+
+  for _ in 0..400 {
+    (_, read) = call(&engine, "GET", &synthesis, None).await;
+
+    if read["waitingOn"] == IN_USE {
+      break;
+    }
+
+    tokio::time::sleep(Duration::from_millis(25)).await;
+  }
+
+  assert_eq!(
+    (read["state"].as_str(), &read["waitingOn"]),
+    (Some("waiting"), &json!(IN_USE)),
+    "{read}"
+  );
+
+  let (_, kept) = call(&engine, "GET", &format!("/briefings/{full_id}"), None).await;
+
+  assert_eq!(kept["state"], "waiting", "{kept}");
+
+  let (_, page) = call(&engine, "GET", "/events?kinds=briefing.ended,briefings.stopped", None).await;
+  let told: Vec<(&str, &Value)> = page["items"]
+    .as_array()
+    .expect("a page")
+    .iter()
+    .map(|event| (event["kind"].as_str().unwrap_or_default(), &event["data"]))
+    .collect();
+
+  assert_eq!(told.len(), 2, "{page}");
+  assert_eq!((told[0].0, &told[0].1["id"]), ("briefing.ended", &json!(summary_id)));
+  assert_eq!(
+    told[1],
+    (
+      "briefings.stopped",
+      &json!({ "chatId": ROOM, "kind": "summary", "briefingIds": [summary_id] })
+    )
+  );
 }
 
 /// A stand-in master holding a demand for each line that asks: the one asked with `granted` as its work key is
@@ -800,7 +876,7 @@ async fn silent_nodes(asked: Arc<std::sync::atomic::AtomicBool>) -> std::net::So
 }
 
 #[tokio::test]
-async fn switching_off_stops_a_waiting_and_a_speaking_briefing_and_neither_plays_afterwards() {
+async fn switching_off_stops_a_speaking_summary_and_a_waiting_full_reading_and_neither_plays_afterwards() {
   let scratch = Scratch::new().await;
   let cards = Arc::new(Cards {
     granted: "voice:synthesis:1".to_owned(),
@@ -812,12 +888,12 @@ async fn switching_off_stops_a_waiting_and_a_speaking_briefing_and_neither_plays
   let nodes = silent_nodes(Arc::clone(&node_asked)).await;
   let served = served(&scratch, Some(master), Some(nodes)).await;
   let engine = router(served.clone());
-  let briefing = |room: i64| {
+  let briefing = |room: i64, kind: &str| {
     json!({ "voiceName": "voice-b", "text": "The backup finished.", "spoken": SPOKEN, "chatId": room,
-            "kind": "summary" })
+            "messageId": 7, "kind": kind })
   };
-  let (_, speaking) = call(&engine, "POST", "/briefings", Some(briefing(ROOM))).await;
-  let (_, waiting) = call(&engine, "POST", "/briefings", Some(briefing(9))).await;
+  let (_, speaking) = call(&engine, "POST", "/briefings", Some(briefing(ROOM, "summary"))).await;
+  let (_, waiting) = call(&engine, "POST", "/briefings", Some(briefing(9, "full"))).await;
   let ids = [speaking["id"].clone(), waiting["id"].clone()];
 
   assert_eq!(speaking["synthesisId"], 1, "the stand-in master grants the first synthesis its card");
@@ -845,7 +921,7 @@ async fn switching_off_stops_a_waiting_and_a_speaking_briefing_and_neither_plays
   assert!(node_asked.load(Ordering::SeqCst), "the speaking line reached its node");
   assert_eq!((states.1["state"].as_str(), &states.1["waitingOn"]), (Some("waiting"), &json!(IN_USE)));
 
-  // Switching the briefings off stops every room's.
+  // Switching the briefings off, naming no kind, stops every room's of every kind.
   let (status, stopped) = call(&engine, "POST", "/briefings/stop", Some(json!({}))).await;
 
   assert_eq!(status, StatusCode::OK, "{stopped}");
@@ -895,7 +971,10 @@ async fn switching_off_stops_a_waiting_and_a_speaking_briefing_and_neither_plays
       .all(|(kind, data)| *kind == "briefing.ended" && data["state"] == "stopped"),
     "{page}"
   );
-  assert_eq!(told[2], ("briefings.stopped", &json!({ "chatId": null, "briefingIds": ids })));
+  assert_eq!(
+    told[2],
+    ("briefings.stopped", &json!({ "chatId": null, "kind": null, "briefingIds": ids }))
+  );
 
   // Switched on again, or started afresh, the engine takes up no line that was stopped.
   let taken = bmo_voice::http::take_up(Arc::clone(&served.context), served.events.clone())

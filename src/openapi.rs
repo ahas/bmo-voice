@@ -340,7 +340,7 @@ pub fn openapi() -> Value {
     operation(
       "stopBriefings",
       "briefings",
-      "Stop every briefing of a room, or of every room, that has not ended; each is stopped and told, and the stop is told for the listeners to fall silent.",
+      "Stop every briefing of a room and a kind, or of every room and every kind, that has not ended; each is stopped and told, and the stop is told for the listeners to fall silent.",
       Asked {
         parameters: Vec::new(),
         body: Some(generator.subschema_for::<BriefingStop>().to_value()),
