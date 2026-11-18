@@ -21,8 +21,8 @@ code, a comment, a document, a test fixture or a commit message.
 
 ## The check
 
-The repository's check holds it (`tests/personal_data.rs`): a pattern check over every tracked file for mail
-addresses, home paths, telephone numbers, tokens and private network addresses. A mailbox in a reserved example
+The testbed's `personal-data` check, which the declaration enables, holds it: a pattern check over every
+tracked file for mail addresses, home paths, telephone numbers, tokens and private network addresses. A mailbox in a reserved example
 domain and the development address are not findings, and neither is a home path naming a neutral folder.
 
 The repository holds the patterns, not a list of terms: a term a scan looks for stands outside the repository,

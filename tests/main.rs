@@ -9,7 +9,6 @@ mod mouth_long_line;
 mod mouth_stages;
 mod narration;
 mod node_target;
-mod personal_data;
 mod scratch;
 mod script_figures;
 mod spoken_words;

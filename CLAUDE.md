@@ -67,5 +67,5 @@ is spoken, and what it says, is its caller's to decide.
 
 - `cargo check --all-targets`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --all --check` for the
   crate; `bunx tsc --noEmit` in each Bun project; `python3 -m py_compile` for the Python under `synth/`.
-- Tests stand in `tests/`, never beside the code; the repository-wide personal-data check is one
-  (`tests/personal_data.rs`, `docs/PERSONAL-DATA.md`).
+- Tests stand in `tests/`, never beside the code. The testbed's `personal-data` check holds the
+  personal-data rule (`docs/PERSONAL-DATA.md`).

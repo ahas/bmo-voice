@@ -93,7 +93,7 @@ stands, and no other.
 ## Tests
 
 Tests live in `tests/`, never beside the code they test, and a hosted tool's in its own folder's `tests/`. The
-repository-wide personal-data check is `personal_data.rs` there (`PERSONAL-DATA.md`); `docs/inventory.md` records
+personal-data rule is held by the testbed's `personal-data` check (`PERSONAL-DATA.md`); `docs/inventory.md` records
 the behaviour the tests are to keep.
 
 A test that needs a store makes a database of its own on the suite's server, the one `BMO_TEST_POSTGRES` names or
