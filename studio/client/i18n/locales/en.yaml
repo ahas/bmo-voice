@@ -147,6 +147,7 @@ common:
     discard_changes: Discard unsaved changes?
     share: Share
   action:
+    add_choice: 'Add "{value}"'
     cancel: Cancel
     choose_all: Choose all
     choose_none: Choose none
@@ -199,6 +200,7 @@ common:
     increase: Increase
     member_permission: "Permission of {name}"
     more_notices: "{n} more notices"
+    others_count: "{n} others"
     pinned_named: "{name}, pinned"
     play_named: "Play {name}"
     player_named: "{name} player"

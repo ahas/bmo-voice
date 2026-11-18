@@ -63,7 +63,7 @@ script:
     add: 추가
     delete: 삭제
     discard: 버리기
-    download_original: 원본 내려받기
+    download_original: 원본 다운로드
     export_csv: CSV 내보내기
     login: 로그인
     logout: 로그아웃
@@ -112,7 +112,7 @@ script:
     unsaved: 저장 안 됨
   message:
     add_lines: 확인한 대사를 추가하세요.
-    check_download: 위의 원본 내려받기로 파일을 확인하세요.
+    check_download: 위의 원본 다운로드로 파일을 확인하세요.
     check_ranges: 대사마다 시작과 끝을 확인하세요.
     delete_confirm: 고른 대사를 삭제할까요?
     discard_confirm: 저장하지 않은 변경을 버릴까요?
@@ -147,6 +147,7 @@ common:
     discard_changes: 저장하지 않은 변경을 버릴까요?
     share: 공유
   action:
+    add_choice: '"{value}" 추가'
     cancel: 취소
     choose_all: 모두 선택
     choose_none: 모두 해제
@@ -194,11 +195,12 @@ common:
     close_named: "{name} 닫기"
     column_width: "{name} 너비"
     decrease: 줄이기
-    download_named: "{name} 내려받기"
+    download_named: "{name} 다운로드"
     image_zoom: "{title} 확대"
     increase: 늘리기
     member_permission: "{name} 권한"
     more_notices: "알림 {n}개 더"
+    others_count: "외 {n}명"
     pinned_named: "{name}, 고정됨"
     play_named: "{name} 재생"
     player_named: "{name} 플레이어"
