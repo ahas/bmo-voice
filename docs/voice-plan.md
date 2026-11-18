@@ -182,7 +182,8 @@ the voice nodes. What a caller does with the sound is the caller's.
   differ. A voice whose folder holds `reference.wav`, with the words it says as `reference_words` in its
   `voice.toml`, has every piece of every line asked with that clip in the place S2-Pro reads a reference from, so
   every line and every piece of it is spoken the way the clip is. The clip is a take of the voice's own, asked
-  bare, so it ends on the voice's own fall. A voice with no clip speaks its first piece bare. The row holds no
+  bare, so it ends on the voice's own fall. A server reads a clip's codes once and keeps them on the host through
+  every load after; a clip it could not read is read again by the next load, and the line is spoken without it. A voice with no clip speaks its first piece bare. The row holds no
   reference either way.
 - **The voices table says which one speaks** (`docs/store.md`): one row per voice, at most one current. The current
   voice is the chat agent's where its registration names none.

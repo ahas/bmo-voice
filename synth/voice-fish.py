@@ -613,6 +613,11 @@ class Mouth:
         self.sampling = {"temperature": 0.7, "top_p": 0.7}
         # The voice's delivery clip as its words and its codes (`delivery_clip`), None for a voice that has none.
         self.reference: tuple | None = None
+        # Each delivery clip read so far, by its file and when that was written: its codes are read once in a
+        # process, on the host, and stand through every load after.
+        self.clips: dict = {}
+        # Why the last delivery clip could not be read, empty where it was or where the voice has none.
+        self.clip_failure = ""
         # The frame step every piece is generated through (`FrameStep`), made with the first model.
         self.step: FrameStep | None = None
         # The model's modules kept without their weights while the card is elsewhere, None where none are kept.
@@ -700,6 +705,9 @@ class Mouth:
         parts.append("frame kept" if self.keeps else "frame not kept")
         parts.append("on its delivery clip" if self.reference is not None else "no delivery clip")
 
+        if self.clip_failure:
+            parts.append(f"the clip could not be read: {self.clip_failure}")
+
         return ", ".join(parts)
 
     def slow(self, adapter: Path):
@@ -746,29 +754,43 @@ class Mouth:
         """The voice's delivery clip as S2-Pro reads a reference: the words `voice.toml` says it speaks and the codes
         the codec reads from `reference.wav`, mixed to one channel at the codec's rate. A voice whose folder holds no
         clip, or names no words for it, has none; a clip that cannot be read is told and the voice speaks without it,
-        since a line is worth more than its delivery."""
+        since a line is worth more than its delivery. A clip is read once in a process: its codes stand
+        on the host through every load after, and one that could not be read is read again by the next load."""
         words = said.get("reference_words")
         clip = checkpoint / REFERENCE_CLIP
+        self.clip_failure = ""
 
         if not isinstance(words, str) or not words.strip() or not clip.exists():
             return None
 
-        try:
-            import torch
-            import torchaudio
+        read = (str(clip), clip.stat().st_mtime_ns, words.strip())
 
-            audio, rate = sf.read(clip, dtype="float32", always_2d=True)
-            mono = torchaudio.functional.resample(torch.from_numpy(audio.mean(axis=1))[None], rate, self.codec.sample_rate)
+        if read in self.clips:
+            return self.clips[read]
 
-            with torch.inference_mode():
-                heard = mono[None].to(device="cuda", dtype=torch.bfloat16)
-                codes, _ = self.codec.encode(heard, torch.tensor([heard.shape[2]], device="cuda", dtype=torch.long))
+        import torch
 
-            return words.strip(), (codes[0] if codes.ndim == 3 else codes).cpu()
-        except Exception as failure:
-            print(f"voice-fish: the delivery clip of {checkpoint.name} could not be read, so the voice speaks without it: {failure}", file=sys.stderr, flush=True)
+        for again in (False, True):
+            try:
+                import torchaudio
 
-            return None
+                audio, rate = sf.read(clip, dtype="float32", always_2d=True)
+                mono = torchaudio.functional.resample(torch.from_numpy(audio.mean(axis=1))[None], rate, self.codec.sample_rate)
+
+                with torch.inference_mode():
+                    heard = mono[None].to(device="cuda", dtype=torch.bfloat16)
+                    codes, _ = self.codec.encode(heard, torch.tensor([heard.shape[2]], device="cuda", dtype=torch.long))
+
+                self.clips = {read: (words.strip(), (codes[0] if codes.ndim == 3 else codes).cpu())}
+                self.clip_failure = ""
+
+                return self.clips[read]
+            except Exception as failure:
+                self.clip_failure = f"{type(failure).__name__}: {failure}"[:200]
+                print(f"voice-fish: the delivery clip of {checkpoint.name} could not be read{'' if again else ', so it is read once more on an emptied cache'}: {self.clip_failure}", file=sys.stderr, flush=True)
+                torch.cuda.empty_cache()
+
+        return None
 
     def decoder(self):
         """The codec, with each of its transformers' attention mask made at that transformer's own block length
