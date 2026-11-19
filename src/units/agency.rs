@@ -53,6 +53,34 @@ impl Slot {
   }
 }
 
+/// What a turn came to once it ended.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Turned {
+  /// What it wrote.
+  Wrote(String),
+  /// It wrote nothing and did not end answered: its outcome, and agency's reason where it gave one.
+  Ended {
+    outcome: String,
+    reason: Option<String>,
+  },
+}
+
+impl std::fmt::Display for Turned {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Wrote(written) => formatter.write_str(written),
+      Self::Ended {
+        outcome,
+        reason: Some(reason),
+      } => write!(formatter, "the turn ended {outcome} with no answer: {reason}"),
+      Self::Ended {
+        outcome,
+        reason: None,
+      } => write!(formatter, "the turn ended {outcome} with no answer"),
+    }
+  }
+}
+
 /// An admission's answer: the request where it is let in, and the request's state with who gave it back and why.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -141,21 +169,32 @@ impl Agency {
   }
 
   /// One turn sent into a session, answered once it ends: what it wrote, its answer where it gave one, else its
-  /// text blocks joined.
-  pub async fn turn(&self, session: &str, body: &Value) -> Result<String, UnitError> {
+  /// text blocks joined; or, where it wrote nothing and did not end answered, how it ended.
+  pub async fn turn(&self, session: &str, body: &Value) -> Result<Turned, UnitError> {
     let request = self.caller.request(Method::POST, &["sessions", session, "turns"]).json(body);
     let turn: Value = self.caller.json(request).await?;
 
     if let Some(answer) = turn["answer"].as_str().filter(|answer| !answer.trim().is_empty()) {
-      return Ok(answer.to_owned());
+      return Ok(Turned::Wrote(answer.to_owned()));
     }
 
     let blocks: Vec<&str> = turn["text"]
       .as_array()
       .map(|blocks| blocks.iter().filter_map(Value::as_str).collect())
       .unwrap_or_default();
+    let written = blocks.join("\n");
 
-    Ok(blocks.join("\n"))
+    match turn["outcome"].as_str().filter(|outcome| *outcome != "answered") {
+      Some(outcome) if written.trim().is_empty() => Ok(Turned::Ended {
+        outcome: outcome.to_owned(),
+        reason: turn["reason"]
+          .as_str()
+          .map(str::trim)
+          .filter(|reason| !reason.is_empty())
+          .map(str::to_owned),
+      }),
+      _ => Ok(Turned::Wrote(written)),
+    }
   }
 
   /// A session ended: true where it is gone, false where a turn of it still runs.

@@ -117,9 +117,14 @@ async fn call(engine: &axum::Router, method: &str, path: &str, body: Option<Valu
 }
 
 async fn read_until(engine: &axum::Router, id: i64, done: impl Fn(&Value) -> bool) -> Value {
+  read_within(engine, id, 400, done).await
+}
+
+// A synthesis read every 25 ms, at most `looks` times, until it is as `done` says.
+async fn read_within(engine: &axum::Router, id: i64, looks: u32, done: impl Fn(&Value) -> bool) -> Value {
   let mut read = Value::Null;
 
-  for _ in 0..400 {
+  for _ in 0..looks {
     (_, read) = call(engine, "GET", &format!("/syntheses/{id}"), None).await;
 
     if done(&read) {
@@ -306,6 +311,9 @@ struct Asked {
   answers: Mutex<Vec<String>>,
 }
 
+// What marks a stand-in turn's answer as a turn that failed with no answer, its reason after it.
+const ENDED: &str = "ended:";
+
 // A refusal as agency answers one.
 fn refused(status: StatusCode, code: &str, error: String) -> (StatusCode, axum::Json<Value>) {
   (status, axum::Json(json!({ "code": code, "error": error })))
@@ -434,7 +442,15 @@ async fn stand_in_agency(asked: Arc<Asked>) -> std::net::SocketAddr {
             .unwrap()
             .push(turn["prompt"].as_str().unwrap_or_default().to_owned());
           let answer = asked.answers.lock().unwrap().remove(0);
-          (StatusCode::CREATED, axum::Json(json!({ "answer": answer })))
+
+          // An answer the test marks as an end is a turn that wrote nothing: agency answers its outcome and reason.
+          match answer.strip_prefix(ENDED) {
+            Some(reason) => (
+              StatusCode::CREATED,
+              axum::Json(json!({ "answer": null, "text": [], "outcome": "failed", "reason": reason })),
+            ),
+            None => (StatusCode::CREATED, axum::Json(json!({ "answer": answer }))),
+          }
         },
       ),
     )
@@ -556,6 +572,47 @@ async fn written_words_alone_are_derived_on_a_slot_the_agreed_readings_first_and
   assert_eq!(hashes, 0, "an identifier is no name and gets no row");
 
   store.close().await.expect("the store connection closes");
+}
+
+#[tokio::test]
+async fn a_turn_that_ended_with_no_answer_gives_its_session_up_and_the_next_try_stands_a_new_one() {
+  let scratch = Scratch::new().await;
+  let asked = Arc::new(Asked::default());
+  let spoken = "넉스트 모델";
+
+  *asked.answers.lock().unwrap() = vec![
+    format!("{ENDED}the road answered nothing"),
+    json!({ "spoken": spoken, "readings": [] }).to_string(),
+  ];
+
+  let engine = engine(&scratch, Some(stand_in_agency(Arc::clone(&asked)).await)).await;
+  let (status, made) = call(
+    &engine,
+    "POST",
+    "/syntheses",
+    Some(json!({ "voiceName": "voice-a", "text": "the Nuxt model" })),
+  )
+  .await;
+
+  assert_eq!(status, StatusCode::CREATED, "{made}");
+
+  let id = made["id"].as_i64().expect("an id");
+  // A second slot waits in its line and a second session is started before the try that answers.
+  let read = read_within(&engine, id, 1200, |read| read["spoken"].is_string()).await;
+
+  assert_eq!(read["spoken"], spoken, "{read}");
+  assert_eq!(asked.prompts.lock().unwrap().len(), 2, "the try that did not answer is asked again");
+  assert_eq!(asked.starts.lock().unwrap().len(), 2, "the next try stands on a session of its own");
+  assert_eq!(
+    *asked.ended.lock().unwrap(),
+    ["transliterator@run:1", "transliterator@run:1"],
+    "the session whose turn ended with no answer is ended, and the one that answered after it"
+  );
+
+  let given_back = asked.given_back.lock().unwrap().clone();
+
+  assert_eq!(given_back.len(), 2, "each slot is given back: {given_back:?}");
+  assert_eq!(given_back[0]["outcome"], "failed", "the first as failed: {given_back:?}");
 }
 
 #[tokio::test]

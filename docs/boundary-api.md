@@ -254,6 +254,10 @@ server any other way.
   road of its own. The session is ended and the slot given back once the spoken words stand; a slot or a
   session agency no longer holds is given up and a new one asked, and no try leaves a session of its own
   standing.
+- **A turn that ended with no answer is no answer to read.** Agency answers a turn's end with its `outcome`
+  and, where it has one, its `reason`; a turn that wrote nothing and whose outcome is not `answered` — one
+  that failed, or was stopped — is a try that did not answer, said with that outcome and reason, and its
+  session and slot are given up, so the next try stands on a new session.
 - **Agency binds the slot to the session** as it starts it, so the slot stands for as long as the session does
   and is given back with its end (agency's `docs/role-slots.md`, 「The line」); the engine binds nothing itself,
   and its own give-back after the session's end finishes a slot agency may already have given back.
@@ -282,8 +286,9 @@ server any other way.
   no place of the role's cap, and the engine keeps no list of the slots it holds.
 - **Derived spoken words hold at most 30,000 characters,** the bound a caller's `spoken` is held to; a longer
   answer does not stand and is asked again, as one that fails the check is.
-- **Nothing gives it up.** An answer that fails the check, one that does not read, a slot or a session agency
-  refuses and agency not reached are each asked again five seconds later, however often; `waitingOn` says which
+- **Nothing gives it up.** An answer that fails the check, one that does not read, a turn that ended with no
+  answer, a slot or a session agency refuses and agency not reached are each asked again five seconds later,
+  however often; `waitingOn` says which
   it was and why, and the synthesis stays `waiting` until its spoken words stand. They are kept as its
   `spoken`, and its card is asked after.
 
@@ -488,7 +493,7 @@ The co-worker pool and its role's sessions (its `docs/api.md`, 「slots, reserva
 | its admission and its end | `PATCH /slot-requests/{token}` | asked with no state, again and again while its `state` is `waiting` or `reserved`, until it is `active`; `released` or `cancelled`, with `endedBy` and `outcome`, ends the asking and a new slot is asked; given back with `finished` and its outcome, `cancel` where no turn ran; never bound by the engine |
 | everything a synthesis holds | `DELETE /slot-requests?owner=voice:synthesis:<synthesisId>` | asked as the service starts, for each synthesis an earlier process left unspoken, before it is taken up: its slots given back and the sessions bound to them ended |
 | a session | `POST /sessions` with `scope` `role`, `slot` the slot's token, `line`, `systemPrompt`, `labels` naming the synthesis and `toolsAllowed` empty | the derivation's role's session, on the slot's role, provider, model and effort, agency binding the slot to it; `422` `slot-not-active` or `contradicts-slot` and `503` `line-not-carried` give the slot back and a new one is asked |
-| its turns | `POST /sessions/{sessionId}/turns` with `prompt`, `resume` `fresh`, `name`, `title`, `chat` 0 (the derivation stands under no room), `hearsWords` false and `variables` empty | one try on the session's road, answered once it ends; its answer is the model's |
+| its turns | `POST /sessions/{sessionId}/turns` with `prompt`, `resume` `fresh`, `name`, `title`, `chat` 0 (the derivation stands under no room), `hearsWords` false and `variables` empty | one try on the session's road, answered once it ends; its `answer` is the model's, else its `text` blocks joined, and where it wrote neither its `outcome` and `reason` say how it ended |
 | its end | `DELETE /sessions/{sessionId}` | the session ended once the spoken words stand; one still busy is asked again |
 
 ### bmo-web

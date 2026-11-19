@@ -14,7 +14,7 @@ use crate::script::reading::{Language, VoiceName};
 use crate::script::unconverted::{Unconverted, unconverted};
 use crate::store::voices;
 use crate::units::UnitError;
-use crate::units::agency::{Agency, Slot, SlotAsk};
+use crate::units::agency::{Agency, Slot, SlotAsk, Turned};
 
 /// What the derivation's model is told, its system prompt.
 const INSTRUCTIONS: &str = include_str!("../../prompts/spoken-words.md");
@@ -104,24 +104,35 @@ pub async fn derived(
         };
 
         match one_try(context, agency, standing, id, language, text, failed.as_ref()).await {
-          Ok(answer) => match answer.and_then(|answer| checked(&answer, language).map(|()| answer)) {
-            Ok(answer) => {
-              if let Some(standing) = held.take() {
-                release(agency, standing, "answered").await;
+          // A turn that ended with no answer leaves a session nothing is read from: it is given up, and the
+          // next try stands a new one.
+          Ok(Tried::Ended(how)) => {
+            if let Some(standing) = held.take() {
+              release(agency, standing, "failed").await;
+            }
+
+            Missed::Road(how)
+          }
+          Ok(Tried::Answered(answer)) => {
+            match answer.and_then(|answer| checked(&answer, language).map(|()| answer)) {
+              Ok(answer) => {
+                if let Some(standing) = held.take() {
+                  release(agency, standing, "answered").await;
+                }
+
+                keep_readings(context, language, &answer.readings).await;
+
+                return answer.spoken.trim().to_owned();
               }
+              Err(Refusal::Unread(why)) => Missed::Answer(why),
+              Err(Refusal::Unconverted(found)) => {
+                let why = found.to_string();
 
-              keep_readings(context, language, &answer.readings).await;
-
-              return answer.spoken.trim().to_owned();
+                failed = Some(found);
+                Missed::Answer(why)
+              }
             }
-            Err(Refusal::Unread(why)) => Missed::Answer(why),
-            Err(Refusal::Unconverted(found)) => {
-              let why = found.to_string();
-
-              failed = Some(found);
-              Missed::Answer(why)
-            }
-          },
+          }
           Err(why) => {
             // A slot or a session agency no longer holds is given up, and the next try stands a new one.
             if matches!(
@@ -154,6 +165,12 @@ pub async fn derived(
 struct Held {
   slot: Slot,
   session: String,
+}
+
+// What one try came to: the answer its turn wrote, read, or how a turn that wrote none ended.
+enum Tried {
+  Answered(Result<Answer, Refusal>),
+  Ended(String),
 }
 
 // Why an answer was not taken.
@@ -370,15 +387,17 @@ async fn one_try(
   language: Language,
   text: &str,
   failed: Option<&Unconverted>,
-) -> Result<Result<Answer, Refusal>, UnitError> {
+) -> Result<Tried, UnitError> {
   let agreed = agreed(context, language).await.map_err(|why| UnitError::Unreached {
     unit: "the voice's store",
     why,
   })?;
   let body = turn_body(id, &turn_prompt(language, &agreed, text, failed));
-  let written = agency.turn(&held.session, &body).await?;
 
-  Ok(read_answer(&written))
+  Ok(match agency.turn(&held.session, &body).await? {
+    Turned::Wrote(written) => Tried::Answered(read_answer(&written)),
+    ended @ Turned::Ended { .. } => Tried::Ended(ended.to_string()),
+  })
 }
 
 // A slot waited on in its role's line, its admission asked again and again until the pool lets it in: the line lets
