@@ -187,6 +187,8 @@ export interface VoiceNodeRequest {
   style: string;
   // Whether the line is spoken a sentence at a time rather than in passes.
   sentences: boolean;
+  // The language the line is said in, which picks the voice's delivery clip for it; the voice's own clip where absent.
+  language?: string;
 }
 
 function under(root: string, path: string): string | null {

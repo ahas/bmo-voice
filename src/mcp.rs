@@ -134,7 +134,7 @@ struct Speaking {
   /// The words the voice says, checked before they are spoken; derived from `text` where absent.
   #[serde(default)]
   spoken: Option<String>,
-  /// The language the line is said in, `ko` or `en`; the voice's own where absent.
+  /// The language the line is said in, `ko` or `en`; where absent, the one its written words are in (English where more words hold a Latin letter than Hangul), else the voice's own.
   #[serde(default)]
   language: Option<String>,
   #[serde(default)]

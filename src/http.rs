@@ -367,7 +367,7 @@ async fn create_synthesis(
   served_voice(&row)?;
   known_emotion(asked.emotion.as_deref())?;
 
-  let language = line_language(asked.language.as_deref(), &row)?;
+  let language = line_language(asked.language.as_deref(), &asked.text, &row)?;
   let spoken = checked_spoken(asked.spoken.as_deref(), language)?;
   let at = crate::now_ms();
   // Held from the row's insert to its event, so no change told of it is numbered before its creation.
@@ -483,12 +483,17 @@ async fn held_briefing(served: &Served, held: &store::syntheses::Row) -> Result<
   ))
 }
 
-// The language a line is said in: the one it names, else its voice's; a voice of a language the spoken words have
-// no check for says only lines that name one.
-fn line_language(named: Option<&str>, row: &voices::VoiceRow) -> Result<Language, Refused> {
+// The language a line is said in (docs/boundary-api.md, 「The spoken words」): the one it names, else the one its
+// written words are in, else its voice's; a voice of a language the spoken words have no check for says only lines
+// that name one or whose words say one.
+fn line_language(named: Option<&str>, written: &str, row: &voices::VoiceRow) -> Result<Language, Refused> {
   if let Some(named) = named {
     return Language::parse(named)
       .ok_or_else(|| Refused::bad_request(format!("there is no language {named}")));
+  }
+
+  if let Some(said) = Language::of_line(written) {
+    return Ok(said);
   }
 
   Language::parse(&row.language).ok_or_else(|| {
@@ -822,6 +827,7 @@ async fn speak_line(context: &Context, events: Events, id: i64, voice: voices::V
     settings: &context.settings,
     voice: &voice,
     text: &text,
+    language: words.language,
     out: &out,
     ask: &ask,
     clocks: &context.clocks,
@@ -1020,10 +1026,10 @@ async fn create_briefing(
   known_emotion(asked.emotion.as_deref())?;
 
   let db = &served.context.db;
-  let language = line_language(asked.language.as_deref(), &voice)?;
-  let spoken_words = checked_spoken(asked.spoken.as_deref(), language)?;
   let script = spoken::finished_script(&spoken::spoken_script(&asked.text));
   let script = if script.trim().is_empty() { asked.text.trim().to_owned() } else { script };
+  let language = line_language(asked.language.as_deref(), &script, &voice)?;
+  let spoken_words = checked_spoken(asked.spoken.as_deref(), language)?;
   let at = crate::now_ms();
   // Held from the rows' insert to their events, so no change told of them, a stop's above all, is numbered before
   // their creation.

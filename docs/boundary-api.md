@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.34.
+Fixed at 0.1.0-rev.35.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -210,9 +210,14 @@ server any other way.
 - **`text` is the written words:** what people read of the line, the caption, the reading a road folds under a
   voice note, a transcript. The engine keeps them as they were given, and a briefing's as the script its reading
   rules make of them (「Script readings」); nothing else changes them.
-- **`language` is the language the line is said in,** `ko` or `en`, the voice's own where absent; any other is
-  answered 400 `bad-request`. A voice says a line of either language, and the spoken words are made and checked
-  in the line's.
+- **`language` is the language the line is said in,** `ko` or `en`; any other is answered 400 `bad-request`. A
+  voice says a line of either language, and the spoken words are made and checked in the line's.
+- **Where `language` is absent, the written words decide it** (a briefing's script, a synthesis's `text`): each
+  word between spaces that holds a Hangul letter is a Korean word, and each other word that holds a Latin letter
+  an English one. A line with more English words than Korean is said in English, with no Korean reading of its
+  words; one with as many Korean words or more is said in Korean, so a Korean line carrying English names, terms
+  or code, whose particles are written onto them, stays Korean. A line holding neither, a line of figures or of
+  another script, is said in the voice's own language.
 - **`spoken` is the words the voice says:** the same words as a reader of the line's language says them aloud.
   Every foreign name, acronym, product name and model name stands in that language's reading, every number,
   date, time and unit in the words a reader says, and a web address, a file path, code and markup are said in a

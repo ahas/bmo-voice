@@ -27,10 +27,11 @@ It calls the engine at the address in the voice settings, with the engine's toke
    `emotions`. Choose a voice by its name, among those `served`; one that is not is refused `retired-voice`.
 2. `voice_synthesize` with `{ "voiceName": "<name>", "text": "<the words>", "emotion": "<one of its emotions>" }`.
    `text` is the written words, what people read of the line. `spoken`, optional, is the words the voice says:
-   the same words as a reader of the voice's language says them aloud, every foreign name, acronym, product and
+   the same words as a reader of the line's language says them aloud, every foreign name, acronym, product and
    model name in that language's letters, every number, date and unit in words, and no address, path, code or
-   markup. Write them with judgement and pass them, or leave them out and the engine derives them. `emotion`,
-   `style` and `seed` are optional. The answer is the synthesis: its `id` and its state, `waiting` or
+   markup. Write them with judgement and pass them, or leave them out and the engine derives them. `language`,
+   `ko` or `en`, is optional: left out, a line with more English words than Korean is said in English and any
+   other in Korean, and a line of neither in the voice's own. `emotion`, `style` and `seed` are optional. The answer is the synthesis: its `id` and its state, `waiting` or
    `speaking`.
 3. `voice_synthesis` with `{ "synthesisId": <id> }` until the state is `done` or `failed`. A `done`
    synthesis carries `durationMs` and its `spoken` words. One that has not ended says what it waits on in
@@ -68,7 +69,7 @@ A tool error's text is JSON: `status`, `code` and `error`, the engine's English 
 - `bad-request`: the arguments are not the shape the tool takes; the sentence names what is wrong.
 - `unknown-emotion`: the emotion is not one the voice offers; `voice_voices` lists them.
 - `unconverted-run`: the `spoken` given holds a word a voice cannot say as written; the sentence names the first
-  one. Write that word in the voice's language and ask again.
+  one. Write that word in the line's language and ask again.
 - `unreadable-source`: an encoding's wav is not a file the engine can read.
 - `unauthorized`: the token is missing or wrong.
 - `failed`: the engine failed; the sentence is the failure.

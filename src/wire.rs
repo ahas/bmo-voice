@@ -209,7 +209,7 @@ pub struct NewSynthesis {
   /// The words the voice says, at most 30,000 characters and checked; derived from `text` where absent.
   #[serde(default)]
   pub spoken: Option<String>,
-  /// The language the line is said in, `ko` or `en`; the voice's own where absent.
+  /// The language the line is said in, `ko` or `en`; where absent, the one its written words are in (English where more words hold a Latin letter than Hangul), else the voice's own.
   #[serde(default)]
   pub language: Option<String>,
   /// One of the voice's emotions; the voice's own where absent.
@@ -388,7 +388,7 @@ pub struct NewBriefing {
   /// The words the voice says, at most 30,000 characters and checked; derived from the script where absent.
   #[serde(default)]
   pub spoken: Option<String>,
-  /// The language the line is said in, `ko` or `en`; the voice's own where absent.
+  /// The language the line is said in, `ko` or `en`; where absent, the one its written words are in (English where more words hold a Latin letter than Hangul), else the voice's own.
   #[serde(default)]
   pub language: Option<String>,
   pub chat_id: i64,

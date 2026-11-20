@@ -212,7 +212,7 @@ async fn taken_in(engine: &axum::Router) -> Value {
     engine,
     "POST",
     "/syntheses",
-    Some(json!({ "voiceName": "voice-b", "text": "A short line.", "spoken": SPOKEN })),
+    Some(json!({ "voiceName": "voice-b", "text": "A short line.", "spoken": SPOKEN, "language": "ko" })),
   )
   .await;
 

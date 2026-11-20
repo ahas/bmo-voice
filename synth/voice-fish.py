@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """Speaks a line in an agent's own trained voice: Fish Audio S2-Pro with the voice's adapter folded into its weights.
 
-The voice is a LoRA fine-tune of S2-Pro's slow autoregressive model on the agent's own recorded lines, spoken with no
-reference clip (docs/voice-plan.md, 「The voices」). What picks a run's weights is the voice folder named by the
+The voice is a LoRA fine-tune of S2-Pro's slow autoregressive model on the agent's own recorded lines, spoken on the
+delivery clip of the line's language where its folder holds one (docs/voice-plan.md, 「The voices」). What picks a run's weights is the voice folder named by the
 caller, never a table this file reads for itself: the row was chosen by the caller, and a mouth that went looking for
 its own settings could speak in a voice nobody asked for.
 
@@ -74,8 +74,13 @@ RATE = 48000
 
 # The engine a voice folder must name in its `voice.toml` to be spoken here: the policy's (`policy/voice.toml`).
 ENGINE = "fish-s2-pro"
-# The file a voice's delivery clip stands in, in the voice's folder (docs/voice-plan.md, 「The voices」).
+# The file a voice's delivery clip stands in, in the voice's folder, and the words it says in its `voice.toml`
+# (docs/voice-plan.md, 「The voices」); a clip of a line's language stands as `reference.<language>.wav`, its words as
+# `reference_words_<language>`.
 REFERENCE_CLIP = "reference.wav"
+REFERENCE_WORDS = "reference_words"
+# A line's language as a request names it: a language code of two or three lower-case letters.
+LANGUAGE = re.compile(r"[a-z]{2,3}")
 # A first capture longer than this, in seconds, compiled the step: a capture alone takes under one.
 RECOMPILED_S = 5.0
 
@@ -285,6 +290,20 @@ def refill(frame, loaded) -> None:
                 setattr(kept[name], attribute, value)
 
     frame._cache_setup_done = False
+
+
+def delivery_of(folder: Path, said: dict, language: str | None) -> tuple[Path, str] | None:
+    """The delivery clip a line in `language` is spoken on, as its file and the words it says: the voice's clip of
+    that language, `reference.<language>.wav` with `voice.toml`'s `reference_words_<language>`, where both stand, and
+    else the voice's own, `reference.wav` with `reference_words`; none where neither stands whole."""
+    own = (folder / REFERENCE_CLIP, said.get(REFERENCE_WORDS))
+    chosen = [own] if language is None else [(folder / f"reference.{language}.wav", said.get(f"{REFERENCE_WORDS}_{language}")), own]
+
+    for clip, words in chosen:
+        if isinstance(words, str) and words.strip() and clip.exists():
+            return clip, words.strip()
+
+    return None
 
 
 def declared(folder: Path) -> dict:
@@ -611,7 +630,7 @@ class Mouth:
         self.codec = None
         self.checkpoint: Path | None = None
         self.sampling = {"temperature": 0.7, "top_p": 0.7}
-        # The voice's delivery clip as its words and its codes (`delivery_clip`), None for a voice that has none.
+        # The delivery clip the line is spoken on, as its words and its codes (`deliver`), None where it has none.
         self.reference: tuple | None = None
         # Each delivery clip read so far, by its file and when that was written: its codes are read once in a
         # process, on the host, and stand through every load after.
@@ -640,7 +659,6 @@ class Mouth:
             self.took["weights"] = time.monotonic() - started
             self.codec = self.decoder()
             self.took["codec"] = time.monotonic() - started - self.took["weights"]
-            self.reference = self.delivery_clip(checkpoint, said)
 
             if self.step is None:
                 self.step = FrameStep()
@@ -750,20 +768,25 @@ class Mouth:
 
         return model
 
-    def delivery_clip(self, checkpoint: Path, said: dict) -> tuple | None:
-        """The voice's delivery clip as S2-Pro reads a reference: the words `voice.toml` says it speaks and the codes
-        the codec reads from `reference.wav`, mixed to one channel at the codec's rate. A voice whose folder holds no
-        clip, or names no words for it, has none; a clip that cannot be read is told and the voice speaks without it,
-        since a line is worth more than its delivery. A clip is read once in a process: its codes stand
-        on the host through every load after, and one that could not be read is read again by the next load."""
-        words = said.get("reference_words")
-        clip = checkpoint / REFERENCE_CLIP
-        self.clip_failure = ""
+    def deliver(self, checkpoint: Path, language: str | None) -> None:
+        """The delivery clip the line is spoken on, as `self.reference`: the clip of its language where the voice
+        has one, else the voice's own (`delivery_of`)."""
+        self.reference = self.delivery_clip(checkpoint, declared(checkpoint), language)
 
-        if not isinstance(words, str) or not words.strip() or not clip.exists():
+    def delivery_clip(self, checkpoint: Path, said: dict, language: str | None = None) -> tuple | None:
+        """The delivery clip of a line in `language` as S2-Pro reads a reference (`delivery_of`): the words
+        `voice.toml` says it speaks and the codes the codec reads from its file, mixed to one channel at the codec's
+        rate. A clip that cannot be read is told and the voice speaks without it, since a line is worth more than its
+        delivery. A clip is read once in a process: its codes stand on the host through every load after, beside every
+        other clip read, and one that could not be read is read again by the next line."""
+        self.clip_failure = ""
+        chosen = delivery_of(checkpoint, said, language)
+
+        if chosen is None:
             return None
 
-        read = (str(clip), clip.stat().st_mtime_ns, words.strip())
+        clip, words = chosen
+        read = (str(clip), clip.stat().st_mtime_ns, words)
 
         if read in self.clips:
             return self.clips[read]
@@ -781,7 +804,7 @@ class Mouth:
                     heard = mono[None].to(device="cuda", dtype=torch.bfloat16)
                     codes, _ = self.codec.encode(heard, torch.tensor([heard.shape[2]], device="cuda", dtype=torch.long))
 
-                self.clips = {read: (words.strip(), (codes[0] if codes.ndim == 3 else codes).cpu())}
+                self.clips[read] = (words, (codes[0] if codes.ndim == 3 else codes).cpu())
                 self.clip_failure = ""
 
                 return self.clips[read]
@@ -827,10 +850,11 @@ class Mouth:
 
         return codec.to("cuda")
 
-    def speak(self, checkpoint: Path, text: str, seed: int, style: str = "", by_sentence: bool = False, told=None):
-        """The line in the voice those weights carry, peak-matched, at `RATE` (`pieces`, joined 0.3 seconds apart),
-        each piece handed to `told` by its place and the count of pieces as it is begun."""
-        pieces, rate = self.pieces(checkpoint, text, seed, style, by_sentence, told)
+    def speak(self, checkpoint: Path, text: str, seed: int, style: str = "", by_sentence: bool = False, told=None,
+              language: str | None = None):
+        """The line in the voice those weights carry, said in `language`, peak-matched, at `RATE` (`pieces`, joined
+        0.3 seconds apart), each piece handed to `told` by its place and the count of pieces as it is begun."""
+        pieces, rate = self.pieces(checkpoint, text, seed, style, by_sentence, told, language)
         pause = np.zeros(int(SENTENCE_PAUSE * rate), dtype=np.float32)
         joined: list[np.ndarray] = []
 
@@ -845,12 +869,15 @@ class Mouth:
 
         return (audio / peak * PEAK).astype(np.float32), RATE
 
-    def pieces(self, checkpoint: Path, text: str, seed: int, style: str = "", by_sentence: bool = False, told=None):
+    def pieces(self, checkpoint: Path, text: str, seed: int, style: str = "", by_sentence: bool = False, told=None,
+               language: str | None = None):
         """The line's pieces at the codec's rate, each levelled (`levelled`) and faded at both edges (`faded`): a
         sentence at a time where asked (`sentences`), in passes the context holds otherwise (`passes`). Every piece
-        is spoken on from the voice's delivery clip where it has one, and else each piece after the first on from the
-        first (`piece`); every piece on the same seed, so the same line gives back the same samples every time."""
+        is spoken on from the voice's delivery clip for the line's language where it has one (`deliver`), and else
+        each piece after the first on from the first (`piece`); every piece on the same seed, so the same line gives
+        back the same samples every time."""
         self.ready(checkpoint)
+        self.deliver(checkpoint, language)
         rate = self.codec.sample_rate
         # What every piece of the line is spoken on from: the voice's delivery clip, or else the line's first piece,
         # as its words and the codes the model made for them, once it is spoken.
@@ -1168,9 +1195,13 @@ class Service:
 
         style = delivery(request.get("style"))
         by_sentence = request.get("sentences", False)
+        language = request.get("language")
 
         if not isinstance(by_sentence, bool):
             raise ValueError("sentences is true or false")
+
+        if language is not None and not (isinstance(language, str) and LANGUAGE.fullmatch(language)):
+            raise ValueError("language is a language code of two or three lower-case letters")
 
         declared(checkpoint)
         arrived = time.monotonic()
@@ -1213,6 +1244,7 @@ class Service:
                 started = time.monotonic()
                 audio, rate = self.mouth.speak(
                     checkpoint, text.strip(), int(request.get("seed", 0)), style, by_sentence, told=stage.piece,
+                    language=language,
                 )
                 spoke = time.monotonic() - started
                 self.mouth.judge_capture()

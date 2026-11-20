@@ -39,8 +39,8 @@ the readings the model chose for spellings no row held (`docs/voice-plan.md`, ã€
 | Column | What it holds |
 |---|---|
 | `written` | the spelling, matched whatever its case, the key |
-| `ko` | what a Korean stretch says in its place, empty to leave it as written |
-| `en` | what an English stretch says in its place, empty to leave it as written |
+| `ko` | what a Korean line says in its place, empty to leave it as written |
+| `en` | what an English line says in its place, empty to leave it as written |
 | `set_at` | when the row was last written |
 
 A table first made is given the seed names of `data/ko/voice-names.toml`; a table that stands is left as it is.

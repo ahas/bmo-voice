@@ -1,0 +1,32 @@
+[
+  {
+    "id": "greet-1",
+    "kind": "greeting",
+    "text": "Hi there! It's me, Beemo. Now I am speaking English, just for you."
+  },
+  {
+    "id": "brief-1",
+    "kind": "briefing",
+    "text": "The backup finished an hour ago, and every check passed on the first try."
+  },
+  {
+    "id": "brief-2",
+    "kind": "briefing",
+    "text": "I looked into the problem, and it was one missing setting, which I have fixed now."
+  },
+  {
+    "id": "names-1",
+    "kind": "names",
+    "text": "The receiver, the agency and the face all answered within a few seconds."
+  },
+  {
+    "id": "cons-1",
+    "kind": "consonants",
+    "text": "Six thick thistle sticks stood in the street, so the strong wind struck them first."
+  },
+  {
+    "id": "ask-1",
+    "kind": "question",
+    "text": "Eight people wanted to carry one television? That is a lot of helpers!"
+  }
+]

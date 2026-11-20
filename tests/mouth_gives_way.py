@@ -72,7 +72,7 @@ class StoodInMouth:
             self.checkpoint = checkpoint
         return 0.0
 
-    def speak(self, checkpoint, text, seed, style, by_sentence, told=None):
+    def speak(self, checkpoint, text, seed, style, by_sentence, told=None, language=None):
         self.speaking()
         return np.zeros(10, dtype=np.float32), fish.RATE
 

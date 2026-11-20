@@ -26,6 +26,7 @@ use tokio::io::AsyncWriteExt;
 use super::{card, shell_word, synth};
 use crate::context::Clocks;
 use crate::now_ms;
+use crate::script::reading::Language;
 use crate::settings::Settings;
 use crate::store::voices::VoiceRow;
 use crate::units::Units;
@@ -394,9 +395,9 @@ fn under(root: &Path, path: &str) -> Option<String> {
 }
 
 /// What the node is asked for one line in one voice: the row's folder named under the voices root, which is all the
-/// node's copy shares, with the seed, the delivery and the sentence switch the row speaks with
-/// (`docs/voice-plan.md`, 「What it answers」).
-pub fn request(voice: &VoiceRow, text: &str, root: &Path) -> Result<Value, NodeError> {
+/// node's copy shares, with the seed, the delivery and the sentence switch the row speaks with, and the language the
+/// line is said in, which picks its delivery clip (`docs/voice-plan.md`, 「What it answers」).
+pub fn request(voice: &VoiceRow, text: &str, language: Language, root: &Path) -> Result<Value, NodeError> {
   let checkpoint = under(root, &voice.checkpoint).ok_or_else(|| {
     NodeError::new(
       Failure::Elsewhere,
@@ -407,6 +408,7 @@ pub fn request(voice: &VoiceRow, text: &str, root: &Path) -> Result<Value, NodeE
 
   Ok(json!({
     "text": text, "checkpoint": checkpoint, "seed": voice.seed, "style": voice.style, "sentences": voice.by_sentence,
+    "language": language.code(),
   }))
 }
 
@@ -804,7 +806,7 @@ pub async fn health(shell: &NodeShell) -> Result<Health, NodeError> {
   }
 }
 
-/// One line to speak on the card the master grants: the voice, the words, where the sound goes, the demand asked
+/// One line to speak on the card the master grants: the voice, the words and their language, where the sound goes, the demand asked
 /// for the card, and the clocks of the node and the clock they are counted on: how long the node service may take to
 /// say how the node is reached, how long one command on the node may take and how long the line may stand still on it.
 pub struct Speech<'a> {
@@ -812,6 +814,7 @@ pub struct Speech<'a> {
   pub settings: &'a Settings,
   pub voice: &'a VoiceRow,
   pub text: &'a str,
+  pub language: Language,
   pub out: &'a Path,
   pub ask: &'a Ask,
   pub clocks: &'a Clocks,
@@ -863,7 +866,7 @@ pub async fn speak_on_card(
 ) -> Result<Heard, NotSpoken> {
   let started = now_ms();
   let root = speech.settings.voices_folder();
-  let request = request(speech.voice, speech.text, &root)?;
+  let request = request(speech.voice, speech.text, speech.language, &root)?;
   let arbiter = &speech.units.arbiter;
   let ledger = speech.settings.demands_folder();
   let mut held = card::hold(arbiter, &ledger, speech.ask, &mut |why| told(Stage::Waiting(why)))

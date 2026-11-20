@@ -21,7 +21,7 @@
     "language": {
       "type": "string",
       "enum": ["ko", "en"],
-      "description": "The language the words are said in; the voice's own where absent."
+      "description": "The language the words are said in, `ko` or `en`; where absent, the one the words are in (English where more words hold a Latin letter than Hangul), else the voice's own."
     },
     "path": {
       "type": "string",

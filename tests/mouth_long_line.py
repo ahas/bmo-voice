@@ -54,6 +54,12 @@ class StoodInMouth(fish.Mouth):
     def release(self) -> None:
         pass
 
+    def delivery_clip(self, checkpoint: Path, said: dict, language: str | None = None) -> tuple | None:
+        # The clip's codes stood in for by its file's name, so a test reads which clip a line was spoken on.
+        chosen = fish.delivery_of(checkpoint, said, language)
+
+        return None if chosen is None else (chosen[1], chosen[0].name)
+
     def piece(self, words: str, seed: int, carried: dict) -> np.ndarray:
         self.said.append(words)
         self.carried_into.append(carried["first"] is not None)
@@ -120,12 +126,10 @@ class LongLine(unittest.TestCase):
         self.server.server_close()
         self.folder.cleanup()
 
-    def spoken(self, text: str, by_sentence: bool) -> tuple[int, bytes]:
+    def spoken(self, text: str, by_sentence: bool, language: str | None = None) -> tuple[int, bytes]:
         # Written as the engine writes a request: UTF-8 as it stands, no character escaped.
-        body = json.dumps(
-            {"text": text, "checkpoint": "a-voice", "seed": 0, "style": "", "sentences": by_sentence},
-            ensure_ascii=False,
-        ).encode("utf-8")
+        asked = {"text": text, "checkpoint": "a-voice", "seed": 0, "style": "", "sentences": by_sentence}
+        body = json.dumps(asked | ({} if language is None else {"language": language}), ensure_ascii=False).encode("utf-8")
         asked = urllib.request.Request(
             f"http://127.0.0.1:{self.server.server_address[1]}/speak",
             data=body,
@@ -152,13 +156,34 @@ class LongLine(unittest.TestCase):
         self.assertEqual(len(audio), tones + pauses, "the pieces joined, a pause between each two")
         self.assertAlmostEqual(float(np.max(np.abs(audio))), fish.PEAK, places=3)
 
+    def clips(self, *languages: str) -> None:
+        # The voice's own delivery clip, and one for each language named, with the words each says.
+        voice = Path(self.folder.name) / "a-voice"
+        lines = [f'engine = "{fish.ENGINE}"', 'reference_words = "the own clip\'s words"']
+        (voice / "reference.wav").write_bytes(b"")
+
+        for language in languages:
+            (voice / f"reference.{language}.wav").write_bytes(b"")
+            lines.append(f'reference_words_{language} = "the {language} clip\'s words"')
+
+        (voice / "voice.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
     def test_a_voice_with_a_delivery_clip_speaks_every_piece_on_from_it_the_first_among_them(self) -> None:
-        self.service.mouth.reference = ("the clip's words", None)
+        self.clips()
         status, _ = self.spoken(line_of(2_000, "The index fell three point five percent."), by_sentence=True)
 
         self.assertEqual(status, 200)
         self.assertGreater(len(self.service.mouth.said), 1)
         self.assertEqual(self.service.mouth.carried_into, [True] * len(self.service.mouth.said))
+
+    def test_a_line_is_spoken_on_the_clip_of_its_language_and_else_on_the_voices_own(self) -> None:
+        self.clips("en")
+
+        for language, clip in [("en", "reference.en.wav"), ("ko", "reference.wav"), (None, "reference.wav")]:
+            status, _ = self.spoken("The backup finished.", by_sentence=True, language=language)
+
+            self.assertEqual(status, 200)
+            self.assertEqual(self.service.mouth.reference[1], clip, f"a line in {language}")
 
     def test_a_9000_character_line_comes_back_as_one_sound(self) -> None:
         text = line_of(9_000, "The index fell three point five percent to five thousand seven hundred and thirty.")

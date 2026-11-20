@@ -172,7 +172,7 @@ async fn a_summary_is_taken_in_at_once_its_end_is_told_and_its_line_is_named_aft
     "POST",
     "/briefings",
     Some(
-      json!({ "voiceName": "voice-a", "text": "The backup finished.", "spoken": SPOKEN, "chatId": ROOM, "kind": "summary",
+      json!({ "voiceName": "voice-a", "text": "The backup finished.", "spoken": SPOKEN, "language": "ko", "chatId": ROOM, "kind": "summary",
       "title": "The backup", "plays": false }),
     ),
   )
@@ -225,7 +225,7 @@ async fn a_speech_awaits_its_line_and_its_kind_narrows_the_page_and_the_stop() {
     &engine,
     "POST",
     "/briefings",
-    Some(json!({ "voiceName": "voice-a", "text": "Hello, everyone.", "spoken": SPOKEN, "chatId": ROOM, "kind": "speech" })),
+    Some(json!({ "voiceName": "voice-a", "text": "Hello, everyone.", "spoken": SPOKEN, "language": "ko", "chatId": ROOM, "kind": "speech" })),
   )
   .await;
 
@@ -247,7 +247,7 @@ async fn a_speech_awaits_its_line_and_its_kind_narrows_the_page_and_the_stop() {
     &engine,
     "POST",
     "/briefings",
-    Some(json!({ "voiceName": "voice-a", "text": "A gist.", "spoken": SPOKEN, "chatId": ROOM, "kind": "summary" })),
+    Some(json!({ "voiceName": "voice-a", "text": "A gist.", "spoken": SPOKEN, "language": "ko", "chatId": ROOM, "kind": "summary" })),
   )
   .await;
   let (_, page) = call(&engine, "GET", &format!("/briefings?chatId={ROOM}&kind=speech"), None).await;
@@ -271,7 +271,7 @@ async fn a_full_reading_names_its_line_keeps_it_and_the_page_narrows_to_it() {
   let scratch = Scratch::new().await;
   let engine = engine(&scratch, None).await;
   let asked = |message: Value| {
-    json!({ "voiceName": "voice-a", "text": "The whole line, read out.", "spoken": SPOKEN, "chatId": ROOM, "messageId": message,
+    json!({ "voiceName": "voice-a", "text": "The whole line, read out.", "spoken": SPOKEN, "language": "ko", "chatId": ROOM, "messageId": message,
       "kind": "full" })
   };
   let (status, _) = call(&engine, "POST", "/briefings", Some(asked(Value::Null))).await;
@@ -295,7 +295,7 @@ async fn a_full_reading_names_its_line_keeps_it_and_the_page_narrows_to_it() {
     &engine,
     "POST",
     "/briefings",
-    Some(json!({ "voiceName": "voice-a", "text": "Another room.", "spoken": SPOKEN, "chatId": 9, "kind": "summary" })),
+    Some(json!({ "voiceName": "voice-a", "text": "Another room.", "spoken": SPOKEN, "language": "ko", "chatId": 9, "kind": "summary" })),
   )
   .await;
 
@@ -430,7 +430,7 @@ async fn a_synthesis_waits_for_its_card_says_why_and_gives_it_back_as_it_ends() 
     &engine,
     "POST",
     "/syntheses",
-    Some(json!({ "voiceName": "voice-b", "text": "A short line.", "spoken": SPOKEN })),
+    Some(json!({ "voiceName": "voice-b", "text": "A short line.", "spoken": SPOKEN, "language": "ko" })),
   )
   .await;
 
@@ -482,7 +482,7 @@ async fn three_hundred_waiting_lines_share_one_runtime_and_one_read_of_the_maste
       &engine,
       "POST",
       "/syntheses",
-      Some(json!({ "voiceName": "voice-b", "text": "A short line.", "spoken": SPOKEN })),
+      Some(json!({ "voiceName": "voice-b", "text": "A short line.", "spoken": SPOKEN, "language": "ko" })),
     )
     .await;
 
@@ -508,8 +508,7 @@ async fn three_hundred_waiting_lines_share_one_runtime_and_one_read_of_the_maste
 async fn a_key_takes_a_line_in_once_until_it_fails() {
   let scratch = Scratch::new().await;
   let engine = engine(&scratch, None).await;
-  let line =
-    |text: &str| json!({ "voiceName": "voice-b", "text": text, "spoken": SPOKEN, "key": "research:7:ko" });
+  let line = |text: &str| json!({ "voiceName": "voice-b", "text": text, "spoken": SPOKEN, "language": "ko", "key": "research:7:ko" });
   let (status, first) = call(&engine, "POST", "/syntheses", Some(line("The first asking."))).await;
 
   assert_eq!(status, StatusCode::CREATED, "{first}");
@@ -543,13 +542,13 @@ async fn a_key_takes_a_line_in_once_until_it_fails() {
       &engine,
       "POST",
       "/syntheses",
-      Some(json!({ "voiceName": "voice-b", "text": "x", "spoken": SPOKEN, "key": "k2" }))
+      Some(json!({ "voiceName": "voice-b", "text": "x", "spoken": SPOKEN, "language": "ko", "key": "k2" }))
     ),
     call(
       &engine,
       "POST",
       "/syntheses",
-      Some(json!({ "voiceName": "voice-b", "text": "x", "spoken": SPOKEN, "key": "k2" }))
+      Some(json!({ "voiceName": "voice-b", "text": "x", "spoken": SPOKEN, "language": "ko", "key": "k2" }))
     ),
   );
 
@@ -560,7 +559,7 @@ async fn a_key_takes_a_line_in_once_until_it_fails() {
     &engine,
     "POST",
     "/syntheses",
-    Some(json!({ "voiceName": "voice-b", "text": "x", "spoken": SPOKEN, "key": "  " })),
+    Some(json!({ "voiceName": "voice-b", "text": "x", "spoken": SPOKEN, "language": "ko", "key": "  " })),
   )
   .await;
 
@@ -572,9 +571,8 @@ async fn a_line_is_taken_in_within_its_bounds_and_refused_past_them() {
   let scratch = Scratch::new().await;
   let engine = engine(&scratch, None).await;
   let words = |count: usize| "가".repeat(count);
-  let synthesis =
-    |text: String, spoken: String| json!({ "voiceName": "voice-b", "text": text, "spoken": spoken });
-  let briefing = |text: String, spoken: String| json!({ "voiceName": "voice-a", "text": text, "spoken": spoken, "chatId": ROOM, "kind": "summary" });
+  let synthesis = |text: String, spoken: String| json!({ "voiceName": "voice-b", "text": text, "spoken": spoken, "language": "ko" });
+  let briefing = |text: String, spoken: String| json!({ "voiceName": "voice-a", "text": text, "spoken": spoken, "language": "ko", "chatId": ROOM, "kind": "summary" });
 
   // At the bounds, a synthesis and a briefing are taken in.
   let (status, taken) =
@@ -609,7 +607,7 @@ async fn a_key_takes_a_briefing_in_once_and_a_plain_synthesis_key_is_a_conflict(
   let scratch = Scratch::new().await;
   let engine = engine(&scratch, None).await;
   let briefing = || {
-    json!({ "voiceName": "voice-b", "text": "The backup finished.", "spoken": SPOKEN, "chatId": ROOM,
+    json!({ "voiceName": "voice-b", "text": "The backup finished.", "spoken": SPOKEN, "language": "ko", "chatId": ROOM,
             "kind": "summary", "key": "research:9:ko" })
   };
   let (status, first) = call(&engine, "POST", "/briefings", Some(briefing())).await;
@@ -625,7 +623,9 @@ async fn a_key_takes_a_briefing_in_once_and_a_plain_synthesis_key_is_a_conflict(
     &engine,
     "POST",
     "/syntheses",
-    Some(json!({ "voiceName": "voice-b", "text": "x", "spoken": SPOKEN, "key": "plain" })),
+    Some(
+      json!({ "voiceName": "voice-b", "text": "x", "spoken": SPOKEN, "language": "ko", "key": "plain" }),
+    ),
   )
   .await;
 
@@ -636,7 +636,7 @@ async fn a_key_takes_a_briefing_in_once_and_a_plain_synthesis_key_is_a_conflict(
     "POST",
     "/briefings",
     Some(
-      json!({ "voiceName": "voice-b", "text": "x", "spoken": SPOKEN, "chatId": ROOM, "kind": "summary",
+      json!({ "voiceName": "voice-b", "text": "x", "spoken": SPOKEN, "language": "ko", "chatId": ROOM, "kind": "summary",
                  "key": "plain" }),
     ),
   )
@@ -655,7 +655,7 @@ async fn a_stop_ends_a_rooms_waiting_briefings_gives_back_their_card_and_tells_i
   let line = Arc::new(Line::default());
   let engine = engine(&scratch, Some(line_master(Arc::clone(&line)).await)).await;
   let briefing = |room: i64, key: &str| {
-    json!({ "voiceName": "voice-b", "text": "The backup finished.", "spoken": SPOKEN, "chatId": room,
+    json!({ "voiceName": "voice-b", "text": "The backup finished.", "spoken": SPOKEN, "language": "ko", "chatId": room,
             "kind": "summary", "key": key })
   };
   let (_, here) = call(&engine, "POST", "/briefings", Some(briefing(ROOM, "stop:here"))).await;
@@ -768,7 +768,7 @@ async fn a_stop_of_summaries_leaves_a_waiting_full_reading_going_and_tells_its_k
   let scratch = Scratch::new().await;
   let engine = engine(&scratch, Some(line_master(Arc::default()).await)).await;
   let briefing = |kind: &str| {
-    json!({ "voiceName": "voice-b", "text": "The backup finished.", "spoken": SPOKEN, "chatId": ROOM,
+    json!({ "voiceName": "voice-b", "text": "The backup finished.", "spoken": SPOKEN, "language": "ko", "chatId": ROOM,
             "messageId": 7, "kind": kind, "key": format!("kind:{kind}") })
   };
   let (_, summary) = call(&engine, "POST", "/briefings", Some(briefing("summary"))).await;
@@ -940,7 +940,7 @@ async fn switching_off_stops_a_speaking_summary_and_a_waiting_full_reading_and_n
   let served = served(&scratch, Some(master), Some(nodes)).await;
   let engine = router(served.clone());
   let briefing = |room: i64, kind: &str| {
-    json!({ "voiceName": "voice-b", "text": "The backup finished.", "spoken": SPOKEN, "chatId": room,
+    json!({ "voiceName": "voice-b", "text": "The backup finished.", "spoken": SPOKEN, "language": "ko", "chatId": room,
             "messageId": 7, "kind": kind })
   };
   let (_, speaking) = call(&engine, "POST", "/briefings", Some(briefing(ROOM, "summary"))).await;

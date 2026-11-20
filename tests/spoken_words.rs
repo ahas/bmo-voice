@@ -176,6 +176,77 @@ fn the_check_finds_the_first_word_left_unconverted_and_only_finds_it() {
 }
 
 #[test]
+fn a_lines_language_is_the_one_more_of_its_words_are_written_in() {
+  assert_eq!(
+    Language::of_line("BMO 왔어"),
+    Some(Language::Ko),
+    "as many Korean words as English is Korean"
+  );
+  assert_eq!(
+    Language::of_line("`cargo check --all-targets`가 통과했어요"),
+    Some(Language::Ko),
+    "a word with a particle written onto it is a Korean word"
+  );
+  assert_eq!(
+    Language::of_line("Say hello to 비모 for me, please."),
+    Some(Language::En),
+    "an English sentence carrying a Korean name stays English"
+  );
+  assert_eq!(
+    Language::of_line("Ｈｅｌｌｏ ｔｈｅｒｅ"),
+    Some(Language::En),
+    "full-width Latin letters are Latin"
+  );
+  assert_eq!(Language::of_line("12:30 — 3.5%"), None, "figures alone say no language");
+  assert_eq!(Language::of_line("   "), None);
+}
+
+#[tokio::test]
+async fn a_briefing_naming_no_language_is_said_in_the_one_its_words_are_in() {
+  let scratch = Scratch::new().await;
+  let asked = Arc::new(Asked::default());
+  let engine = engine(&scratch, Some(stand_in_agency(Arc::clone(&asked)).await)).await;
+  let lines = [
+    (
+      "Hi Haas! It's me, BMO! Now I am speaking English, just for you.",
+      "Hi Haas! It's me, Beemo! Now I am speaking English, just for you.",
+      "English",
+    ),
+    ("오늘 백업이 끝났습니다.", "오늘 백업이 끝났습니다.", "Korean"),
+    (
+      "오늘 receiver와 agency에 PR 두 개를 올렸어요.",
+      "오늘 리시버와 에이전시에 피알 두 개를 올렸어요.",
+      "Korean",
+    ),
+  ];
+
+  for (at, (written, said, language)) in lines.into_iter().enumerate() {
+    *asked.answers.lock().unwrap() = vec![json!({ "spoken": said, "readings": [] }).to_string()];
+
+    let (status, made) = call(
+      &engine,
+      "POST",
+      "/briefings",
+      Some(
+        json!({ "voiceName": "voice-a", "text": written, "chatId": 7, "kind": "speech", "plays": false }),
+      ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::CREATED, "{made}");
+
+    let synthesis = made["synthesisId"].as_i64().expect("its synthesis");
+    let read = read_until(&engine, synthesis, |read| read["spoken"].is_string()).await;
+
+    assert_eq!(read["spoken"], said, "{read}");
+    assert!(
+      asked.prompts.lock().unwrap()[at].contains(&format!("The line's language: {language}.")),
+      "{written} is said in {language}"
+    );
+  }
+}
+
+#[test]
 fn an_answer_is_read_out_of_the_text_round_it_and_held_to_the_check() {
   let fenced = "```json\n{\"spoken\": \"백업이 끝났습니다.\", \"readings\": []}\n```";
 
@@ -221,7 +292,7 @@ async fn spoken_words_a_caller_gives_are_checked_and_refused_naming_the_word_nev
     &engine,
     "POST",
     "/syntheses",
-    Some(json!({ "voiceName": "voice-a", "text": "Qwen is up.", "spoken": "Qwen 이 섰습니다." })),
+    Some(json!({ "voiceName": "voice-a", "text": "Qwen is up.", "spoken": "Qwen 이 섰습니다.", "language": "ko" })),
   )
   .await;
 
@@ -234,7 +305,7 @@ async fn spoken_words_a_caller_gives_are_checked_and_refused_naming_the_word_nev
     "POST",
     "/briefings",
     Some(
-      json!({ "voiceName": "voice-a", "text": "Up at 3.", "spoken": "3시에 섰습니다.", "chatId": 1,
+      json!({ "voiceName": "voice-a", "text": "Up at 3.", "spoken": "3시에 섰습니다.", "language": "ko", "chatId": 1,
       "kind": "summary" }),
     ),
   )
@@ -247,7 +318,7 @@ async fn spoken_words_a_caller_gives_are_checked_and_refused_naming_the_word_nev
     &engine,
     "POST",
     "/syntheses",
-    Some(json!({ "voiceName": "voice-a", "text": "Qwen is up.", "spoken": "퀜이 섰습니다." })),
+    Some(json!({ "voiceName": "voice-a", "text": "Qwen is up.", "spoken": "퀜이 섰습니다.", "language": "ko" })),
   )
   .await;
 
@@ -517,7 +588,7 @@ async fn written_words_alone_are_derived_on_a_slot_the_agreed_readings_first_and
     &engine,
     "POST",
     "/syntheses",
-    Some(json!({ "voiceName": "voice-a", "text": "Nuxt and the Qwen model" })),
+    Some(json!({ "voiceName": "voice-a", "text": "Nuxt and the Qwen model", "language": "ko" })),
   )
   .await;
 
@@ -611,7 +682,7 @@ async fn a_turn_that_ended_with_no_answer_gives_its_session_up_and_the_next_try_
     &engine,
     "POST",
     "/syntheses",
-    Some(json!({ "voiceName": "voice-a", "text": "the Nuxt model" })),
+    Some(json!({ "voiceName": "voice-a", "text": "the Nuxt model", "language": "ko" })),
   )
   .await;
 
@@ -648,7 +719,7 @@ async fn a_line_whose_tries_are_spent_fails_saying_why_each_try_under_a_name_of_
     &engine,
     "POST",
     "/syntheses",
-    Some(json!({ "voiceName": "voice-a", "text": "the Nuxt model" })),
+    Some(json!({ "voiceName": "voice-a", "text": "the Nuxt model", "language": "ko" })),
   )
   .await;
 
@@ -694,7 +765,7 @@ async fn a_briefing_stopped_while_its_words_are_derived_gives_back_what_its_line
     &engine,
     "POST",
     "/briefings",
-    Some(json!({ "voiceName": "voice-a", "text": "the Nuxt model", "chatId": 7, "kind": "summary", "plays": false })),
+    Some(json!({ "voiceName": "voice-a", "text": "the Nuxt model", "language": "ko", "chatId": 7, "kind": "summary", "plays": false })),
   )
   .await;
 

@@ -1,18 +1,18 @@
-//! The engine's own reading rules (docs/voice-plan.md, 「A line is spoken as a script」, 「How names are said」,
-//! 「How figures are said」): a line cut into its languages, its names said by the voice name table, its figures
+//! The engine's own reading rules (docs/voice-plan.md, 「Which language a line is said in」, 「How names are said」,
+//! 「How figures are said」): the language a line's words are in, its names said by the voice name table, its figures
 //! said by rule, and the spans a Korean voice has no settled reading for marked. Everything here is mechanical;
 //! no model is asked.
 
 use std::sync::LazyLock;
 
-use bmo_text::js::{self, is_space};
+use bmo_text::js;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use super::figures::RUN;
 use super::spoken::{CODE_CLOSE, CODE_OPEN, holds_korean};
 
-/// The language a stretch of a line is spoken in.
+/// The language a line is spoken in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Language {
@@ -37,9 +37,37 @@ impl Language {
       _ => None,
     }
   }
+
+  /// The language the written words of a line say they are in (docs/voice-plan.md, 「Which language a line is
+  /// said in」): English where more of its words hold a Latin letter and no Hangul than hold a Hangul letter,
+  /// Korean where as many or more hold Hangul, and none where no word holds either.
+  pub fn of_line(text: &str) -> Option<Self> {
+    let (korean, english) = text.split_whitespace().fold((0usize, 0usize), |(korean, english), word| {
+      if holds_korean(word) {
+        (korean + 1, english)
+      } else if word.chars().any(is_latin_letter) {
+        (korean, english + 1)
+      } else {
+        (korean, english)
+      }
+    });
+
+    match (korean, english) {
+      (0, 0) => None,
+      (korean, english) if english > korean => Some(Self::En),
+      _ => Some(Self::Ko),
+    }
+  }
 }
 
-/// One row of the voice name table: a spelling, and what a Korean and an English stretch say in its place,
+// A letter of the Latin alphabet, in its plain or its full-width form.
+fn is_latin_letter(character: char) -> bool {
+  character.is_ascii_alphabetic()
+    || ('\u{FF21}'..='\u{FF3A}').contains(&character)
+    || ('\u{FF41}'..='\u{FF5A}').contains(&character)
+}
+
+/// One row of the voice name table: a spelling, and what a Korean and an English line say in its place,
 /// empty where that language leaves it as written (docs/voice-plan.md, 「How names are said」).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct VoiceName {
@@ -57,133 +85,14 @@ impl VoiceName {
   }
 }
 
-/// One stretch of a line in one language, and where it stands in the line, by byte offsets.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VoiceStretch {
-  pub language: Language,
-  pub text: String,
-  pub start: usize,
-  pub end: usize,
-}
-
 /// Whether a text holds anything a Korean voice has no settled reading for: a roman letter, or a figure,
 /// which is read one way as a number and another as a date, a time or a version.
 pub fn needs_reading(text: &str) -> bool {
   text.chars().any(|character| character.is_ascii_alphanumeric())
 }
 
-fn is_roman(text: &str) -> bool {
-  text.chars().any(|character| character.is_ascii_alphabetic())
-}
-
 fn spaces_only(text: &str) -> bool {
   !text.is_empty() && text.chars().all(|character| character == ' ' || character == '\t')
-}
-
-// Where the line breaks into sentences, by byte offsets: the white space after a full stop, a question or
-// exclamation mark or an ellipsis, and every run of line breaks.
-fn sentence_gaps(text: &str) -> Vec<(usize, usize)> {
-  let characters = text.char_indices().collect::<Vec<_>>();
-  let offset = |at: usize| characters.get(at).map_or(text.len(), |(offset, _)| *offset);
-  let mut gaps = vec![];
-  let mut at = 0;
-
-  while at < characters.len() {
-    let character = characters[at].1;
-    let closed = at > 0 && matches!(characters[at - 1].1, '.' | '?' | '!' | '\u{2026}');
-    let gap: Option<fn(char) -> bool> = if closed && is_space(character) {
-      Some(is_space)
-    } else if character == '\n' {
-      Some(|next| next == '\n')
-    } else {
-      None
-    };
-
-    let Some(within) = gap else {
-      at += 1;
-      continue;
-    };
-    let end = at + characters[at..].iter().take_while(|(_, next)| within(*next)).count();
-
-    gaps.push((offset(at), offset(end)));
-    at = end;
-  }
-
-  gaps
-}
-
-// Where each sentence of the line starts and ends, its surrounding spaces left out.
-fn sentence_spans(text: &str) -> Vec<(usize, usize)> {
-  let mut spans = vec![];
-  let mut start = 0;
-
-  for (end, next) in sentence_gaps(text)
-    .into_iter()
-    .map(|(gap, next)| (gap, Some(next)))
-    .chain([(text.len(), None)])
-  {
-    let piece = &text[start..end];
-
-    if !js::trim(piece).is_empty() {
-      let lead = piece.len() - piece.trim_start_matches(is_space).len();
-
-      spans.push((start + lead, start + js::trim_end(piece).len()));
-    }
-
-    start = next.unwrap_or(end);
-  }
-
-  spans
-}
-
-// Korean for a sentence holding a Korean letter, English for one holding none with two words or more that
-// have a lower-case letter, and none for one that says nothing by itself — a greeting, a model name, a
-// figure.
-fn said_language(sentence: &str) -> Option<Language> {
-  if holds_korean(sentence) {
-    return Some(Language::Ko);
-  }
-
-  let words = sentence
-    .split(|character: char| !(character.is_ascii_alphabetic() || character == '\''))
-    .filter(|word| word.chars().any(|character| character.is_ascii_lowercase()))
-    .count();
-
-  (words >= 2).then_some(Language::En)
-}
-
-/// The line as its stretches of one language each, in order (docs/voice-plan.md, 「Which sentences are
-/// English」). A sentence that says nothing by itself takes the language of the next one that does, or of
-/// the last one before it where none follows; a line where none does is English if it has a roman letter
-/// and Korean otherwise. Neighbouring sentences of one language are one stretch, cut out of the line as they
-/// stand.
-pub fn voice_stretches(text: &str) -> Vec<VoiceStretch> {
-  let spans = sentence_spans(text);
-  let said = spans.iter().map(|&(start, end)| said_language(&text[start..end])).collect::<Vec<_>>();
-  let fallback = if is_roman(text) { Language::En } else { Language::Ko };
-  let mut stretches: Vec<VoiceStretch> = vec![];
-
-  for (at, &(start, end)) in spans.iter().enumerate() {
-    let language = said[at]
-      .or_else(|| said[at + 1..].iter().find_map(|after| *after))
-      .or_else(|| said[..at].iter().rev().find_map(|before| *before))
-      .unwrap_or(fallback);
-
-    match stretches.last_mut() {
-      Some(last) if last.language == language => {
-        last.end = end;
-        last.text = text[last.start..end].to_owned();
-      }
-      _ => stretches.push(VoiceStretch {
-        language,
-        text: text[start..end].to_owned(),
-        start,
-        end,
-      }),
-    }
-  }
-
-  stretches
 }
 
 /// One span of a Korean stretch the gate is asked to read, where it stands in the stretch by byte offsets,

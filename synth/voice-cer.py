@@ -19,10 +19,14 @@ The draws come from the trained voice on the voice server of the node `--node` n
 through `scripts/voice-node.ts speak` the way a briefing reaches it, and are transcribed in this
 process as they were spoken (docs/voice-plan.md, 「How intelligible the voice is」).
 
-usage: <venv>/bin/python synth/voice-cer.py --node <name> [--sentences <file.json>]
-       [--draws 2] [--work <dir>] [--json <out.json>]
-       [--checkpoint step_0450 --reference reference/<key>.wav
-        --style '<the voice row's delivery instruction>']
+Beside them, for a line asked in English, how surely the recogniser hears English in the clip
+(`english`): its own language guess, the share it gives English among every language it knows. A
+voice speaking English with another language's accent is heard as English less surely, so it
+tells the accent apart where the error rate alone does not.
+
+usage: <venv>/bin/python synth/voice-cer.py --node <name> --checkpoint <voice folder>
+       [--sentences <file.json>] [--language korean|english] [--draws 2] [--work <dir>]
+       [--json <out.json>] [--style '<the voice row's delivery instruction>']
 """
 
 import argparse
@@ -76,8 +80,8 @@ def spoken(text: str) -> str:
 
 
 def bare(text: str) -> str:
-    """What is left to compare: the letters and nothing else."""
-    return re.sub(r"[^가-힣a-zA-Z]", "", spoken(text))
+    """What is left to compare: the letters and nothing else, in one case."""
+    return re.sub(r"[^가-힣a-z]", "", spoken(text).lower())
 
 
 def cer(asked: str, heard: str) -> float:
@@ -128,11 +132,32 @@ def ending_db(sound, rate: int) -> float:
     return float(20 * np.log10(levels[max(0, last - 2): last + 1].max() / loudest))
 
 
+def english_share(asr, sound, rate: int) -> float:
+    """The share the recogniser's language guess gives English for the clip: its first decoding step
+    after the start of a transcript, read over its language tokens alone."""
+    import torch
+
+    model = asr.model
+    features = asr.feature_extractor(sound, sampling_rate=rate, return_tensors="pt").input_features
+    features = features.to(model.device, dtype=model.dtype)
+    start = asr.tokenizer.convert_tokens_to_ids("<|startoftranscript|>")
+    languages = model.generation_config.lang_to_id
+
+    with torch.no_grad():
+        logits = model(input_features=features,
+                       decoder_input_ids=torch.tensor([[start]], device=model.device)).logits[0, -1]
+
+    ids = list(languages.values())
+    shares = torch.softmax(logits[ids].float(), dim=-1)
+
+    return float(shares[ids.index(languages["<|en|>"])])
+
+
 def speak(args: argparse.Namespace, text: str, wav: Path, seed: int) -> None:
     """One draw of the trained voice from the voice server, through the node's own shell."""
     line = [
         "bun", "scripts/voice-node.ts", "speak", "--node", args.node,
-        "--checkpoint", args.checkpoint, "--reference", args.reference,
+        "--checkpoint", args.checkpoint, "--language", {"korean": "ko", "english": "en"}[args.language],
         "--style", args.style, "--seed", str(seed), "--text", text, "--wav", str(wav),
     ]
     done = subprocess.run(line, capture_output=True, text=True)
@@ -151,8 +176,9 @@ def main() -> int:
     # The trained voice is drawn from a voice server: the node it stands on by its name in the nodes
     # table, and the checkpoint and reference as names under its voices root.
     parser.add_argument("--node", required=True)
-    parser.add_argument("--checkpoint", default="step_0450")
-    parser.add_argument("--reference", default="reference/bc4bf96b5f4643b0aa2c.wav")
+    parser.add_argument("--checkpoint", required=True)
+    # The language the sentences are said in, as the recogniser names it.
+    parser.add_argument("--language", choices=["korean", "english"], default="korean")
     # The delivery instruction the voice row carries, so a clip is drawn the way a briefing speaks it.
     parser.add_argument("--style", default="")
     args = parser.parse_args()
@@ -199,11 +225,16 @@ def main() -> int:
             rate = 16000
 
         heard = asr({"raw": sound, "sampling_rate": rate},
-                    generate_kwargs={"language": "korean", "task": "transcribe"})["text"].strip()
+                    generate_kwargs={"language": args.language, "task": "transcribe"})["text"].strip()
         clip["heard"] = heard
         clip["cer"] = round(cer(clip["asked"], heard), 3)
+
+        if args.language == "english":
+            clip["english"] = round(english_share(asr, sound, rate), 3)
+
         print(f"voice-cer: {index}/{len(clips)} {clip['id']}-{clip['draw']} "
-              f"CER {clip['cer']:.3f} · ending {clip['endingDb']} dB · {heard}", file=sys.stderr, flush=True)
+              f"CER {clip['cer']:.3f} · ending {clip['endingDb']} dB · English {clip.get('english')} · {heard}",
+              file=sys.stderr, flush=True)
 
     def mean(of: list[dict]) -> float:
         return round(sum(clip["cer"] for clip in of) / max(1, len(of)), 3)
@@ -216,6 +247,9 @@ def main() -> int:
         "overall": mean(clips),
         "byKind": {kind: mean([c for c in clips if c["kind"] == kind]) for kind in kinds},
         "worst": max([c["cer"] for c in clips], default=0.0),
+        "language": args.language,
+        # How surely English was heard, on average, in a line asked in English.
+        "english": round(sum(c["english"] for c in clips) / len(clips), 3) if clips and "english" in clips[0] else None,
         # How many clips end on a last syllable cut off while it still sounds.
         "cutEndings": sum(clip["endingDb"] is not None and clip["endingDb"] > CUT_DB for clip in clips),
     }

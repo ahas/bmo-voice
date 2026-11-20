@@ -8,7 +8,7 @@
 //   bun scripts/voice-node.ts push   [--node <name>]   the mouth, the voices, the token and the unit; restarts it
 //   bun scripts/voice-node.ts sync   [--node <name>]   push, only where the stamp the last one left differs
 //   bun scripts/voice-node.ts health [--node <name>]   what the server holds right now
-//   bun scripts/voice-node.ts speak  [--node <name>] --text '<words>' --wav <path>
+//   bun scripts/voice-node.ts speak  [--node <name>] --text '<words>' --wav <path> [--language <code>]
 //       [--voice <name> | --checkpoint <folder under the voices root>] [--style '<instruction>'] [--seed 0]
 //       [--sentences on|off]
 //
@@ -492,6 +492,7 @@ async function speakRequest(text: string): Promise<VoiceNodeRequest> {
   const seed = argValue("--seed");
   const style = argValue("--style");
   const sentences = argValue("--sentences");
+  const language = argValue("--language");
 
   if (sentences !== null && sentences !== "on" && sentences !== "off") {
     fail("--sentences is on or off");
@@ -502,6 +503,7 @@ async function speakRequest(text: string): Promise<VoiceNodeRequest> {
     ...(seed === null ? {} : { seed: Number.parseInt(seed, 10) }),
     ...(style === null ? {} : { style }),
     ...(sentences === null ? {} : { sentences: sentences === "on" }),
+    ...(language === null ? {} : { language }),
   };
 }
 

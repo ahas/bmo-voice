@@ -138,23 +138,24 @@ the voice nodes. What a caller does with the sound is the caller's.
   a line's spoken words, which a model makes of the written words with judgement (`docs/boundary-api.md`, 「The
   spoken words」), never the script itself.
 
-### Which sentences are English
+### Which language a line is said in
 
-- **One rule, read where the script is made:** it decides which stretches a line's names and figures are said in
-  the Korean way. The mouth speaks a line whole, whatever languages it holds; S2-Pro reads both.
-- **A sentence** ends at a full stop, a question or exclamation mark or an ellipsis before a space, and at every
-  line break.
-- **Its language:** Korean where it holds a Hangul syllable; English where it holds none and has at least two words
-  with a lower-case letter; otherwise it takes the language of the next sentence that says one, or the last before
-  it. A line where no sentence says is English if it has a roman letter and Korean otherwise.
-- **Neighbouring sentences of one language are one stretch.** English is spoken as English.
+- **A line is said in one language, whole,** and its spoken words are made and checked in it
+  (`docs/boundary-api.md`, 「The spoken words」). The mouth speaks a line whole; S2-Pro reads both languages.
+- **A caller that names the language decides it.** Where none is named, the line's written words do, a briefing's
+  script or a synthesis's text: each word between spaces that holds a Hangul letter is a Korean word, and each
+  other word holding a Latin letter an English one.
+- **More English words than Korean make an English line,** spoken as English: its spoken words are English words,
+  with no Korean reading of them. As many Korean words or more make a Korean line, so a Korean sentence carrying
+  English names, terms or code stays Korean, its particles written onto them counting each such word as Korean.
+- **A line holding neither,** figures alone or another script, is said in its voice's own language.
 
 ## How names are said
 
 - **One table says it for both languages:** `voice_names` (`docs/store.md`), one row per spelling, each with what a
-  Korean stretch and an English stretch say in its place. An empty reading leaves the spelling as written.
+  Korean line and an English line say in its place. An empty reading leaves the spelling as written.
 - **Its rows are the agreed readings every line's spoken words are derived with** (`docs/boundary-api.md`, 「How the
-  engine derives the spoken words」): the rows with a reading in the voice's language are handed to the model as
+  engine derives the spoken words」): the rows with a reading in the line's language are handed to the model as
   readings to apply as they stand, and the model reads whatever else the line needs with its own judgement. No
   row is applied to a line by the engine itself.
 - **A reading the model chose is written in as a row,** for a spelling the table does not hold, so the same name is
@@ -188,19 +189,30 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 - **A trained voice is a LoRA fine-tune of S2-Pro** on an agent's recorded lines: an adapter on each attention and
   feed-forward linear of the slow autoregressive model, the fast one and the codec left as they are. Its folder
-  under the voices folder holds two files:
+  under the voices folder holds:
   - **`voice.toml`,** which says what the voice is: its engine, the run and step its adapter was trained at, the
-    words of its delivery clip where it has one, and the temperature and top-p every line of it is sampled with;
+    words of each delivery clip it has, and the temperature and top-p every line of it is sampled with;
   - **`lora.pt`,** the adapter: its two matrices for each linear it names, and the scale they are added at;
-  - **`reference.wav`,** where the voice has one: its delivery clip, one sentence the voice itself spoke.
+  - **`reference.wav`,** where the voice has one: its delivery clip, takes of its own in its own language;
+  - **`reference.<language>.wav`,** where the voice has one: its delivery clip for lines of another language, a
+    take of its own in that language, `reference.en.wav` for English.
 - **The adapter carries the voice, and a delivery clip carries how it speaks.** The adapter alone gives the
   timbre; the pitch, pace and mood of a line asked bare are whatever the model draws for that text, so two lines
   differ. A voice whose folder holds `reference.wav`, with the words it says as `reference_words` in its
   `voice.toml`, has every piece of every line asked with that clip in the place S2-Pro reads a reference from, so
   every line and every piece of it is spoken the way the clip is. The clip is a take of the voice's own, asked
   bare, so it ends on the voice's own fall. A server reads a clip's codes once and keeps them on the host through
-  every load after; a clip it could not read is read again by the next load, and the line is spoken without it. A voice with no clip speaks its first piece bare. The row holds no
+  every load after; a clip it could not read is read again by the next line, and the line is spoken without it. A voice with no clip speaks its first piece bare. The row holds no
   reference either way.
+- **A line is spoken on the clip of its language.** A voice's clip carries its language's accent into every line
+  spoken on it, so a line in another language than the voice's own is spoken on that language's clip,
+  `reference.<language>.wav` with its words as `reference_words_<language>`, where the folder holds both, and on
+  the voice's own clip otherwise. A Korean line is spoken on the Korean clip, an English line on the English one.
+- **A language's clip is chosen by measurement and swapped by hand:** takes of one delivery sentence in that
+  language drawn bare on several seeds, each measured with `synth/voice-cer.py` in that language, and the take
+  heard most exactly, most surely in that language and ending on the deepest fall placed as the clip, its words
+  written beside it. Another take is put in its place the same way, the file and its words replaced together, and
+  the next push brings it to the nodes (「How a voice is measured」).
 - **The voices table says which one speaks** (`docs/store.md`): one row per voice, at most one current. The current
   voice is the chat agent's where its registration names none.
 - **The instruction is the row's to change:** `scripts/voice-install.ts --style <name> '<words>'`. The mouth puts it
@@ -438,12 +450,13 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 - **Every call carries the bearer token,** `voice/voice.token` under the data root, made by the first `push` and
   copied to every node; it never goes into a database, a log, a command line or an environment variable.
-- **`POST /speak`:** a line and the voice as a name under the voices root, with `seed`, `style` and `sentences`. The
+- **`POST /speak`:** a line and the voice as a name under the voices root, with `seed`, `style`, `sentences` and
+  `language`, the language the line is said in, which picks its delivery clip (「The voices」). The
   answer is the spoken line as a 48 kHz 16-bit wav, peak-matched, with its length, load time, speaking time and
   checkpoint in its headers. The line is spoken whole however many characters it holds; only the request's body is
   bounded, at 1 MiB, read no further than that. A path leaving the voices root, a voice the node does not hold, a
-  voice whose `voice.toml` names another engine, nothing to say, or a `style` carrying a bracket or longer than 300
-  characters is refused before any model loads.
+  voice whose `voice.toml` names another engine, nothing to say, a `style` carrying a bracket or longer than 300
+  characters, or a `language` that is not two or three lower-case letters is refused before any model loads.
 - **`GET /health`:** the checkpoint loaded, whether a line is being spoken, whether the model is on the card, the
   device and VRAM held, the card's free memory (asked of `nvidia-smi`, opening no CUDA context), whether
   other work holds the card lock (read from the kernel's lock table, never by taking it), whether the server holds
@@ -533,3 +546,13 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **Intelligibility:** `synth/voice-cer.py` draws a voice's clips from a voice node's server, through
   `scripts/voice-node.ts speak`, of the sentences in `synth/voice-cer-sentences.json`, transcribes them with Whisper
   and compares them with the originals character by character, both sides first matched to their spoken spelling.
+- **In English:** `--language english` draws the sentences of `synth/voice-cer-sentences-en.json` as English lines,
+  transcribes them in English, and gives each clip the share Whisper's own language guess gives English. An accent
+  carried over from another language lowers that share where the error rate does not move, so it is how a voice's
+  English is told apart from its English spoken with a Korean accent.
+- **What the delivery clip does to an English line,** measured on the served voice with its six English sentences
+  three draws each: on its Korean clip, Whisper gives English 98.4% of its guess on average and Korean 0.72%, at
+  most 3.9% on one clip; bare, English 99.2% and Korean 0.28%; on its English clip, English 99.0% and Korean 0.42%,
+  14 of its 18 clips heard as less Korean than the same line and seed on the Korean clip. The error rate is the same
+  on all three, 1.8% to 2.1%. So an English line is spoken on the voice's English clip, which keeps the delivery
+  one line to the next that a bare line does not.
