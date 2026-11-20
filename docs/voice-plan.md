@@ -364,7 +364,8 @@ the voice nodes. What a caller does with the sound is the caller's.
   for an ssh node and the hub's exec and file transfer for a hub node, as the node service's target gives it.
 - **What a node takes:** a card of 12 GB or more (「The synthesiser」); a smaller card cannot be a voice node.
 - **What lands on each node,** under `bmo-voice/` in the account's home: the server file, the engine environment
-  (`fish-speech/`), the base weights (`s2-pro/`), a copy of the voices directory, and `spoken/` (`0700`), where a
+  (`fish-speech/`), the base weights (`s2-pro/`), a copy of the voices directory that holds what the data root's holds
+  and nothing more (「Building and updating them」), and `spoken/` (`0700`), where a
   call's request and answer stand while it is under way. The token is `.config/bmo-voice/token`, `0600`.
 
 ### Which node speaks a line
@@ -404,6 +405,13 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **`push`** copies the server file, the voices directory and the token, writes the unit, restarts it, waits until it
   answers its health or its process has ended (its unit failed or stopped, or restarting it), and leaves a stamp of
   what it brought, `bmo-voice/pushed`.
+- **The node's voices directory is made the data root's own on every push.** The voices are packed whole, every
+  file but a training stage's resume state, and the pack is unpacked on the node into a folder apart beside the
+  voices directory, which then takes the directory's place whole: a voice folder or a file the data root no longer
+  holds is gone from the node, and one it still holds stands as the data root has it. A pack that does not unpack
+  leaves the node's voices directory as it stood. The push touches nothing under `bmo-voice/` beyond the voices
+  directory, its pack and the two folders of its own beside it, `voices.incoming/` and `voices.previous/`, which a
+  push left halfway clears first; the engine environment, the base weights and `spoken/` stay as they are.
 - **`sync`** is push where it is due: only where a node's stamp differs from what a push would bring now. Every
   deployment runs it once the service answers (`docs/deploy.md`), so a change to the server or a newly installed
   voice reaches every node; a sync that pushes restarts that node's server.

@@ -16,7 +16,7 @@ How the repository is laid out, what each part is, and where it runs. Read this 
 | `src/` | The crate: the settings, the store, the event log, the service's client, the MCP server, the OpenAPI document, the script rules, synthesis and the voice nodes, the routes, a document's narration, the script studio's server, and the `voice-server`, `bmo-voice` and `script-studio` binaries |
 | `studio/` | The script studio's screen (`studio/client/`, a Nuxt project) and its media tools (`studio/lib/` and `studio/scripts/`, Bun and Python), with their records' shared fixtures |
 | `synth/` | What speaks: the Fish S2-Pro mouth and voice server and the engine's pinned install (`engine.toml`), the encoder, the transcriber, the intelligibility measure, the tool entries and their schemas, and the frozen package list of the voice environment |
-| `tests/` | Every test of the repository's crate, whatever its language |
+| `tests/` | Every test of the repository's crate and of its node scripts, whatever its language |
 | `tools/` | The voice's hosted tools, each a folder of its own with a crate, its manifest, its input schemas and its tests: `tools/servers/`, the `voice/servers`, `voice/generate` and `worker/voice_sound` entries |
 | `weights/` | The declarations of the voice's weights: the voice server's card declaration and where the voices and the base model stand; never the weights themselves |
 
@@ -93,6 +93,7 @@ stands, and no other.
 ## Tests
 
 Tests live in `tests/`, never beside the code they test, and a hosted tool's in its own folder's `tests/`. The
+node scripts' tests are `tests/*.test.ts`, which `bun test` runs from the repository's root. The
 personal-data rule is held by the testbed's `personal-data` check (`PERSONAL-DATA.md`); `docs/inventory.md` records
 the behaviour the tests are to keep.
 

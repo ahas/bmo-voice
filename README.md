@@ -39,14 +39,15 @@ only the base libraries `bmo-chat`, `bmo-chat-client`, `bmo-ui` and `bmo-text` m
 | `src/` | The crate: the settings, the store, the event log, the client, the MCP server, the OpenAPI document, the script rules, the voice nodes, the routes, a document's narration, the script studio's server, and the `voice-server`, `bmo-voice` and `script-studio` binaries |
 | `studio/` | The script studio's media tools, a Bun project with Python scripts beside it (`studio/lib/`, `studio/scripts/`, `studio/fixtures/`), and its screen, `studio/client/`, a Nuxt project on bmo-ui |
 | `synth/` | What speaks: the Fish S2-Pro mouth and voice server and the engine's pinned install (`engine.toml`), the encoder, the transcriber, the intelligibility measure, the tool entries and their schemas, and the frozen package list of the voice environment |
-| `tests/` | Every test of the repository's crate, whatever its language |
+| `tests/` | Every test of the repository's crate and of its node scripts, whatever its language |
 | `tools/` | The voice's hosted tools, each a crate of the workspace with its manifest, schema and tests: `tools/servers/`, the `voice/servers` entry a session reads the voice servers through |
 | `weights/` | The declarations of the voice's weights: the voice server's card declaration and where the voices and the base model stand; never the weights themselves |
 
 ## Tests
 
 Tests live in `tests/`, never beside the code, a hosted tool's in its own folder's `tests/` and the studio screen's in
-`studio/client/tests/`, which its project's own check runs after its type check. The testbed's `personal-data` check holds the personal-data rule
+`studio/client/tests/`, which its project's own check runs after its type check. The node scripts' tests,
+`tests/*.test.ts`, are run by `bun test` from the repository's root and type-checked with the scripts. The testbed's `personal-data` check holds the personal-data rule
 (`docs/PERSONAL-DATA.md`): no tracked file holds a mail address, a home path, a
 telephone number, a token or a private network address. `docs/inventory.md` records the behaviour the tests are
 to keep.
