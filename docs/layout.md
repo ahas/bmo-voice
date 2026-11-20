@@ -17,7 +17,7 @@ How the repository is laid out, what each part is, and where it runs. Read this 
 | `studio/` | The script studio's screen (`studio/client/`, a Nuxt project) and its media tools (`studio/lib/` and `studio/scripts/`, Bun and Python), with their records' shared fixtures |
 | `synth/` | What speaks: the Fish S2-Pro mouth and voice server and the engine's pinned install (`engine.toml`), the encoder, the transcriber, the intelligibility measure, the tool entries and their schemas, and the frozen package list of the voice environment |
 | `tests/` | Every test of the repository's crate, whatever its language |
-| `tools/` | The voice's hosted tools, each a folder of its own with a crate, its manifest, its input schemas and its tests: `tools/servers/`, the `voice/servers` and `worker/voice_sound` entries |
+| `tools/` | The voice's hosted tools, each a folder of its own with a crate, its manifest, its input schemas and its tests: `tools/servers/`, the `voice/servers`, `voice/generate` and `worker/voice_sound` entries |
 | `weights/` | The declarations of the voice's weights: the voice server's card declaration and where the voices and the base model stand; never the weights themselves |
 
 A folder stands only once something is in it. The README's folder table names every top-level folder that
@@ -56,9 +56,9 @@ stands, and no other.
 
 ## The hosted tool
 
-- **`voice-servers-tool`** answers the tool host's calls of `voice/servers` and `worker/voice_sound`
-  (`docs/boundary-api.md`, 「The hosted tool」). The release builds it into its `bin/`, and the deployment places
-  it with its manifest and its entries' schemas from `tools/servers/.placed/`.
+- **`voice-servers-tool`** answers the tool host's calls of `voice/servers`, `voice/generate` and
+  `worker/voice_sound` (`docs/boundary-api.md`, 「The hosted tool」). The release builds it into its `bin/`, and the
+  deployment places it with its manifest and its entries' schemas from `tools/servers/.placed/`.
 
 ## Settings
 

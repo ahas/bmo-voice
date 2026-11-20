@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.33.
+Fixed at 0.1.0-rev.34.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -317,10 +317,16 @@ server any other way.
   `chatId`, `messageId` (the line, null while it awaits one), `kind`, `title` (null where none was given),
   `voiceName`, `text` (what was spoken), `emotion`, `synthesisId`, `state`, `durationMs` (null until done),
   `plays`, `awaitsLine`, `voiceMessageId`, `startedAt` and `finishedAt` (null until it ends).
-- **Two kinds.** A `summary` is what a listener hears live: a line or two of a line's gist, written to be heard,
-  with a one-line title a listener shows in place of the words. A `full` reading is a whole line read out, kept on
-  that line, which a listener plays only when asked; it names its line, and one that names none is answered 400
-  `bad-request`.
+- **Three kinds, each saying how its line stands to the room:**
+  - a `summary` is what a listener hears live: a line or two of a line's gist, written to be heard, with a
+    one-line title a listener shows in place of the words; it may be spoken before its line stands;
+  - a `full` reading is a whole line read out, kept on that line, which a listener plays only when asked; it names
+    its line, and one that names none is answered 400 `bad-request`; its line never moves;
+  - a `speech` is a line an agent says to a room in its own voice: its caller sends the sound into the room as a
+    voice message and names the line it went out as once it stands, so it may be spoken before its line stands.
+- **A briefing is a voice speaking as itself to a room.** Every other sound the engine makes, a synthesis taken in
+  through `POST /syntheses` or the hosted tool's `voice/generate`, is no briefing and is told on no briefing
+  event, so a listener that follows a speaker as it speaks hears the briefings alone.
 - **It is spoken as a synthesis is.** `POST /briefings` answers at once, state `waiting`; the engine reads the
   words into a script by its own reading rules (「Script readings」), and the script is the written words of a
   synthesis in the named voice, `spoken` its spoken words where the caller gave them and derived where it did
@@ -333,13 +339,15 @@ server any other way.
   naming a key the synthesis of a briefing holds, not yet `failed`, is answered 200 with that briefing. A key a
   synthesis holds that speaks no briefing is answered 409 `conflict`.
 - **Whether it plays by itself is the caller's to say** in `plays`, true where absent, and the engine keeps what
-  it was told. A listener plays by itself only a `summary` whose `plays` holds, once `briefing.ended` says it is
-  `done`; it plays a `full` reading only when somebody asks for it, and shows a briefing it learns of more than
-  two minutes after it ended rather than playing it.
+  it was told. A listener plays by itself only a `summary` or a `speech` whose `plays` holds, once
+  `briefing.ended` says it is `done`, and which of the two it plays is its own: a speech is in its room already
+  as a voice message, so a listener that plays a room's sound leaves it, and one that shows the speaker speaking
+  plays it. A listener plays a `full` reading only when somebody asks for it, and shows a briefing it learns of
+  more than two minutes after it ended rather than playing it.
 - **Stopping silences at once.** `POST /briefings/stop` stops every briefing of the room `chatId` names, or of
   every room where the body names none, of the kind `kind` names, or of every kind where it names none, that has
   not ended: one `waiting` and one `speaking` alike, and one whose synthesis is done but whose end is not yet told.
-  A `kind` other than `summary` and `full` is answered 400 `bad-request`. Each is `stopped` from that moment, its `finishedAt` the
+  A `kind` other than `summary`, `full` and `speech` is answered 400 `bad-request`. Each is `stopped` from that moment, its `finishedAt` the
   moment it was stopped; its speaking is ended where it runs, its card given back, what a derivation of its spoken
   words holds of agency given back (「How the engine derives the spoken words」), and no sound of it is served. Each is told as `briefing.ended`, its synthesis as `synthesis.ended`, and then one `briefings.stopped`
   names the room, the kind and the briefings it stopped, told even where it stopped none. A stopped briefing never plays and
@@ -349,9 +357,9 @@ server any other way.
   is null and for every kind where `kind` is null: it stops the briefing of that room and kind it plays, and plays
   by itself none of that room's briefings of that kind that ended before the event. A stop of summaries leaves a
   full reading somebody asked for playing.
-- **A summary may be spoken before its line stands.** One taken in with no `messageId` awaits its line, and
-  `POST /briefings/{briefingId}/line` names it, or lets it go with null; either way it no longer awaits one, and
-  `briefing.changed` says so. A full reading's line is never moved; asking is 409 `conflict`.
+- **A summary or a speech may be spoken before its line stands.** One taken in with no `messageId` awaits its
+  line, and `POST /briefings/{briefingId}/line` names it, or lets it go with null; either way it no longer awaits
+  one, and `briefing.changed` says so. A full reading's line is never moved; asking is 409 `conflict`.
 - **The page** is read newest first; the cursor is the last briefing's `id`, as a number, and the page starts
   below it. `chatId`, `messageId`, `kind` and `awaitsLine` narrow it.
 - **A briefing the engine did not speak,** a row kept from before it spoke briefings, names no synthesis and no
@@ -540,16 +548,19 @@ The archive (its `docs/api.md`, 「Attachments」), called by the command alone,
 
 ## The hosted tool
 
-- **The tool host serves two entries from the voice's own folder** (bmo-pocket's `docs/mcp-host.md`, 「Placed
+- **The tool host serves three entries from the voice's own folder** (bmo-pocket's `docs/mcp-host.md`, 「Placed
   tools」): a session the shell guard keeps off every unit's loopback port, the chat agent among them, reads
   through `voice/servers` which voice nodes stand in the voice node list and whether their servers answer, since
-  the tool host runs it outside every harness; and a worker whose role holds `room.send`, the producer among them,
-  writes a finished synthesis's sound through `worker/voice_sound`. It is the folder `tools/servers/`, the crate
+  the tool host runs it outside every harness, and makes a sound of any words in any served voice through
+  `voice/generate`; and a worker whose role holds `room.send`, the producer among them, writes a finished
+  synthesis's sound through `worker/voice_sound`. It is the folder `tools/servers/`, the crate
   `voice-servers-tool`, built into the release and placed before the flip for this service, with the capabilities
   its entries ask for allowed (`docs/deploy.md`).
-- **`voice/servers`** asks for `room.tools`, is read-only and takes no arguments. **`worker/voice_sound`** asks for
+- **`voice/servers`** asks for `room.tools`, is read-only and takes no arguments. **`voice/generate`** asks for
+  `room.tools` and takes `voiceName`, `text`, and optionally `emotion`, `language` and the absolute `path` to
+  write. **`worker/voice_sound`** asks for
   `room.send`, takes a `synthesisId`, the `key` the synthesis was taken in under and the absolute `path` to write,
-  and answers the path with the bytes written. The tool host keeps no clock on either call, which ends when the
+  and answers the path with the bytes written. The tool host keeps no clock on any call, which ends when the
   engine has answered. The executable speaks the tool host's call protocol 1 itself: one request on standard
   input, one tool result of text on standard output.
 - **What `voice/servers` answers:** every page of `GET /voice-servers`, called through the engine's own client, as
@@ -557,6 +568,14 @@ The archive (its `docs/api.md`, 「Attachments」), called by the command alone,
   loaded; then a line saying where a line is spoken now (`docs/voice-plan.md`, 「Which road speaks a line」): on the
   voice server of the listed node the arbiter's master grants a card of `voice`, where any is listed, and, where
   none is, nowhere, since a synthesis fails and nothing speaks on the operations machine's card.
+- **What `voice/generate` answers:** a sound of the words, made as any synthesis is (「Syntheses」) and tied to no
+  briefing, no room and no line, so no listener plays it and nothing follows it as a speaker. It takes the words
+  in through `POST /syntheses`, reads the synthesis every half second until it ends, and at most ten minutes, then
+  writes its sound at `path` whole or not at all, the folders it names made and a file there replaced; where no
+  `path` is given, at `bmo-voice/generated-<synthesisId>.ogg` under the machine's temporary folder. It answers the
+  path, the bytes written, the sound's length, the synthesis and the words the voice said. A voice no list holds is
+  refused with the served voices named; a synthesis that failed or was stopped is refused with its `failure`; one
+  still not ended after ten minutes is let go, its caller's clock ending it, and refused naming what it waits on.
 - **What `worker/voice_sound` answers:** the synthesis at `GET /syntheses/{synthesisId}`, then, where it is done
   and carries the given key, the bytes of `GET /syntheses/{synthesisId}/sound` written at `path` whole or not at
   all, the folders it names made where they do not stand and a file already there replaced. Only the caller's own
@@ -564,10 +583,10 @@ The archive (its `docs/api.md`, 「Attachments」), called by the command alone,
   caller's own name for the line. The sound is OGG/Opus, as the route answers it.
 - **Its settings** are the file `BMO_VOICE_SETTINGS` names, else `settings.toml` under the link of the voice's
   deploy tree, `~/.local/share/bmo-voice/deploy`: the tool host runs the registry's copy of the placed folder,
-  which stands in no release. Both entries call the settings' address with the settings' token.
+  which stands in no release. Every entry calls the settings' address with the settings' token.
 - **What it refuses,** each as an answer marked as an error: settings or a token that do not read, with the
   sentence saying why; an engine that does not answer, or one that refuses, carrying the status, code and sentence
-  of the refusal, or the sentence saying why nothing answered, as the harness plugin's failures do; the sound's
+  of the refusal, or the sentence saying why nothing answered, as the harness plugin's failures do; an entry's
   arguments when they do not read, naming what is wrong; a synthesis that is not the caller's own or is not done,
   naming the key or the state; a path that is not absolute or could not be written, naming it; and a call of
   another entry, naming its own. It serves no resources, and a kind of request it does not answer ends the call
@@ -583,7 +602,7 @@ declares the nouns `listen`, `brief` and `brief-attach` when asked `nouns`, so t
 |---|---|
 | `nouns` | answers `listen`, `brief` and `brief-attach`, one a line |
 | `listen <file>…` | asks `POST /transcriptions` for the files in `--language` and waits for it to end, however long it takes; prints what was heard, or the transcription as JSON with `--json` |
-| `brief` | asks `POST /briefings` for a line spoken in `--voice` for the room `--chat`, of kind `--kind` (`summary` or `full`), with `--text`, and optional `--spoken`, `--title`, `--emotion`, `--message` and `--plays`; waits for the engine to speak it, however long it takes, then prints its id, or the briefing as JSON with `--json` |
+| `brief` | asks `POST /briefings` for a line spoken in `--voice` for the room `--chat`, of kind `--kind` (`summary`, `full` or `speech`), with `--text`, and optional `--spoken`, `--title`, `--emotion`, `--message` and `--plays`; waits for the engine to speak it, however long it takes, then prints its id, or the briefing as JSON with `--json` |
 | `brief-attach <document> <file> [voice]` | speaks the text the file holds as a document's narration and attaches its sound to that document of the archive, waiting at most `--within` minutes for the synthesis (「Narrating a document」) |
 | `health` | asks the service the settings name for `GET /health`, with its token, and exits 0 where it answers ready, 1 where it answers otherwise or nothing listens; it waits for the answer however long it takes |
 | `mcp` | runs the harness plugin's MCP server; `--address` and `--token` name the engine |

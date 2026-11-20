@@ -2,7 +2,7 @@
 //! `docs/mcp-host.md`, 「A call」): protocol 1, a call of the one entry, and an answer of text pieces.
 
 use serde_json::json;
-use voice_servers_tool::{Asked, ENTRY, SOUND_ENTRY, read_arguments, read_handed};
+use voice_servers_tool::{Asked, ENTRY, GENERATE_ENTRY, SOUND_ENTRY, read_arguments, read_handed};
 
 use crate::stand::{call, call_entry, env_without_settings, text, tool};
 
@@ -112,6 +112,25 @@ fn a_sound_call_reads_the_settings() {
   assert_eq!(answer["isError"], true);
   assert!(text(&answer).contains("settings do not read"), "{}", text(&answer));
   assert!(text(&answer).contains(&missing), "{}", text(&answer));
+}
+
+// "the executable answers the generate entry: arguments that do not read before any settings, then the settings"
+#[test]
+fn the_generate_entry_is_answered() {
+  let (env, missing) = env_without_settings("generate");
+
+  for (arguments, said) in [
+    (json!({ "text": "hi" }), "voiceName"),
+    (json!({ "voiceName": "alpha", "text": "hi" }), "settings do not read"),
+  ] {
+    let ran = tool(&call_entry(GENERATE_ENTRY, arguments).to_string(), &env);
+    let answer = ran.answer();
+
+    assert_eq!(ran.code, 0, "{}", ran.err);
+    assert_eq!(answer["isError"], true);
+    assert!(text(&answer).contains(said), "{}", text(&answer));
+    assert_eq!(text(&answer).contains(&missing), said == "settings do not read", "{}", text(&answer));
+  }
 }
 
 // "settings that do not read answer an error naming their path"

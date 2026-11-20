@@ -1,6 +1,6 @@
 # The voice's hosted tool: a session the shell guard keeps off every unit's loopback port reads the voice servers,
-# or writes a finished synthesis's sound where it names, through the tool host, which runs this executable outside
-# every harness (docs/boundary-api.md, 「The hosted tool」).
+# makes a sound of any words in a served voice, or writes a finished synthesis's sound where it names, through the
+# tool host, which runs this executable outside every harness (docs/boundary-api.md, 「The hosted tool」).
 [tool]
 name = "servers"
 protocol = 1
@@ -19,6 +19,16 @@ capabilities = ["room.tools"]
 
 [entry.hints]
 read_only = true
+
+# Any words in any served voice, made as a synthesis and written to a file to play or attach: no briefing, so no
+# room, no line and no listener (docs/boundary-api.md, 「The hosted tool」).
+[[entry]]
+namespace = "voice"
+name = "generate"
+title = "Generate a voice"
+description = "Make a sound of any words in any served voice and write it to a file to play or attach, as OGG/Opus: written at path where one is given, else under the temporary folder, and the answer names the file. It is generated media, never you speaking in a room: it drives no face and plays nowhere by itself."
+input = "generate.json"
+capabilities = ["room.tools"]
 
 # A worker whose role holds `room.send`, the producer among them, reaches this entry through the `worker`
 # namespace its line already names: the line is taken in under the caller's own key, which is what makes the sound

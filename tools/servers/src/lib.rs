@@ -1,15 +1,21 @@
 //! The voice's hosted tool (docs/boundary-api.md, 「The hosted tool」): the tool host hands it one call of
-//! `voice/servers` or `worker/voice_sound`, and it answers which voice nodes stand in the voice node list,
-//! whether their servers answer and the voices they hold loaded, or writes a finished synthesis's sound to the
-//! file its caller names, for a session the shell guard keeps off the engine's port.
+//! `voice/servers`, `voice/generate` or `worker/voice_sound`, and it answers which voice nodes stand in the voice
+//! node list, whether their servers answer and the voices they hold loaded, makes a sound of any words in any served
+//! voice and writes it to a file, or writes a finished synthesis's sound to the file its caller names, for a session
+//! the shell guard keeps off the engine's port.
 
 mod call;
+mod generate;
 mod servers;
 mod sound;
 
 use serde_json::{Value, json};
 
 pub use call::{Answer, Asked, Content, Handed, PROTOCOL, read_handed};
+pub use generate::{
+  Asked as GenerateAsked, ENTRY as GENERATE_ENTRY, Pace, generate, generate_at, not_spoken,
+  read_generate_arguments, target, written_text,
+};
 pub use servers::{
   DEPLOY_SETTINGS, client_of, failure_text, listed, servers, servers_text, settings_of_process,
   settings_path,
@@ -45,6 +51,13 @@ pub async fn answer(handed: &Handed) -> Result<Value, String> {
           },
           Err(why) => Answer::error(why),
         },
+        GENERATE_ENTRY => match read_generate_arguments(arguments) {
+          Ok(asked) => match settings_of_process() {
+            Ok(settings) => generate(&settings, &asked).await,
+            Err(why) => Answer::error(why),
+          },
+          Err(why) => Answer::error(why),
+        },
         SOUND_ENTRY => match read_sound_arguments(arguments) {
           Ok(asked) => match settings_of_process() {
             Ok(settings) => sound(&settings, &asked).await,
@@ -52,7 +65,9 @@ pub async fn answer(handed: &Handed) -> Result<Value, String> {
           },
           Err(why) => Answer::error(why),
         },
-        other => Answer::error(format!("this tool answers {ENTRY} and {SOUND_ENTRY}, not {other}")),
+        other => Answer::error(format!(
+          "this tool answers {ENTRY}, {GENERATE_ENTRY} and {SOUND_ENTRY}, not {other}"
+        )),
       };
 
       serde_json::to_value(answered).map_err(|why| why.to_string())

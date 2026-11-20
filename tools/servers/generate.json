@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["voiceName", "text"],
+  "properties": {
+    "voiceName": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The served voice to speak in. A name no list holds is refused with the served voices named."
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 10000,
+      "description": "The words to say, as written. The engine derives how the voice says them."
+    },
+    "emotion": {
+      "type": "string",
+      "description": "One of the voice's emotions; the voice's own where absent."
+    },
+    "language": {
+      "type": "string",
+      "enum": ["ko", "en"],
+      "description": "The language the words are said in; the voice's own where absent."
+    },
+    "path": {
+      "type": "string",
+      "description": "The absolute path of the file to write. Its folders are made where they do not stand, and a file already there is replaced. Under the temporary folder where absent."
+    }
+  }
+}

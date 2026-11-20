@@ -215,6 +215,57 @@ async fn a_summary_is_taken_in_at_once_its_end_is_told_and_its_line_is_named_aft
   assert_eq!(kinds, ["briefing.created", "briefing.ended", "briefing.changed"]);
 }
 
+// "a speech is taken in before its line stands, its line is named once it went out, and the page and the stop
+// narrow to its kind"
+#[tokio::test]
+async fn a_speech_awaits_its_line_and_its_kind_narrows_the_page_and_the_stop() {
+  let scratch = Scratch::new().await;
+  let engine = engine(&scratch, None).await;
+  let (status, speech) = call(
+    &engine,
+    "POST",
+    "/briefings",
+    Some(json!({ "voiceName": "voice-a", "text": "Hello, everyone.", "spoken": SPOKEN, "chatId": ROOM, "kind": "speech" })),
+  )
+  .await;
+
+  assert_eq!(status, StatusCode::CREATED, "{speech}");
+  assert_eq!(speech["kind"], "speech");
+  assert_eq!(speech["messageId"], Value::Null);
+  assert_eq!(speech["awaitsLine"], true);
+  assert_eq!(speech["plays"], true);
+
+  let id = speech["id"].as_i64().expect("an id");
+  let (status, named) =
+    call(&engine, "POST", &format!("/briefings/{id}/line"), Some(json!({ "messageId": 21 }))).await;
+
+  assert_eq!(status, StatusCode::OK, "{named}");
+  assert_eq!(named["messageId"], 21);
+  assert_eq!(named["awaitsLine"], false);
+
+  let (_, summary) = call(
+    &engine,
+    "POST",
+    "/briefings",
+    Some(json!({ "voiceName": "voice-a", "text": "A gist.", "spoken": SPOKEN, "chatId": ROOM, "kind": "summary" })),
+  )
+  .await;
+  let (_, page) = call(&engine, "GET", &format!("/briefings?chatId={ROOM}&kind=speech"), None).await;
+  let items = page["items"].as_array().expect("a page");
+
+  assert_eq!(items.len(), 1, "{page}");
+  assert_eq!(items[0]["id"], id);
+
+  let (status, stopped) =
+    call(&engine, "POST", "/briefings/stop", Some(json!({ "chatId": ROOM, "kind": "speech" }))).await;
+
+  assert_eq!(status, StatusCode::OK, "{stopped}");
+
+  let summary = call(&engine, "GET", &format!("/briefings/{}", summary["id"]), None).await.1;
+
+  assert_ne!(summary["state"], "stopped", "a stop of speeches leaves a summary: {summary}");
+}
+
 #[tokio::test]
 async fn a_full_reading_names_its_line_keeps_it_and_the_page_narrows_to_it() {
   let scratch = Scratch::new().await;

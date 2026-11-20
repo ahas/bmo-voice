@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "bmo-voice",
-    "version": "0.1.0-rev.33",
+    "version": "0.1.0-rev.34",
     "description": "The voice engine: trained voices, speech synthesis on the voice servers of the nodes, transcription, speaker encodings and scripts for the ear. A synthesis is answered at once and the sound follows. Bodies are JSON with camelCase keys, times are integers of epoch milliseconds and spans of milliseconds end in Ms. A list is a page, `after` being the last member's name. Every failure is a non-2xx answer whose body is `code` and `error`. The harness plugin's tools, each a thin call of one route, are stated under `x-tools`. A briefing is a line spoken for a room, kept with the room and the line its caller names and told on the event stream for its listeners to play; when one is spoken, and what it says, is its caller's decision."
   },
   "servers": [
@@ -481,9 +481,9 @@
                   "type": "null"
                 }
               ],
-              "description": "`summary` or `full`."
+              "description": "`summary`, `full` or `speech`."
             },
-            "description": "`summary` or `full`."
+            "description": "`summary`, `full` or `speech`."
           },
           {
             "name": "awaitsLine",
@@ -494,9 +494,9 @@
                 "boolean",
                 "null"
               ],
-              "description": "Only the summaries still awaiting their line, or only the others."
+              "description": "Only the briefings still awaiting their line, or only the others."
             },
-            "description": "Only the summaries still awaiting their line, or only the others."
+            "description": "Only the briefings still awaiting their line, or only the others."
           },
           {
             "name": "after",
@@ -1541,7 +1541,7 @@
               "null"
             ],
             "format": "int64",
-            "description": "The line it speaks; a summary may leave it out and await its line, a full reading names it.",
+            "description": "The line it speaks; a summary or a speech may leave it out and await its line, a full reading names it.",
             "default": null
           },
           "kind": {
@@ -1598,9 +1598,14 @@
             "type": "string",
             "const": "full",
             "description": "A whole line read out, kept on that line, played only when somebody asks for it."
+          },
+          {
+            "type": "string",
+            "const": "speech",
+            "description": "A line an agent says to a room in its own voice, sent there as a voice message, whose line is named once it\nwent out."
           }
         ],
-        "description": "What a briefing is: a line's gist heard live, or a whole line read out on that line."
+        "description": "What a briefing is: a line's gist heard live, a whole line read out on that line, or a line an agent says to a\nroom in its own voice as a voice message."
       },
       "Briefing": {
         "type": "object",
@@ -1677,7 +1682,7 @@
           },
           "awaitsLine": {
             "type": "boolean",
-            "description": "Whether it is a summary still awaiting its line."
+            "description": "Whether it is a summary or a speech still awaiting its line."
           },
           "voiceMessageId": {
             "type": [

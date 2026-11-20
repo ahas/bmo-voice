@@ -69,9 +69,9 @@ pub struct Taken<'a> {
   pub at: i64,
 }
 
-/// A briefing taken in, its synthesis named; a summary that names no line awaits one.
+/// A briefing taken in, its synthesis named; one whose kind may await its line and that names none awaits it.
 pub async fn insert(db: &DatabaseConnection, taken: &Taken<'_>) -> Result<i64, StoreError> {
-  let awaits = taken.kind == BriefingKind::Summary && taken.message_id.is_none();
+  let awaits = taken.kind.awaits_a_line() && taken.message_id.is_none();
   let row = one(
     db,
     r#"INSERT INTO "voice_briefings" ("chat_id", "message_id", "kind", "title", "synthesis_id", "plays",

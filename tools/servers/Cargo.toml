@@ -1,6 +1,6 @@
 [package]
 name = "voice-servers-tool"
-description = "The voice's hosted tool: which voice nodes stand in the voice node list, whether their servers answer and the voices they hold loaded, or a finished synthesis's sound written to the file its caller names, through the tool host for a session kept off the engine's port."
+description = "The voice's hosted tool: which voice nodes stand in the voice node list, whether their servers answer and the voices they hold loaded, a sound of any words in a served voice written to a file, or a finished synthesis's sound written to the file its caller names, through the tool host for a session kept off the engine's port."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -21,6 +21,8 @@ serde_json = "1.0.140"
 tokio.workspace = true
 
 [dev-dependencies]
+# The engine standing in on the loopback for the generate entry's tests.
+axum.workspace = true
 # The manifest and the deployment's declaration read in the tests.
 toml = { version = "0.8.23", default-features = false, features = ["parse"] }
 

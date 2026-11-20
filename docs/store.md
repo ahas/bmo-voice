@@ -68,11 +68,11 @@ briefings among them.
 | `run_id` | the briefing's id, the key |
 | `chat_id` | the room it was spoken for, as its caller numbers it |
 | `message_id` | the line it speaks; null while it awaits one, or where it was let go without one |
-| `kind` | `summary` or `full` |
+| `kind` | `summary`, `full` or `speech` |
 | `title` | a summary's title; null where none was given |
 | `synthesis_id` | the synthesis that spoke it; null on a row the engine did not speak |
 | `plays` | 1 where a listener plays it by itself, 0 where it does not |
-| `awaits_line` | 1 while a summary awaits its line, 0 otherwise |
+| `awaits_line` | 1 while a summary or a speech awaits its line, 0 otherwise |
 | `voice_message_id` | the voice message a row from before the engine spoke briefings went out as; null on every other |
 | `sent_at` | when it ended done, in epoch milliseconds |
 | `seconds` | how long its sound runs, once it is done |

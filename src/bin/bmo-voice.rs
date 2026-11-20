@@ -49,7 +49,8 @@ enum Word {
     /// The words the voice says, where the caller writes them; derived from the written words otherwise.
     #[arg(long)]
     spoken: Option<String>,
-    /// `summary` for a line or two played by itself, `full` for a whole line read out.
+    /// `summary` for a line or two played by itself, `full` for a whole line read out, `speech` for a line said
+    /// to a room as a voice message.
     #[arg(long, default_value = "summary")]
     kind: String,
     /// What a listener shows in place of the words.
@@ -168,7 +169,7 @@ async fn brief(
   json: bool,
 ) -> Result<(), String> {
   let Some(kind) = BriefingKind::parse(&kind) else {
-    return Err(format!("{kind}: a briefing is summary or full"));
+    return Err(format!("{kind}: a briefing is summary, full or speech"));
   };
   let client = connect(settings)?;
   let mut held = client

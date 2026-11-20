@@ -1,12 +1,12 @@
 //! The tool's manifest and input schemas held to the executable (bmo-pocket's `docs/api.md`, 「The manifest」;
 //! docs/boundary-api.md, 「The hosted tool」): the tool named for its folder, its executable the crate's own
-//! binary, its two entries the ones the executable answers, each entry's schema, and the deployment placing what
+//! binary, its three entries the ones the executable answers, each entry's schema, and the deployment placing what
 //! the manifest names.
 
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use voice_servers_tool::{ENTRY, PROTOCOL, SOUND_ENTRY};
+use voice_servers_tool::{ENTRY, GENERATE_ENTRY, PROTOCOL, SOUND_ENTRY};
 
 fn folder() -> PathBuf {
   Path::new(env!("CARGO_MANIFEST_DIR")).to_path_buf()
@@ -51,14 +51,14 @@ fn the_manifest_names_the_tool_for_its_folder_and_runs_the_crates_binary() {
   assert!(manifest["tool"].get("timeout").is_none());
 }
 
-// "its two entries are the ones the executable answers: the servers read-only under room.tools, and the sound a
-// worker reaches under room.send"
+// "its three entries are the ones the executable answers: the servers read-only under room.tools, the generate
+// entry under room.tools, and the sound a worker reaches under room.send"
 #[test]
 fn its_entries_are_the_ones_the_executable_answers() {
   let manifest = toml_of(&folder().join("tool.toml"));
   let entries = manifest["entry"].as_array().unwrap();
 
-  assert_eq!(entries.len(), 2, "{entries:?}");
+  assert_eq!(entries.len(), 3, "{entries:?}");
 
   let servers = entry(&manifest, ENTRY);
   assert_eq!(words(&servers["capabilities"]), ["room.tools"]);
@@ -68,6 +68,15 @@ fn its_entries_are_the_ones_the_executable_answers() {
   assert!(servers.get("unbounded").is_none());
   assert_eq!(servers["hints"]["read_only"].as_bool(), Some(true));
   assert!(!text(servers, &["description"]).is_empty());
+
+  let generate = entry(&manifest, GENERATE_ENTRY);
+  assert_eq!(words(&generate["capabilities"]), ["room.tools"]);
+  assert!(generate.get("grant").is_none());
+  assert!(generate.get("system").is_none());
+  assert!(generate.get("timeout").is_none());
+  assert!(generate.get("unbounded").is_none());
+  assert!(generate.get("hints").is_none());
+  assert!(!text(generate, &["description"]).is_empty());
 
   let sound = entry(&manifest, SOUND_ENTRY);
   assert_eq!(text(sound, &["namespace"]), "worker");
@@ -82,7 +91,8 @@ fn its_entries_are_the_ones_the_executable_answers() {
   assert!(manifest.get("resources").is_none());
 }
 
-// "the servers schema is an empty object and the sound schema takes the id, the key and the absolute path"
+// "the servers schema is an empty object, the generate schema takes the voice and the words with the emotion, the
+// language and the path beside them, and the sound schema takes the id, the key and the absolute path"
 #[test]
 fn each_entrys_schema_is_the_one_it_takes() {
   let manifest = toml_of(&folder().join("tool.toml"));
@@ -99,6 +109,15 @@ fn each_entrys_schema_is_the_one_it_takes() {
   assert_eq!(servers["additionalProperties"], false);
   assert!(servers["properties"].as_object().unwrap().is_empty());
   assert!(servers.get("required").is_none());
+
+  let (generate_input, generate) = schema_of(GENERATE_ENTRY);
+  assert_eq!(generate_input, "generate.json");
+  assert_eq!(generate["type"], "object");
+  assert_eq!(generate["additionalProperties"], false);
+  assert_eq!(generate["required"], serde_json::json!(["voiceName", "text"]));
+  for property in ["voiceName", "text", "emotion", "language", "path"] {
+    assert_eq!(generate["properties"][property]["type"], "string", "{property}");
+  }
 
   let (sound_input, sound) = schema_of(SOUND_ENTRY);
   assert_eq!(sound_input, "voice_sound.json");

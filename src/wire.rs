@@ -296,7 +296,8 @@ pub struct VoiceServer {
   pub voice_names: Vec<String>,
 }
 
-/// What a briefing is: a line's gist heard live, or a whole line read out on that line.
+/// What a briefing is: a line's gist heard live, a whole line read out on that line, or a line an agent says to a
+/// room in its own voice as a voice message.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum BriefingKind {
@@ -304,6 +305,9 @@ pub enum BriefingKind {
   Summary,
   /// A whole line read out, kept on that line, played only when somebody asks for it.
   Full,
+  /// A line an agent says to a room in its own voice, sent there as a voice message, whose line is named once it
+  /// went out.
+  Speech,
 }
 
 impl BriefingKind {
@@ -312,6 +316,7 @@ impl BriefingKind {
     match self {
       Self::Summary => "summary",
       Self::Full => "full",
+      Self::Speech => "speech",
     }
   }
 
@@ -320,8 +325,22 @@ impl BriefingKind {
     match word {
       "summary" => Some(Self::Summary),
       "full" => Some(Self::Full),
+      "speech" => Some(Self::Speech),
       _ => None,
     }
+  }
+
+  /// Whether a briefing of this kind names its line as it is taken in: a full reading reads a line that stands.
+  pub fn names_its_line(self) -> bool {
+    match self {
+      Self::Full => true,
+      Self::Summary | Self::Speech => false,
+    }
+  }
+
+  /// Whether a briefing of this kind taken in with no line awaits one, which its caller names or lets go later.
+  pub fn awaits_a_line(self) -> bool {
+    !self.names_its_line()
   }
 }
 
@@ -349,7 +368,7 @@ pub struct Briefing {
   pub duration_ms: Option<i64>,
   /// Whether a listener plays it by itself.
   pub plays: bool,
-  /// Whether it is a summary still awaiting its line.
+  /// Whether it is a summary or a speech still awaiting its line.
   pub awaits_line: bool,
   /// The voice message a briefing from before the engine spoke briefings went out as; null on every other.
   pub voice_message_id: Option<i64>,
@@ -373,7 +392,7 @@ pub struct NewBriefing {
   #[serde(default)]
   pub language: Option<String>,
   pub chat_id: i64,
-  /// The line it speaks; a summary may leave it out and await its line, a full reading names it.
+  /// The line it speaks; a summary or a speech may leave it out and await its line, a full reading names it.
   #[serde(default)]
   pub message_id: Option<i64>,
   pub kind: BriefingKind,
@@ -400,10 +419,10 @@ pub struct BriefingQuery {
   /// The line they speak.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub message_id: Option<i64>,
-  /// `summary` or `full`.
+  /// `summary`, `full` or `speech`.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub kind: Option<BriefingKind>,
-  /// Only the summaries still awaiting their line, or only the others.
+  /// Only the briefings still awaiting their line, or only the others.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub awaits_line: Option<bool>,
   /// The id of the last briefing read; the page starts below it.

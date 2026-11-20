@@ -33,10 +33,9 @@ use crate::speech::{card, node, synth};
 use crate::store::{self, StoreError, voices};
 use crate::units::arbiter::Ask;
 use crate::wire::{
-  Briefing, BriefingKind, BriefingLine, BriefingQuery, BriefingStop, BriefingsStopped, Encoding, Event,
-  EventQuery, Health, NewBriefing, NewEncoding, NewScriptReading, NewSynthesis, NewTranscription, Page,
-  PageQuery, ScriptReading, Synthesis, SynthesisState, Transcription, Voice, VoiceServer, WaitOn,
-  WireError,
+  Briefing, BriefingLine, BriefingQuery, BriefingStop, BriefingsStopped, Encoding, Event, EventQuery,
+  Health, NewBriefing, NewEncoding, NewScriptReading, NewSynthesis, NewTranscription, Page, PageQuery,
+  ScriptReading, Synthesis, SynthesisState, Transcription, Voice, VoiceServer, WaitOn, WireError,
 };
 
 /// How often an idle event stream says it is still there.
@@ -1001,7 +1000,7 @@ async fn create_briefing(
 
   within_bounds(&asked.text, asked.spoken.as_deref())?;
 
-  if asked.kind == BriefingKind::Full && asked.message_id.is_none() {
+  if asked.kind.names_its_line() && asked.message_id.is_none() {
     return Err(Refused::bad_request("a full reading names the line it reads"));
   }
 
@@ -1232,7 +1231,7 @@ async fn name_line(
   let db = &served.context.db;
   let standing = briefing_of(db, id).await?;
 
-  if standing.kind == BriefingKind::Full {
+  if standing.kind.names_its_line() {
     return Err(Refused::new(
       StatusCode::CONFLICT,
       "conflict",
