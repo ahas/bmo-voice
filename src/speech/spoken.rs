@@ -1,8 +1,9 @@
 //! A line's spoken words derived from its written words (`docs/boundary-api.md`, 「How the engine derives the spoken
 //! words」): a model on a slot of agency's co-worker pool writes them with judgement, the agreed readings of the voice
 //! name table handed to it first, and the check holds the answer to what a voice can say. An answer that fails is
-//! asked again, as is every refusal and every silence on the way, with no count and no clock; the readings the
-//! model chose for names the table did not hold are written into it.
+//! asked again, as is every refusal and every silence on the way, each wait longer than the one before, until the
+//! policy's count of tries is spent; the readings the model chose for names the table did not hold are written into
+//! it.
 
 use std::time::Duration;
 
@@ -25,9 +26,6 @@ pub const DERIVING: &str = "the spoken words are being derived";
 /// The most characters of spoken words a line holds, a caller's and a derived one's alike (docs/boundary-api.md,
 /// 「Syntheses」): the line a voice server is handed whole.
 pub const MOST_SPOKEN: usize = 30_000;
-
-/// How long a try that did not answer, or answered words that failed, waits before it is asked again.
-const ASK_AGAIN: Duration = Duration::from_secs(5);
 
 /// The source label a slot is asked under, the caller's own.
 const SOURCE: &str = "voice";
@@ -68,96 +66,167 @@ impl Language {
   }
 }
 
-/// The spoken words of `text` said in `language`, asked until they stand; `told` is handed an English sentence
-/// each time how the derivation stands changes.
+/// How the tries of one line's derivation are paced (`docs/boundary-api.md`, 「The clocks」): the wait after the first
+/// try that failed, doubled after each one after it up to the longest, and how many tries fail before the line does.
+#[derive(Clone, Copy, Debug)]
+pub struct Pacing {
+  /// The wait after the first try that failed.
+  pub first_wait: Duration,
+  /// The longest wait between two tries.
+  pub longest_wait: Duration,
+  /// How many tries fail before the line does.
+  pub tries: u32,
+}
+
+impl Pacing {
+  /// The wait after the `failed`th try that failed, counted from one.
+  pub fn wait_after(&self, failed: u32) -> Duration {
+    let doubled = self.first_wait.saturating_mul(2_u32.saturating_pow(failed.saturating_sub(1)));
+
+    doubled.min(self.longest_wait)
+  }
+}
+
+/// The spoken words of `text` said in `language`, asked until they stand, or why the last try failed once the pacing's
+/// tries are spent; `told` is handed an English sentence each time how the derivation stands changes.
 pub async fn derived(
   context: &Context,
   id: i64,
   language: Language,
   text: &str,
   told: &mut (dyn FnMut(&str) + Send),
-) -> String {
+) -> Result<String, String> {
+  let pacing = context.clocks.spoken;
+  let drawn = rand::random::<u32>();
   let mut failed: Option<Unconverted> = None;
   let mut held: Option<Held> = None;
+  let mut tried = 0;
 
   loop {
     told(DERIVING);
+    tried += 1;
 
     let missed = match context.units.agency.as_ref() {
       None => {
         Missed::Road("no agency is named in the settings, so no spoken words can be derived".to_owned())
       }
       Some(agency) => {
-        if held.is_none() {
-          match stand(context, agency, id).await {
-            Ok(standing) => held = Some(standing),
-            Err(why) => {
-              told(&format!("the spoken words could not be derived: {why}; asked again"));
-              tokio::time::sleep(ASK_AGAIN).await;
-              continue;
-            }
-          }
-        }
-
-        let Some(standing) = held.as_ref() else {
-          continue;
+        let standing = match held.take() {
+          Some(standing) => Ok(standing),
+          None => stand(context, agency, id).await,
         };
 
-        match one_try(context, agency, standing, id, language, text, failed.as_ref()).await {
-          // A turn that ended with no answer leaves a session nothing is read from: it is given up, and the
-          // next try stands a new one.
-          Ok(Tried::Ended(how)) => {
-            if let Some(standing) = held.take() {
-              release(agency, standing, "failed").await;
-            }
+        match standing {
+          Err(why) => Missed::Road(why),
+          Ok(standing) => {
+            let turn = Try {
+              name: format!("voice-synthesis-{id}-spoken-{drawn:08x}-{tried}"),
+              language,
+              text,
+              failed: failed.as_ref(),
+            };
 
-            Missed::Road(how)
-          }
-          Ok(Tried::Answered(answer)) => {
-            match answer.and_then(|answer| checked(&answer, language).map(|()| answer)) {
-              Ok(answer) => {
-                if let Some(standing) = held.take() {
-                  release(agency, standing, "answered").await;
+            match tried_once(context, agency, standing, &turn).await {
+              Came::Spoken(words) => return Ok(words),
+              Came::Missed(missed, kept, unconverted) => {
+                held = kept;
+
+                if unconverted.is_some() {
+                  failed = unconverted;
                 }
 
-                keep_readings(context, language, &answer.readings).await;
-
-                return answer.spoken.trim().to_owned();
-              }
-              Err(Refusal::Unread(why)) => Missed::Answer(why),
-              Err(Refusal::Unconverted(found)) => {
-                let why = found.to_string();
-
-                failed = Some(found);
-                Missed::Answer(why)
+                missed
               }
             }
-          }
-          Err(why) => {
-            // A slot or a session agency no longer holds is given up, and the next try stands a new one.
-            if matches!(
-              why,
-              UnitError::Refused {
-                status: 404 | 409 | 410,
-                ..
-              }
-            ) && let Some(standing) = held.take()
-            {
-              release(agency, standing, "failed").await;
-            }
-
-            Missed::Road(format!("the turn did not answer: {why}"))
           }
         }
       }
     };
+    let why = missed.to_string();
 
-    match missed {
-      Missed::Road(why) => told(&format!("the spoken words could not be derived: {why}; asked again")),
-      Missed::Answer(why) => told(&format!("the derived spoken words did not stand: {why}; asked again")),
+    if tried >= pacing.tries {
+      if let (Some(agency), Some(standing)) = (context.units.agency.as_ref(), held.take()) {
+        release(agency, standing, "failed").await;
+      }
+
+      return Err(format!("its spoken words did not stand after {tried} tries: {why}"));
     }
 
-    tokio::time::sleep(ASK_AGAIN).await;
+    let wait = pacing.wait_after(tried);
+
+    told(&format!("{why}; try {tried} of {}, asked again in {} s", pacing.tries, wait.as_secs()));
+    context.clocks.until(context.clocks.now() + wait).await;
+  }
+}
+
+// One try's turn: the run name it goes out under, which no other try carries, so a stop put to one refuses no other;
+// and what its prompt hands over.
+struct Try<'a> {
+  name: String,
+  language: Language,
+  text: &'a str,
+  failed: Option<&'a Unconverted>,
+}
+
+// What one try on a standing session came to: the spoken words, or why it missed, with the session to try again on
+// where it still stands and the word a failed answer stopped at.
+enum Came {
+  Spoken(String),
+  Missed(Missed, Option<Held>, Option<Unconverted>),
+}
+
+// One try on a session that stands: the words kept and the session given back once they stand, a session agency no
+// longer holds, or whose turn ended with no answer, given up.
+async fn tried_once(context: &Context, agency: &Agency, standing: Held, turn: &Try<'_>) -> Came {
+  match one_try(context, agency, &standing, turn).await {
+    // A turn that ended with no answer leaves a session nothing is read from: it is given up, and the next try
+    // stands a new one.
+    Ok(Tried::Ended(how)) => {
+      release(agency, standing, "failed").await;
+
+      Came::Missed(Missed::Road(how), None, None)
+    }
+    Ok(Tried::Answered(answer)) => {
+      match answer.and_then(|answer| checked(&answer, turn.language).map(|()| answer)) {
+        Ok(answer) => {
+          release(agency, standing, "answered").await;
+          keep_readings(context, turn.language, &answer.readings).await;
+
+          Came::Spoken(answer.spoken.trim().to_owned())
+        }
+        Err(Refusal::Unread(why)) => Came::Missed(Missed::Answer(why), Some(standing), None),
+        Err(Refusal::Unconverted(found)) => {
+          Came::Missed(Missed::Answer(found.to_string()), Some(standing), Some(found))
+        }
+      }
+    }
+    Err(why) => {
+      let missed = Missed::Road(format!("the turn did not answer: {why}"));
+
+      // A slot or a session agency no longer holds is given up, and the next try stands a new one.
+      if matches!(
+        why,
+        UnitError::Refused {
+          status: 404 | 409 | 410,
+          ..
+        }
+      ) {
+        release(agency, standing, "failed").await;
+
+        Came::Missed(missed, None, None)
+      } else {
+        Came::Missed(missed, Some(standing), None)
+      }
+    }
+  }
+}
+
+impl std::fmt::Display for Missed {
+  fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Road(why) => write!(out, "the spoken words could not be derived: {why}"),
+      Self::Answer(why) => write!(out, "the derived spoken words did not stand: {why}"),
+    }
   }
 }
 
@@ -351,6 +420,15 @@ fn owner(id: i64) -> String {
   format!("voice:synthesis:{id}")
 }
 
+/// Everything one synthesis holds of agency given back by its owner, as a derivation ended under its try leaves it.
+pub async fn give_back_owned(agency: &Agency, id: i64) {
+  let owner = owner(id);
+
+  if let Err(why) = agency.release_owner(&owner).await {
+    eprintln!("voice: what {owner} held of agency was not given back: {why}");
+  }
+}
+
 /// Everything the syntheses an earlier process left unspoken hold of agency given back by their owners, before
 /// any of them is taken up (docs/boundary-api.md, 「How the engine derives the spoken words」); how many slots
 /// were.
@@ -383,16 +461,13 @@ async fn one_try(
   context: &Context,
   agency: &Agency,
   held: &Held,
-  id: i64,
-  language: Language,
-  text: &str,
-  failed: Option<&Unconverted>,
+  turn: &Try<'_>,
 ) -> Result<Tried, UnitError> {
-  let agreed = agreed(context, language).await.map_err(|why| UnitError::Unreached {
+  let agreed = agreed(context, turn.language).await.map_err(|why| UnitError::Unreached {
     unit: "the voice's store",
     why,
   })?;
-  let body = turn_body(id, &turn_prompt(language, &agreed, text, failed));
+  let body = turn_body(&turn.name, &turn_prompt(turn.language, &agreed, turn.text, turn.failed));
 
   Ok(match agency.turn(&held.session, &body).await? {
     Turned::Wrote(written) => Tried::Answered(read_answer(&written)),
@@ -435,11 +510,11 @@ async fn admitted(agency: &Agency, mut slot: Slot) -> Result<Slot, UnitError> {
 }
 
 // The one turn's body: the turn's own parts alone, its road the session's.
-fn turn_body(id: i64, prompt: &str) -> Value {
+fn turn_body(name: &str, prompt: &str) -> Value {
   json!({
     "prompt": prompt,
     "resume": { "kind": "fresh" },
-    "name": format!("voice-synthesis-{id}-spoken"),
+    "name": name,
     "title": "The spoken words of a line",
     // The derivation stands under no room.
     "chat": 0,

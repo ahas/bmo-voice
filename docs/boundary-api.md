@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.32.
+Fixed at 0.1.0-rev.33.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -147,13 +147,14 @@ flowchart TD
 
 ### The clocks
 
-Three clocks end a synthesis that nothing else would end. Their spans are the policy's (「The policy」).
+Four clocks end a synthesis that nothing else would end. Their spans are the policy's (「The policy」).
 
 | Clock | Span | What it bounds | `failure` |
 |---|---|---|---|
 | the caller's | `caller_gone_seconds`, 120 | a synthesis taken in through `POST /syntheses` that its caller has not read for the span | its caller has gone, not having read it for the span |
 | the node's answer | `node_answer_seconds`, 60 | each call the line makes to reach its node: the node service's target for it, and each command on the node's shell | the node, and that it did not answer within the span |
 | the node's progress | `node_still_seconds`, 600 | a line on its node that stands still: its stage on the voice server unchanged and no line of that server moving | the node, the stage the line stood at, and the span |
+| the spoken words' tries | `spoken_first_wait_seconds`, 5, doubled up to `spoken_longest_wait_seconds`, 300, over `spoken_tries`, 10 | a line whose spoken words are derived: the wait after each try that failed, and how many tries fail before the line does (「How the engine derives the spoken words」) | that its spoken words did not stand after so many tries, and why the last one failed |
 
 - **A caller reads its synthesis** by `GET /syntheses/{synthesisId}`, by its sound, or by a `POST` naming its key;
   each read starts the caller's clock again. A synthesis taken in starts it, and so does one taken up as the
@@ -251,7 +252,9 @@ server any other way.
   and no tool allowed. Each try is one turn in it, handing the model the line's language, the agreed readings,
   the written words, in a Korean line the language's examples of runs written as they sound
   (`data/ko/voice-script.yaml`), and, where the answer before failed the check, the word it failed on; a turn names no
-  road of its own. The session is ended and the slot given back once the spoken words stand; a slot or a
+  road of its own. Each turn goes out under a run name no other try carries,
+  `voice-synthesis-<synthesisId>-spoken-<drawn>-<try>`, its middle a number drawn for the derivation and its end the
+  try's count, so a stop agency puts to one turn refuses no other. The session is ended and the slot given back once the spoken words stand; a slot or a
   session agency no longer holds is given up and a new one asked, and no try leaves a session of its own
   standing.
 - **A turn that ended with no answer is no answer to read.** Agency answers a turn's end with its `outcome`
@@ -286,11 +289,18 @@ server any other way.
   no place of the role's cap, and the engine keeps no list of the slots it holds.
 - **Derived spoken words hold at most 30,000 characters,** the bound a caller's `spoken` is held to; a longer
   answer does not stand and is asked again, as one that fails the check is.
-- **Nothing gives it up.** An answer that fails the check, one that does not read, a turn that ended with no
-  answer, a slot or a session agency refuses and agency not reached are each asked again five seconds later,
-  however often; `waitingOn` says which
-  it was and why, and the synthesis stays `waiting` until its spoken words stand. They are kept as its
-  `spoken`, and its card is asked after.
+- **A try that fails is asked again, each wait longer, and the tries are counted.** An answer that fails the check,
+  one that does not read, a turn that ended with no answer, a slot or a session agency refuses, agency not reached
+  and no agency named are each a try that failed, asked again after the spoken words' clock's wait (「The clocks」):
+  five seconds after the first, twice as long after each one after it, and never longer than five minutes. While it
+  waits, `waitingOn` says which it was, why, which try of how many it was and how long the next is waited for. Spoken
+  words that stand are kept as the synthesis's `spoken`, and its card is asked after.
+- **A line whose tries are spent fails.** Once the tenth try has failed, its session is ended, its slot given back,
+  and the synthesis fails as a clock ends one, its `failure` saying that its spoken words did not stand after so many
+  tries and why the last one failed. A slot's wait in its role's line is no try and is not counted.
+- **A derivation ended from outside gives back what it holds.** A synthesis stopped, or ended by its caller's clock,
+  while its spoken words are derived has everything its owner holds of agency given back
+  (`DELETE /slot-requests?owner=`), the slot and the session of the try it was ended under among them.
 
 ## Briefings
 
@@ -330,7 +340,8 @@ server any other way.
   every room where the body names none, of the kind `kind` names, or of every kind where it names none, that has
   not ended: one `waiting` and one `speaking` alike, and one whose synthesis is done but whose end is not yet told.
   A `kind` other than `summary` and `full` is answered 400 `bad-request`. Each is `stopped` from that moment, its `finishedAt` the
-  moment it was stopped; its speaking is ended where it runs, its card given back, and no sound of it is served. Each is told as `briefing.ended`, its synthesis as `synthesis.ended`, and then one `briefings.stopped`
+  moment it was stopped; its speaking is ended where it runs, its card given back, what a derivation of its spoken
+  words holds of agency given back (「How the engine derives the spoken words」), and no sound of it is served. Each is told as `briefing.ended`, its synthesis as `synthesis.ended`, and then one `briefings.stopped`
   names the room, the kind and the briefings it stopped, told even where it stopped none. A stopped briefing never plays and
   is never spoken again, whatever its caller does next: its key stays held, so a `POST` naming the key answers it,
   `stopped`, and a restart takes up no stopped line. A briefing that ended before the stop keeps its end.
@@ -602,8 +613,9 @@ declares the nouns `listen`, `brief` and `brief-attach` when asked `nouns`, so t
 
 `policy/voice.toml` holds the engine's own policy values, read once at start: `emotions`, the emotions a voice may be
 asked to speak with; `engine`, the engine every served voice belongs to (`fish-s2-pro`); and `clocks`, the spans of
-the three clocks that end a synthesis (「Syntheses」, 「The clocks」): `caller_gone_seconds`, `node_answer_seconds` and
-`node_still_seconds`. No route serves them; the voices list the emotions, and a synthesis outside them is refused.
+the four clocks that end a synthesis (「Syntheses」, 「The clocks」): `caller_gone_seconds`, `node_answer_seconds`,
+`node_still_seconds`, and the spoken words' `spoken_first_wait_seconds`, `spoken_longest_wait_seconds` and
+`spoken_tries`. No route serves them; the voices list the emotions, and a synthesis outside them is refused.
 
 ## Settings
 

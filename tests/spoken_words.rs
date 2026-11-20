@@ -2,7 +2,9 @@
 //! line's spoken words given by its caller are held to the check and refused naming the first word that fails, never
 //! mended; a line given its written words alone has them derived on a slot of agency's pool, the agreed readings
 //! handed over first, an answer that fails asked again naming the word, and the readings the model chose kept
-//! without writing over a row that stands; and with no agency named the line waits, saying so.
+//! without writing over a row that stands; with no agency named the line waits, saying so; every try goes out under a
+//! name of its own, and a line whose tries are spent fails saying why; and a line stopped while its words are derived
+//! gives back what it holds of agency.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
@@ -12,13 +14,13 @@ use axum::body::Body;
 use axum::extract::{Path, State};
 use axum::http::{Request, StatusCode, Uri};
 use axum::routing::{delete, patch, post};
-use bmo_voice::context::Context;
+use bmo_voice::context::{Clocks, Context};
 use bmo_voice::events::Events;
 use bmo_voice::http::{Served, router};
 use bmo_voice::script::reading::Language;
 use bmo_voice::script::unconverted::unconverted;
 use bmo_voice::settings::Settings;
-use bmo_voice::speech::spoken::testing;
+use bmo_voice::speech::spoken::{Pacing, testing};
 use bmo_voice::units::Units;
 use serde_json::{Value, json};
 use sqlx::postgres::PgConnection;
@@ -29,14 +31,27 @@ use super::scratch::{Scratch, address_of};
 
 const TOKEN: &str = "a-test-token";
 
-/// The engine's routes on the scratch store with one served voice, its master out of reach so no line it takes in is
-/// ever spoken, and its agency the one `agency` names, or none.
-async fn engine(scratch: &Scratch, agency: Option<std::net::SocketAddr>) -> axum::Router {
-  router(served(scratch, agency).await)
+/// A derivation's tries paced in milliseconds, three to a line, so no test waits on the policy's seconds.
+const QUICK: Pacing = Pacing {
+  first_wait: Duration::from_millis(10),
+  longest_wait: Duration::from_millis(20),
+  tries: 3,
+};
+
+/// The policy's own pacing, whose first wait outlasts what a test reads.
+fn policy_pacing() -> Pacing {
+  Clocks::default().spoken
 }
 
-/// What [`engine`] serves: its context and its event log, for a test that runs the service's own start steps.
-async fn served(scratch: &Scratch, agency: Option<std::net::SocketAddr>) -> Served {
+/// The engine's routes on the scratch store with one served voice, its master out of reach so no line it takes in is
+/// ever spoken, its agency the one `agency` names, or none, and its derivations paced [`QUICK`].
+async fn engine(scratch: &Scratch, agency: Option<std::net::SocketAddr>) -> axum::Router {
+  router(served(scratch, agency, QUICK).await)
+}
+
+/// What [`engine`] serves, its derivations paced as `pacing` says: its context and its event log, for a test that runs
+/// the service's own start steps.
+async fn served(scratch: &Scratch, agency: Option<std::net::SocketAddr>, pacing: Pacing) -> Served {
   let master = "[::1]:9";
   let agency =
     agency.map_or_else(String::new, |at| format!("\n[units.agency]\naddress = \"http://{at}\"\n"));
@@ -87,7 +102,10 @@ address = "http://[::1]:9"
     units,
     waits: Default::default(),
     reads: Default::default(),
-    clocks: Default::default(),
+    clocks: Clocks {
+      spoken: pacing,
+      ..Clocks::default()
+    },
     stops: Default::default(),
   };
 
@@ -264,7 +282,8 @@ async fn spoken_words_a_caller_gives_are_checked_and_refused_naming_the_word_nev
   assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
-// The derivation of a line with no agency named never ends, so the runtime is let go without waiting for it.
+// The derivation of a line with no agency named waits the policy's seconds before its next try, so the runtime is let
+// go without waiting for it.
 #[test]
 fn written_words_alone_wait_saying_so_while_no_agency_is_named() {
   let runtime = tokio::runtime::Runtime::new().expect("a runtime");
@@ -275,7 +294,7 @@ fn written_words_alone_wait_saying_so_while_no_agency_is_named() {
 
 async fn waits_with_no_agency() {
   let scratch = Scratch::new().await;
-  let engine = engine(&scratch, None).await;
+  let engine = router(served(&scratch, None, policy_pacing()).await);
   let (status, made) = call(
     &engine,
     "POST",
@@ -305,6 +324,7 @@ struct Asked {
   bound: Mutex<Vec<Value>>,
   starts: Mutex<Vec<Value>>,
   prompts: Mutex<Vec<String>>,
+  names: Mutex<Vec<String>>,
   given_back: Mutex<Vec<Value>>,
   owners_released: Mutex<Vec<String>>,
   ended: Mutex<Vec<String>>,
@@ -441,6 +461,7 @@ async fn stand_in_agency(asked: Arc<Asked>) -> std::net::SocketAddr {
             .lock()
             .unwrap()
             .push(turn["prompt"].as_str().unwrap_or_default().to_owned());
+          asked.names.lock().unwrap().push(turn["name"].as_str().unwrap_or_default().to_owned());
           let answer = asked.answers.lock().unwrap().remove(0);
 
           // An answer the test marks as an end is a turn that wrote nothing: agency answers its outcome and reason.
@@ -616,6 +637,95 @@ async fn a_turn_that_ended_with_no_answer_gives_its_session_up_and_the_next_try_
 }
 
 #[tokio::test]
+async fn a_line_whose_tries_are_spent_fails_saying_why_each_try_under_a_name_of_its_own() {
+  let scratch = Scratch::new().await;
+  let asked = Arc::new(Asked::default());
+
+  *asked.answers.lock().unwrap() = vec!["no object".to_owned(); 3];
+
+  let engine = engine(&scratch, Some(stand_in_agency(Arc::clone(&asked)).await)).await;
+  let (status, made) = call(
+    &engine,
+    "POST",
+    "/syntheses",
+    Some(json!({ "voiceName": "voice-a", "text": "the Nuxt model" })),
+  )
+  .await;
+
+  assert_eq!(status, StatusCode::CREATED, "{made}");
+
+  let id = made["id"].as_i64().expect("an id");
+  let read = read_until(&engine, id, |read| read["state"] == "failed").await;
+  let failure = read["failure"].as_str().unwrap_or_default();
+
+  assert!(
+    failure.contains("did not stand after 3 tries") && failure.contains("held no JSON object"),
+    "the failure says the tries are spent and why the last one failed: {read}"
+  );
+  assert_eq!(asked.prompts.lock().unwrap().len(), 3, "the policy's count of tries is asked, no more");
+
+  let names = asked.names.lock().unwrap().clone();
+  let prefix = format!("voice-synthesis-{id}-spoken-");
+
+  assert!(names.iter().all(|name| name.starts_with(&prefix)), "{names:?}");
+  assert_eq!(
+    names.iter().collect::<std::collections::BTreeSet<_>>().len(),
+    3,
+    "each try goes out under a name no other try carries: {names:?}"
+  );
+
+  let given_back = asked.given_back.lock().unwrap().clone();
+
+  assert_eq!(given_back.len(), 1, "the slot is given back once: {given_back:?}");
+  assert_eq!(given_back[0]["outcome"], "failed", "{given_back:?}");
+  assert_eq!(*asked.ended.lock().unwrap(), ["transliterator@run:1"], "and its session ended");
+}
+
+#[tokio::test]
+async fn a_briefing_stopped_while_its_words_are_derived_gives_back_what_its_line_holds_of_agency() {
+  let scratch = Scratch::new().await;
+  let asked = Arc::new(Asked::default());
+
+  *asked.answers.lock().unwrap() = vec!["no object".to_owned()];
+
+  let agency = stand_in_agency(Arc::clone(&asked)).await;
+  let engine = router(served(&scratch, Some(agency), policy_pacing()).await);
+  let (status, briefing) = call(
+    &engine,
+    "POST",
+    "/briefings",
+    Some(json!({ "voiceName": "voice-a", "text": "the Nuxt model", "chatId": 7, "kind": "summary", "plays": false })),
+  )
+  .await;
+
+  assert_eq!(status, StatusCode::CREATED, "{briefing}");
+
+  let id = briefing["synthesisId"].as_i64().expect("its synthesis");
+
+  // The first try's answer failed, and the next waits the policy's seconds: the stop comes in that wait.
+  read_until(&engine, id, |read| {
+    read["waitingOn"].as_str().is_some_and(|on| on.contains("asked again in"))
+  })
+  .await;
+
+  let (status, stopped) = call(&engine, "POST", "/briefings/stop", Some(json!({ "chatId": 7 }))).await;
+
+  assert_eq!(status, StatusCode::OK, "{stopped}");
+
+  let owner = format!("voice:synthesis:{id}");
+
+  for _ in 0..400 {
+    if asked.owners_released.lock().unwrap().contains(&owner) {
+      return;
+    }
+
+    tokio::time::sleep(Duration::from_millis(25)).await;
+  }
+
+  panic!("{owner} was never asked to give back what it holds");
+}
+
+#[tokio::test]
 async fn the_settled_month_and_day_readings_are_handed_over_and_the_line_kept_whole() {
   let scratch = Scratch::new().await;
   let asked = Arc::new(Asked::default());
@@ -664,7 +774,7 @@ async fn the_settled_month_and_day_readings_are_handed_over_and_the_line_kept_wh
 async fn what_the_syntheses_an_earlier_process_left_hold_is_given_back_by_their_owners() {
   let scratch = Scratch::new().await;
   let asked = Arc::new(Asked::default());
-  let served = served(&scratch, Some(stand_in_agency(Arc::clone(&asked)).await)).await;
+  let served = served(&scratch, Some(stand_in_agency(Arc::clone(&asked)).await), QUICK).await;
   let mut store = PgConnection::connect(&address_of(&scratch.name)).await.expect("the store answers");
 
   store
@@ -752,7 +862,7 @@ fn the_lines_a_stopped_process_left_are_taken_up_as_the_next_starts() {
 
 async fn takes_up_left_lines() {
   let scratch = Scratch::new().await;
-  let served = served(&scratch, None).await;
+  let served = served(&scratch, None, policy_pacing()).await;
   let engine = router(Served {
     context: Arc::clone(&served.context),
     events: served.events.clone(),

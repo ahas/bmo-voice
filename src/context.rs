@@ -182,6 +182,8 @@ pub struct Clocks {
   pub node_answer: Duration,
   /// How long a line on its node may stand still.
   pub node_still: Duration,
+  /// How the tries of a line's derivation are paced, and how many fail before the line does.
+  pub spoken: crate::speech::spoken::Pacing,
   /// The clock every span is counted on.
   pub clock: Arc<dyn Clock>,
 }
@@ -217,6 +219,11 @@ impl Default for Clocks {
       node_service: Duration::from_secs(spans.node_answer_seconds),
       node_answer: Duration::from_secs(spans.node_answer_seconds),
       node_still: Duration::from_secs(spans.node_still_seconds),
+      spoken: crate::speech::spoken::Pacing {
+        first_wait: Duration::from_secs(spans.spoken_first_wait_seconds),
+        longest_wait: Duration::from_secs(spans.spoken_longest_wait_seconds),
+        tries: spans.spoken_tries,
+      },
       clock: Arc::new(RuntimeClock),
     }
   }

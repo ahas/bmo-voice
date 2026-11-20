@@ -556,13 +556,18 @@ fn known_emotion(emotion: Option<&str>) -> Result<(), Refused> {
 
 // The spoken words a synthesis taken in without them is derived (docs/boundary-api.md, 「How the engine derives the
 // spoken words」), kept as its own once they stand; what the derivation waits on is told as the synthesis's wait, and
-// once they stand it waits for its card.
-async fn derived_words(context: &Context, id: i64, language: Language, text: &str) -> String {
+// once they stand it waits for its card. A derivation whose tries are spent answers why the last one failed.
+async fn derived_words(
+  context: &Context,
+  id: i64,
+  language: Language,
+  text: &str,
+) -> Result<String, String> {
   let mut told = |why: &str| {
     eprintln!("voice: synthesis {id} waits on its spoken words: {why}");
     context.waits.set(id, Wait::words(why));
   };
-  let words = crate::speech::spoken::derived(context, id, language, text, &mut told).await;
+  let words = crate::speech::spoken::derived(context, id, language, text, &mut told).await?;
 
   if let Err(why) = store::syntheses::set_spoken(&context.db, id, &words).await {
     eprintln!("voice: synthesis {id}'s spoken words were not kept: {why}");
@@ -570,7 +575,7 @@ async fn derived_words(context: &Context, id: i64, language: Language, text: &st
 
   context.waits.set(id, Wait::asking());
 
-  words
+  Ok(words)
 }
 
 // A line's speaking run apart from the answer, a task of the service's one runtime, which every waiting line shares;
@@ -632,6 +637,7 @@ async fn speak(
   stop: CancellationToken,
   caller: Caller,
 ) -> bool {
+  let derives = words.spoken.is_none();
   let ended = tokio::select! {
     () = speak_line(&context, events.clone(), id, voice, words) => Ended::Own,
     () = stop.cancelled() => Ended::Stopped,
@@ -652,6 +658,11 @@ async fn speak(
   context.waits.clear(id);
   card::give_back_work(&context.units.arbiter, &context.settings.demands_folder(), &node::work_key(id))
     .await;
+
+  // A derivation ended under its try leaves its slot and session to its owner's release.
+  if derives && let Some(agency) = &context.units.agency {
+    crate::speech::spoken::give_back_owned(agency, id).await;
+  }
 
   if caller_gone {
     let why =
@@ -787,7 +798,14 @@ impl Told {
 async fn speak_line(context: &Context, events: Events, id: i64, voice: voices::VoiceRow, words: Words) {
   let text = match words.spoken {
     Some(spoken) => spoken,
-    None => derived_words(context, id, words.language, &words.text).await,
+    None => match derived_words(context, id, words.language, &words.text).await {
+      Ok(derived) => derived,
+      Err(why) => {
+        context.waits.clear(id);
+
+        return failed(context, events, id, None, &why).await;
+      }
+    },
   };
   let out = sound_path(context, id);
   if let Some(folder) = out.parent().map(std::path::Path::to_path_buf) {

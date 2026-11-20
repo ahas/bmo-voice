@@ -17,8 +17,8 @@ pub struct VoicePolicy {
   pub clocks: ClockSpans,
 }
 
-/// The spans of the three clocks that end a synthesis nothing else would end (`docs/boundary-api.md`, 「The clocks」),
-/// in whole seconds.
+/// The spans of the four clocks that end a synthesis nothing else would end (`docs/boundary-api.md`, 「The clocks」),
+/// in whole seconds, and the count of tries the spoken words' clock allows.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ClockSpans {
@@ -28,6 +28,12 @@ pub struct ClockSpans {
   pub node_answer_seconds: u64,
   /// How long a line on its node may stand still.
   pub node_still_seconds: u64,
+  /// How long a line's derivation waits after its first try that failed, doubled after each one after it.
+  pub spoken_first_wait_seconds: u64,
+  /// The longest wait between two tries of a line's derivation.
+  pub spoken_longest_wait_seconds: u64,
+  /// How many tries of a line's derivation fail before the line does.
+  pub spoken_tries: u32,
 }
 
 /// The policy, read once.

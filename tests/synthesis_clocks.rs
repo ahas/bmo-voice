@@ -79,6 +79,7 @@ fn long_on(hand: &Arc<HandClock>) -> Clocks {
     node_service: LONG,
     node_answer: LONG,
     node_still: LONG,
+    spoken: Clocks::default().spoken,
     clock: Arc::clone(hand) as Arc<dyn Clock>,
   }
 }

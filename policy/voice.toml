@@ -8,7 +8,7 @@ emotions = ["기본", "기쁨", "슬픔", "놀람", "화남", "졸림", "폭소"
 # `voice.toml` names another, or a folder with none, is kept and never spoken.
 engine = "fish-s2-pro"
 
-# The spans of the three clocks that end a synthesis nothing else would end (docs/boundary-api.md, 「The clocks」).
+# The spans of the four clocks that end a synthesis nothing else would end (docs/boundary-api.md, 「The clocks」).
 [clocks]
 # A synthesis taken in through POST /syntheses that its caller has not read for this long fails: its caller has gone.
 caller_gone_seconds = 120
@@ -17,3 +17,8 @@ caller_gone_seconds = 120
 node_answer_seconds = 60
 # A line on its node whose stage and whose server's every line stand still for this long fails: it stood still.
 node_still_seconds = 600
+# A line whose spoken words are derived waits this long after its first try that failed, twice as long after each
+# one after it up to the longest wait, and fails once this many tries have failed: its spoken words did not stand.
+spoken_first_wait_seconds = 5
+spoken_longest_wait_seconds = 300
+spoken_tries = 10
