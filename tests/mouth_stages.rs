@@ -1,4 +1,4 @@
-//! The voice server's account of a line (`tests/mouth_stages.py`), run on the mouth's tests' own interpreter as the
+//! The voice server's account of a line (`tests/mouth_stages.py`), run on the Python tests' own interpreter as the
 //! long line is (docs/voice-plan.md, 「How a line crosses」).
 
 use std::path::PathBuf;
@@ -11,9 +11,10 @@ fn a_line_on_the_voice_server_writes_its_stages_counts_the_servers_own_room_and_
  {
   let python = voice_python();
   let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/mouth_stages.py");
-  let ran = Command::new(&python).arg(&script).output().unwrap_or_else(|why| {
-    panic!("the mouth's tests' interpreter {} does not run: {why}", python.display())
-  });
+  let ran = Command::new(&python)
+    .arg(&script)
+    .output()
+    .unwrap_or_else(|why| panic!("the Python tests' interpreter {} does not run: {why}", python.display()));
 
   assert!(
     ran.status.success(),

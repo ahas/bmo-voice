@@ -51,7 +51,7 @@ Tests live in `tests/`, never beside the code, a hosted tool's in its own folder
 telephone number, a token or a private network address. `docs/inventory.md` records the behaviour the tests are
 to keep.
 
-The mouth's tests (`tests/mouth_*.py`) run on an interpreter of their own, `tests/.venv`, which the declaration's setup
+The Python tests (`tests/*.py`) run on an interpreter of their own, `tests/.venv`, which the declaration's setup
 makes with `uv` from `tests/python-requirements.txt`, the voice environment's own versions of the packages they read,
 so they run on whatever machine the suite is placed on; `BMO_VOICE_PYTHON` names another interpreter instead.
 

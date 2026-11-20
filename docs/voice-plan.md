@@ -81,12 +81,28 @@ the voice nodes. What a caller does with the sound is the caller's.
     however long the lines ahead of it take.
   - **`voice/encoder`** writes a wav as OGG/Opus, in no line, since the card is not touched.
   - **`voice/transcriber`** takes spoken files down in one language, each answered with what was heard, in the
-    order given.
+    order given, on the card where it is free and on the processor otherwise (「Where a transcription runs」).
 - **Its executable is `synth/voice-tool.py`,** on the system's `python3` and the standard library alone, placed
   with the mouth, the encoder and the transcriber it runs and the tool host's Python helper; each file it runs runs
   on the voice environment's interpreter.
 - **No clock bounds a call:** the manifest declares no span and the tool host keeps none, so a call ends when its
   work ends, fails, or its caller stops it.
+
+## Where a transcription runs
+
+- **On the operations machine's card only while the card is free,** and on its processor otherwise. The
+  transcriber tries the card lock (「How it holds the card」) once, without waiting: where it gets it, Whisper runs
+  on the card in half precision and the lock is held until the last file is heard and the model is off the card;
+  where another occupant holds it, a model resting there or a claim, Whisper runs on the processor in full
+  precision. A machine with no CUDA runs it on the processor.
+- **It asks the card arbiter for no turn.** A transcription is short work the processor carries as well, so it
+  never makes a model resting on the card give way for it and never waits in the card's line behind other work.
+  While it holds the lock it is the card's one occupant as the arbiter's rules require, and a claim that comes
+  meanwhile waits for it to end.
+- **A card that runs out of memory hands the work to the processor:** where loading the model or hearing a file
+  fails for want of the card's memory, the model is let go off the card, the allocator's cache emptied and the lock
+  given back, and that file and every one after it are heard on the processor. The files are answered in the order
+  given either way.
 
 ## Encoding
 

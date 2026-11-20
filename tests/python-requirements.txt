@@ -1,4 +1,4 @@
-# The packages the mouth's tests run on (tests/mouth_*.py), pinned at the versions the voice environment freezes
+# The packages the Python tests run on (tests/*.py), pinned at the versions the voice environment freezes
 # (synth/voice-node-requirements.txt). The declaration's setup makes tests/.venv from this file.
 numpy==1.26.4
 soundfile==0.14.0

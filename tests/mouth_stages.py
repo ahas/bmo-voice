@@ -3,7 +3,7 @@ and the card's driver stood in for: the room the model needs counts what the ser
 stage a line reaches is written into its stage file, the pieces counted; a line whose asker has gone is dropped
 before it takes the card, and while it waits for room; and a stage file outside the call folder is refused.
 
-Run on the mouth's tests' own interpreter, which carries numpy and soundfile (README.md, 「Tests」): `tests/mouth_stages.rs` runs it.
+Run on the Python tests' own interpreter, which carries numpy and soundfile (README.md, 「Tests」): `tests/mouth_stages.rs` runs it.
 """
 
 import importlib.util

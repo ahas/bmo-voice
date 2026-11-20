@@ -14,3 +14,4 @@ mod script_figures;
 mod spoken_words;
 mod studio_sign_in;
 mod synthesis_clocks;
+mod transcriber_card;

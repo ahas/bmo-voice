@@ -7,7 +7,7 @@ name = "bmo-voice"
 # stand in tests/ (README.md, 「Tests」); the quick checks hold the personal-data rule.
 [test]
 languages = ["cargo", "bun"]
-# The mouth's tests' own interpreter, tests/.venv, made from tests/python-requirements.txt (README.md, 「Tests」),
+# The Python tests' own interpreter, tests/.venv, made from tests/python-requirements.txt (README.md, 「Tests」),
 # and the Bun projects' packages, which their checks, the node scripts and the studio's tools and screen stand on; a
 # release runs them too.
 setup = [

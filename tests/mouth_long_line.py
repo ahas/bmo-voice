@@ -2,7 +2,7 @@
 only the model and the card's driver stood in for (docs/voice-plan.md, 「What it answers」, 「What a long line takes of the card」): a line of
 any length the engine takes in comes back as one sound, every word of it spoken once and in order.
 
-Run on the mouth's tests' own interpreter, which carries numpy and soundfile (README.md, 「Tests」): `tests/mouth_long_line.rs` runs it.
+Run on the Python tests' own interpreter, which carries numpy and soundfile (README.md, 「Tests」): `tests/mouth_long_line.rs` runs it.
 """
 
 import importlib.util

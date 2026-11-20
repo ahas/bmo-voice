@@ -6,7 +6,7 @@ How a commit of this repository goes live. The testbed deploys it from the repos
 ## What a deployment does
 
 - **The release:** the testbed builds the crate's three binaries and the hosted tool's into a release's `bin/`,
-  runs the declaration's setup, which makes the mouth's tests' interpreter (README.md, 「Tests」) and installs the
+  runs the declaration's setup, which makes the Python tests' interpreter (README.md, 「Tests」) and installs the
   Bun projects' packages (`scripts/`, `studio/` and `studio/client/`) from their lockfiles and the base libraries
   packed in their `vendor/` folders (`docs/layout.md`, 「The rules the layout keeps」), links
   the settings from the data root's `env/voice.toml` as the release's `settings.toml`, and, before the flip,
