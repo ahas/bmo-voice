@@ -123,6 +123,35 @@ export function voicesManifest(root: string): VoiceFile[] {
   return found;
 }
 
+// The voices directory as a push carries it: every file the manifest counts, as one tar.
+export function voicesPack(root: string): Uint8Array {
+  const packed = Bun.spawnSync(["tar", "-C", root, "-cf", "-", `--exclude=${VOICE_PUSH_SKIPS}`, "."]);
+
+  if (packed.exitCode !== 0) {
+    throw new Error(`the voices directory could not be packed: ${packed.stderr.toString().trim()}`);
+  }
+
+  return packed.stdout;
+}
+
+// The node's line that makes its voices directory the pack's (docs/voice-plan.md, 「Building and updating them」):
+// the pack a push left as `voices.tar` in the place under the account's home is unpacked into a folder apart, which
+// then takes the voices directory's place whole, so whatever the pack does not carry is gone. Each step runs only
+// once the one before it succeeded, so a pack that does not unpack leaves the voices directory as it stood, and
+// what a push left halfway, the two folders of its own beside the directory, is cleared first.
+export function voicesLaying(place: string): string {
+  return [
+    `cd ~/${shellWord(place)}`,
+    "rm -rf voices.incoming voices.previous",
+    "mkdir voices.incoming",
+    "tar -C voices.incoming -xf voices.tar",
+    "rm -f voices.tar",
+    "if [ -e voices ]; then mv voices voices.previous; fi",
+    "mv voices.incoming voices",
+    "rm -rf voices.previous",
+  ].join(" && ");
+}
+
 // The stamp of one push, as the hex of a digest. The token goes in only as its own digest, so the stamp standing on
 // the node says nothing about it beyond whether it moved.
 export function voicePushStamp(push: VoicePush): string {

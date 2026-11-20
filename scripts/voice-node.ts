@@ -16,9 +16,8 @@
 // takes a free node the way a synthesis does unless `--node` names one. A node is one the node service lists,
 // reached through its own shell as the node service's target gives it. What lands on it lives under one directory
 // in its home: the server file, the engine environment, the base weights and a copy of the data root's voices
-// directory laid out the same,
-// which is what lets a request name a voice by its place under that directory. The unit and the token file are the
-// node's own, beside them.
+// directory laid out the same and holding nothing else, which is what lets a request name a voice by its place under
+// that directory. The unit and the token file are the node's own, beside them.
 
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -36,7 +35,6 @@ import {
   takeVoiceNode,
   VOICE_PLACE,
   VOICE_PORT,
-  VOICE_PUSH_SKIPS,
   VOICE_SERVICE,
   VOICE_STAMP,
   VOICE_TOKEN,
@@ -46,7 +44,9 @@ import {
   voiceNodeRequest,
   voiceNodeShell,
   voicePushStamp,
+  voicesLaying,
   voicesManifest,
+  voicesPack,
 } from "./lib/voice-node";
 
 import type { NodeShell } from "./lib/node-shell";
@@ -372,18 +372,14 @@ function stampNow(): string {
 // node a verb pushes to.
 let packed: Uint8Array | null = null;
 
-function voicesPack(): Uint8Array {
-  if (packed !== null) {
-    return packed;
+function voicesPacked(): Uint8Array {
+  if (packed === null) {
+    try {
+      packed = voicesPack(voicesFolder());
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error));
+    }
   }
-
-  const voices = Bun.spawnSync(["tar", "-C", voicesFolder(), "-cf", "-", `--exclude=${VOICE_PUSH_SKIPS}`, "."]);
-
-  if (voices.exitCode !== 0) {
-    fail(`the voices directory could not be packed: ${voices.stderr.toString()}`);
-  }
-
-  packed = voices.stdout;
 
   return packed;
 }
@@ -393,19 +389,19 @@ async function push(node: VoiceNode): Promise<void> {
   // Taken before the pack, so a file written while it is packed makes the stamp older than the node rather than
   // newer, and the next sync brings it.
   const stamp = stampNow();
-  const voices = voicesPack();
+  const voices = voicesPacked();
   let home: string;
 
   try {
     home = await nodeHome(node.shell);
-    await onNode(node, `mkdir -p ~/${VOICE_PLACE}/voices ~/.config/${VOICE_PLACE} ~/.config/systemd/user`);
+    await onNode(node, `mkdir -p ~/${VOICE_PLACE} ~/.config/${VOICE_PLACE} ~/.config/systemd/user`);
     await node.shell.put(`${home}/${VOICE_PLACE}/voice-fish.py`, readFileSync(serverFile));
     await node.shell.put(`${home}/${VOICE_PLACE}/voices.tar`, voices);
   } catch (error) {
     throw new NodeRefused(error instanceof Error ? error.message : String(error));
   }
 
-  await onNode(node, `cd ~/${VOICE_PLACE} && tar -C voices -xf voices.tar && rm -f voices.tar`);
+  await onNode(node, voicesLaying(VOICE_PLACE));
   await onNode(node, `umask 077 && cat > ~/${VOICE_TOKEN} && chmod 600 ~/${VOICE_TOKEN}`, `${secret}\n`);
   await onNode(node, `cat > ~/.config/systemd/user/${unit}`, unitText());
   await onNode(node, `systemctl --user daemon-reload && systemctl --user enable --quiet ${unit} && systemctl --user restart ${unit}`);
