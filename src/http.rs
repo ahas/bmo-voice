@@ -368,7 +368,7 @@ async fn create_synthesis(
   known_emotion(asked.emotion.as_deref())?;
 
   let language = line_language(asked.language.as_deref(), &asked.text, &row)?;
-  let spoken = checked_spoken(asked.spoken.as_deref(), language)?;
+  let spoken = checked_spoken(&asked.text, asked.spoken.as_deref(), language)?;
   let at = crate::now_ms();
   // Held from the row's insert to its event, so no change told of it is numbered before its creation.
   let writing = served.events.write().await;
@@ -504,14 +504,18 @@ fn line_language(named: Option<&str>, written: &str, row: &voices::VoiceRow) -> 
   })
 }
 
-// The spoken words a caller gave, held to the check before anything is taken in (docs/boundary-api.md, 「The spoken
-// words」): never mended, refused naming the first word that failed.
-fn checked_spoken(spoken: Option<&str>, language: Language) -> Result<Option<String>, Refused> {
+// The spoken words a caller gave, held to the check against the written words before anything is taken in
+// (docs/boundary-api.md, 「The spoken words」): never mended, refused naming the first word that failed.
+fn checked_spoken(
+  written: &str,
+  spoken: Option<&str>,
+  language: Language,
+) -> Result<Option<String>, Refused> {
   let Some(spoken) = spoken else {
     return Ok(None);
   };
 
-  match unconverted::unconverted(spoken, language) {
+  match unconverted::found(written, spoken, language) {
     Some(found) => {
       Err(Refused::new(StatusCode::UNPROCESSABLE_ENTITY, "unconverted-run", found.to_string()))
     }
@@ -1029,7 +1033,7 @@ async fn create_briefing(
   let script = spoken::finished_script(&spoken::spoken_script(&asked.text));
   let script = if script.trim().is_empty() { asked.text.trim().to_owned() } else { script };
   let language = line_language(asked.language.as_deref(), &script, &voice)?;
-  let spoken_words = checked_spoken(asked.spoken.as_deref(), language)?;
+  let spoken_words = checked_spoken(&script, asked.spoken.as_deref(), language)?;
   let at = crate::now_ms();
   // Held from the rows' insert to their events, so no change told of them, a stop's above all, is numbered before
   // their creation.

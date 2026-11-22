@@ -27,7 +27,7 @@ fn digit_word(figure: char) -> &'static str {
 }
 
 // Figures one by one: a number opening with 0, and the figures after a decimal point.
-fn spelled(figures: &str) -> String {
+pub(crate) fn spelled(figures: &str) -> String {
   figures.chars().map(digit_word).collect()
 }
 
@@ -105,6 +105,14 @@ fn native_count(n: u64) -> String {
   format!("{tens}{}", words().native_ones.get(ones).map_or("", String::as_str))
 }
 
+// A count of one to ninety-nine in the native form it is said in alone.
+fn native_count_alone(n: u64) -> String {
+  let (tens, ones) = ((n / 10) as usize, (n % 10) as usize);
+  let tens = words().native_tens.get(tens).map_or("", String::as_str);
+
+  format!("{tens}{}", words().native_ones_alone.get(ones).map_or("", String::as_str))
+}
+
 // How a whole number is said before the word that follows it.
 type Reading = fn(&str) -> String;
 
@@ -114,7 +122,17 @@ fn trimmed(figures: &str) -> String {
 }
 
 // A native count: native Korean up to 99, the hundreds above it in Sino-Korean.
-fn native(figures: &str) -> String {
+pub(crate) fn native(figures: &str) -> String {
+  native_by(figures, native_count)
+}
+
+/// A native count as it is said alone, with no counter after it.
+pub(crate) fn native_alone(figures: &str) -> String {
+  native_by(figures, native_count_alone)
+}
+
+// A native count, its last two figures in the native form `count` says them in.
+fn native_by(figures: &str, count: fn(u64) -> String) -> String {
   if figures.starts_with('0') || figures.len() > 15 {
     return sino_korean(figures);
   }
@@ -123,7 +141,7 @@ fn native(figures: &str) -> String {
   let rest = n % 100;
   let hundreds = if n == rest { String::new() } else { sino_korean(&(n - rest).to_string()) };
 
-  format!("{hundreds}{}", if rest == 0 { String::new() } else { native_count(rest) })
+  format!("{hundreds}{}", if rest == 0 { String::new() } else { count(rest) })
 }
 
 fn ordinal(figures: &str) -> String {
@@ -568,6 +586,11 @@ fn mark(rest: &[char], _: &RunPlace) -> Option<Piece> {
 // The pieces a run is read out of, tried in this order at each place in it.
 const PIECES: [PieceReader; 11] =
   [sign, date, clock, ratio, item, fraction, currency, decimal, whole, range, mark];
+
+/// A run of figures and the marks it is written with, said the way these rules read it before `after`.
+pub(crate) fn said_run(run: &str, after: &str) -> String {
+  read_run(&run.chars().collect::<Vec<_>>(), after)
+}
 
 // One run of figures and the marks it is written with, said, given what follows the run.
 fn read_run(run: &[char], after: &str) -> String {

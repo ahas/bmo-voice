@@ -53,7 +53,10 @@ pub struct FigureWords {
   pub groups: Vec<String>,
   pub native_ones: Vec<String>,
   pub native_tens: Vec<String>,
+  pub native_ones_alone: Vec<String>,
   pub twenty: String,
+  pub zero: String,
+  pub english_digits: Vec<String>,
   pub first: String,
   pub months: BTreeMap<String, String>,
   pub native_counters: Vec<String>,
@@ -71,12 +74,14 @@ pub struct FigureWords {
   pub ratio: String,
   pub fraction: String,
   pub point: String,
+  pub point_tensed: String,
   pub dollars: String,
   pub won: String,
   pub plus: String,
   pub minus: String,
   pub range: String,
   pub symbols: BTreeMap<String, String>,
+  pub percent_also: Vec<String>,
 }
 
 /// The script words of the language, read once.

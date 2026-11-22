@@ -172,6 +172,12 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **No line is spoken by these rules.** A line's figures are said as its spoken words say them, which a model
   writes with judgement, and the check refuses spoken words that still hold a digit (`docs/boundary-api.md`, 「The
   spoken words」). The rules are the reading table's, kept with it.
+- **The check reads the figures with the same words.** Every number of the written words is looked for in the
+  spoken words in each reading the language's words give it: Sino-Korean; figure by figure, zero said either way,
+  or as a name's figures are said in English; native, as a count alone or before a counter; an hour on a
+  twelve-hour clock; a month by its own word; a decimal with its point said plain or tensed and carried. Spoken
+  words that say it in none are refused, naming the reading these rules give it where it stands. An English line's
+  numbers are read the same way in English words.
 - **A figure's reading the model writes wrongly is settled the way a name's is:** a row of `voice_names` holds the
   spelling and its Korean reading, and every derivation applies it as it stands (`docs/store.md`). The months and
   days of a date are seeded there, so a month and its counter are read as one word every time.

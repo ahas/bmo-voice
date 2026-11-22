@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 
 use crate::context::{Clocks, Context};
 use crate::script::reading::{Language, VoiceName};
-use crate::script::unconverted::{Unconverted, unconverted};
+use crate::script::unconverted::{Finding, found, unconverted};
 use crate::store::voices;
 use crate::units::UnitError;
 use crate::units::agency::{Agency, Slot, SlotAsk, Turned};
@@ -103,7 +103,7 @@ pub async fn derived(
 ) -> Result<String, String> {
   let pacing = context.clocks.spoken;
   let drawn = rand::random::<u32>();
-  let mut failed: Option<Unconverted> = None;
+  let mut failed: Option<Finding> = None;
   let mut held: Option<Held> = None;
   let mut tried = 0;
 
@@ -176,14 +176,14 @@ struct Try<'a> {
   name: String,
   language: Language,
   text: &'a str,
-  failed: Option<&'a Unconverted>,
+  failed: Option<&'a Finding>,
 }
 
 // What one try on a standing session came to: the spoken words, or why it missed, with the session to try again on
 // where it still stands and the word a failed answer stopped at.
 enum Came {
   Spoken(String),
-  Missed(Missed, Option<Held>, Option<Unconverted>),
+  Missed(Missed, Option<Held>, Option<Finding>),
 }
 
 // One try on a session that stands: the words kept and the session given back once they stand, a session agency no
@@ -198,7 +198,7 @@ async fn tried_once(context: &Context, agency: &Agency, standing: Held, turn: &T
       Came::Missed(Missed::Road(how), None, None)
     }
     Ok(Tried::Answered(answer)) => {
-      match answer.and_then(|answer| checked(&answer, turn.language).map(|()| answer)) {
+      match answer.and_then(|answer| checked(&answer, turn.text, turn.language).map(|()| answer)) {
         Ok(answer) => {
           release(agency, standing, "answered").await;
           keep_readings(context, turn.language, &answer.readings).await;
@@ -256,16 +256,17 @@ enum Tried {
 // Why an answer was not taken.
 enum Refusal {
   Unread(String),
-  Unconverted(Unconverted),
+  Unconverted(Finding),
 }
 
-// Whether an answer's spoken words pass the check and stand within the bound every line is spoken within.
-fn checked(answer: &Answer, language: Language) -> Result<(), Refusal> {
+// Whether an answer's spoken words pass the check against the written words and stand within the bound every line is
+// spoken within.
+fn checked(answer: &Answer, written: &str, language: Language) -> Result<(), Refusal> {
   if answer.spoken.trim().chars().count() > MOST_SPOKEN {
     return Err(Refusal::Unread(format!("the spoken words run past {MOST_SPOKEN} characters")));
   }
 
-  match unconverted(&answer.spoken, language) {
+  match found(written, &answer.spoken, language) {
     Some(found) => Err(Refusal::Unconverted(found)),
     None => Ok(()),
   }
@@ -287,7 +288,7 @@ fn turn_prompt(
   language: Language,
   agreed: &[(String, String)],
   text: &str,
-  failed: Option<&Unconverted>,
+  failed: Option<&Finding>,
 ) -> String {
   let mut prompt = format!("The line's language: {}.\n\n", language.named());
 
@@ -603,19 +604,20 @@ pub mod testing {
     language: Language,
     agreed: &[(String, String)],
     text: &str,
-    failed: Option<&Unconverted>,
+    failed: Option<&Finding>,
   ) -> String {
     turn_prompt(language, agreed, text, failed)
   }
 
-  /// The spoken words of an answer the model wrote, where it reads and passes the check, else why not.
-  pub fn answer(written: &str, language: Language) -> Result<String, String> {
+  /// The spoken words of an answer the model wrote for the written words `text`, where it reads and passes the
+  /// check, else why not.
+  pub fn answer(written: &str, text: &str, language: Language) -> Result<String, String> {
     let answer = read_answer(written).map_err(|why| match why {
       Refusal::Unread(why) => why,
       Refusal::Unconverted(found) => found.to_string(),
     })?;
 
-    match checked(&answer, language) {
+    match checked(&answer, text, language) {
       Ok(()) => Ok(answer.spoken),
       Err(Refusal::Unconverted(found)) => Err(found.to_string()),
       Err(Refusal::Unread(why)) => Err(why),

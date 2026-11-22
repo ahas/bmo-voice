@@ -1,7 +1,9 @@
-//! What a line's spoken words left unconverted (docs/boundary-api.md, 「The spoken words」): a letter of a script the
-//! voice's language does not write, a digit, or a mark an address, a path, code or markup is written with. It only
-//! finds; nothing here mends a word, since the spoken words are a model's to write.
+//! What a line's spoken words left unconverted or misread (docs/boundary-api.md, 「The spoken words」): a letter of a
+//! script the voice's language does not write, a digit, a mark an address, a path, code or markup is written with,
+//! or a number of the written words they do not say. It only finds; nothing here mends a word, since the spoken words
+//! are a model's to write.
 
+use super::numbers::{Misread, misread};
 use super::reading::Language;
 use super::spoken::holds_korean;
 
@@ -76,4 +78,32 @@ pub fn unconverted(spoken: &str, language: Language) -> Option<Unconverted> {
       holds,
     })
   })
+}
+
+/// What the check found in a line's spoken words: a word holding what no spoken word may, or a number of the written
+/// words they do not say as it is written.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Finding {
+  Unconverted(Unconverted),
+  Misread(Misread),
+}
+
+impl std::fmt::Display for Finding {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Unconverted(found) => found.fmt(f),
+      Self::Misread(Misread { written, said }) => write!(
+        f,
+        "the spoken words do not say the written \"{written}\" as it is written; its figures read {said}"
+      ),
+    }
+  }
+}
+
+/// The first thing the check finds in `spoken`, the spoken words of the written words `written`: a word left
+/// unconverted first, then a number they do not say; none where the line can be said as it stands.
+pub fn found(written: &str, spoken: &str, language: Language) -> Option<Finding> {
+  unconverted(spoken, language)
+    .map(Finding::Unconverted)
+    .or_else(|| misread(written, spoken, language).map(Finding::Misread))
 }

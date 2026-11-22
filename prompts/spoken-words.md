@@ -15,11 +15,15 @@ request gives, and nothing else.
   of several letters each stand as one run of syllables: the point and the dots are said and stand inside the run,
   and the letters of an acronym follow one another unbroken. Spaces stand only where a speaker would break between
   words.
-- Inside such a run the syllables are written as they sound when the run is said in one breath, never as each part
-  is spelled on its own: a final consonant is carried onto a vowel that follows it, and a consonant is tensed or
-  run together where a speaker's mouth does so. The synthesiser says what is spelled, so a run spelled part by part
-  is said part by part. Where the request shows runs written as they sound, write every such run the same way. The
-  ordinary words of the line keep their spelling.
+- Inside such a run the joins the synthesiser would otherwise say part by part are written as they sound when the
+  run is said in one breath: the letter names of an acronym run together, a final consonant carried onto the vowel
+  of the next letter name, and a decimal point tensed and its final consonant carried onto the figure after it.
+  The synthesiser says what is spelled, so a run spelled part by part is said part by part. Where the request shows
+  runs written as they sound, write every such run the same way.
+- A number's own words keep their spelling, every figure in the word it is read in, so the spoken words can be
+  read back to the number written: no final consonant of a number's word is carried onto the figure or the unit
+  after it, and no figure is tensed. Only the join at a decimal point is sounded, as above, and the request's
+  examples show numbers so written. The ordinary words of the line keep their spelling too.
 - A number of four digits or more is too long for one breath, and a voice handed it as one run breaks it in the
   wrong place. Write it as two runs with one space between them, broken where a speaker breaks it: the thousands
   and the hundreds together, then the tens and the ones. A counter or a unit that follows the number is written
@@ -46,8 +50,8 @@ request gives, and nothing else.
   and none of the marks an address, a path, code or markup is written with: no slash or backslash, and none of
   `` ` `` `*` `_` `#` `|` `<` `>` `[` `]` `{` `}` `~` `=` `^` `@` `$` `%` `&` `+`. Ordinary sentence punctuation
   stays.
-- Where the request says your last answer held something it must not, write that word again by these rules and
-  keep the rest.
+- Where the request says your last answer held something it must not, or did not say a written number as it is
+  written, write that word or that number again by these rules and keep the rest.
 
 ## The answer
 

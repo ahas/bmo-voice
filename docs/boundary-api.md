@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.36.
+Fixed at 0.1.0-rev.37.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -224,8 +224,10 @@ server any other way.
   date, time and unit in the words a reader says, and a web address, a file path, code and markup are said in a
   few words for what they are or left out. What is said in one breath stands as one word with no space inside it,
   a decimal, a version and an acronym read by its letters among them, since a voice pauses at every space, and
-  inside it the syllables are written as they sound in that breath, a final consonant carried onto the vowel after
-  it, since a voice says what is spelled. A number of four digits or more is two runs, broken after its
+  inside it the joins a voice would otherwise say part by part are written as they sound in that breath, since a
+  voice says what is spelled: the letter names of an acronym run together, and a decimal point tensed and its
+  final consonant carried onto the figure after it. A number's own words keep their spelling, so every number
+  reads as the one written. A number of four digits or more is two runs, broken after its
   hundreds, with its counter written onto the last. An
   identifier that is no word, a commit hash among them, is said by its first four characters alone. A time zone's
   abbreviation is said as the place it names, before its time. Nothing else differs from the written words.
@@ -234,14 +236,21 @@ server any other way.
   and the engine's own reading rules (「Script readings」, `docs/voice-plan.md`) unfold markup into the written
   words and never read them. A caller writes them itself and passes `spoken`, or passes `text` alone and the
   engine derives them (「How the engine derives the spoken words」).
-- **The check:** before a line is spoken its spoken words are checked for what was left unconverted. It finds,
-  and the engine never mends:
+- **The check:** before a line is spoken its spoken words are checked for what was left unconverted or misread.
+  It finds, and the engine never mends:
   - a letter of another script than the line's language writes: a Latin letter in a Korean line, a Hangul letter
     in an English one;
   - a digit, in every voice;
   - the marks a web address, a path, code or markup is written with: a slash or a backslash, and any of
     `` ` `` `*` `_` `#` `|` `<` `>` `[` `]` `{` `}` `~` `=` `^` `@` `$` `%` `&` `+`, and a character of the
-    private use area.
+    private use area;
+  - a number of the written words that the spoken words do not say, in any of the readings the line's language has
+    for it: a whole number in its own words, figure by figure, as a count, as an hour, or by a name's figures in
+    English; a decimal or a version as its parts and its points, a point tensed and carried as above; and one
+    followed by a percent sign with the sign's word after it. A number written onto a Latin letter or among the
+    marks of code is a name's or the code's and is not looked for, and a run of three parts or more is also said
+    where its parts are each said, as a date is. The spaces and the sentence punctuation of the spoken words do not
+    count, and the check names the written number with the reading the engine would give it.
 - **A `spoken` a caller passed that fails the check is refused** 422 `unconverted-run`, the sentence naming the
   first word that failed and what it holds, so a caller that claims to have converted a line and did not is
   caught; it corrects that word and asks again. A derived one that fails is asked of the model again.

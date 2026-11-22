@@ -11,6 +11,7 @@ mod narration;
 mod node_target;
 mod scratch;
 mod script_figures;
+mod spoken_numbers;
 mod spoken_words;
 mod studio_sign_in;
 mod synthesis_clocks;

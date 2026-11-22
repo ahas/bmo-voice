@@ -254,20 +254,33 @@ async fn a_briefing_naming_no_language_is_said_in_the_one_its_words_are_in() {
 fn an_answer_is_read_out_of_the_text_round_it_and_held_to_the_check() {
   let fenced = "```json\n{\"spoken\": \"백업이 끝났습니다.\", \"readings\": []}\n```";
 
-  assert_eq!(testing::answer(fenced, Language::Ko).as_deref(), Ok("백업이 끝났습니다."));
+  assert_eq!(
+    testing::answer(fenced, "The backup finished.", Language::Ko).as_deref(),
+    Ok("백업이 끝났습니다.")
+  );
 
-  let latin = testing::answer("{\"spoken\": \"Qwen 모델\"}", Language::Ko).expect_err("a Latin word");
+  let latin =
+    testing::answer("{\"spoken\": \"Qwen 모델\"}", "Qwen", Language::Ko).expect_err("a Latin word");
 
   assert!(latin.contains("\"Qwen\""), "{latin}");
-  assert!(testing::answer("no object here", Language::Ko).is_err());
+  assert!(testing::answer("no object here", "", Language::Ko).is_err());
 
   // Spoken words past the most a line holds do not stand, and are asked again; at the bound they stand.
   let most = bmo_voice::speech::spoken::MOST_SPOKEN;
   let at_most = json!({ "spoken": "가".repeat(most) }).to_string();
   let past = json!({ "spoken": "가".repeat(most + 1) }).to_string();
 
-  assert_eq!(testing::answer(&at_most, Language::Ko).map(|words| words.chars().count()), Ok(most));
-  assert!(testing::answer(&past, Language::Ko).expect_err("too long").contains("30000 characters"));
+  assert_eq!(testing::answer(&at_most, "", Language::Ko).map(|words| words.chars().count()), Ok(most));
+  assert!(
+    testing::answer(&past, "", Language::Ko)
+      .expect_err("too long")
+      .contains("30000 characters")
+  );
+
+  let misread = json!({ "spoken": "시피유 시비퍼센트 사용 중입니다." }).to_string();
+  let refused = testing::answer(&misread, "CPU 12% 사용 중입니다.", Language::Ko).expect_err("12 misread");
+
+  assert!(refused.contains("\"12%\""), "the answer is asked again naming the number: {refused}");
 
   let agreed = [("Nuxt".to_owned(), "넉스트".to_owned())];
   let prompt = testing::prompt(Language::Ko, &agreed, "Nuxt and Qwen", None);
@@ -317,6 +330,19 @@ async fn spoken_words_a_caller_gives_are_checked_and_refused_naming_the_word_nev
 
   assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
   assert_eq!(refused["code"], "unconverted-run");
+
+  let (status, refused) = call(
+    &engine,
+    "POST",
+    "/syntheses",
+    Some(
+      json!({ "voiceName": "voice-a", "text": "CPU 12%", "spoken": "시피유 시비퍼센트", "language": "ko" }),
+    ),
+  )
+  .await;
+
+  assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "a number not said as written: {refused}");
+  assert!(refused["error"].as_str().unwrap_or_default().contains("\"12%\""), "{refused}");
 
   let (status, made) = call(
     &engine,

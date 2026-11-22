@@ -42,15 +42,18 @@ spoken:
     - 니다
   # The one sentence closing a script its web addresses were taken out of: in a casual line, in a polite
   # line, and in a line holding English and no Korean.
-  # Runs said in one breath, each as its reading spelled part by part and then as it is written for the voice, the
-  # way it sounds: a final consonant carried onto the vowel after it, the decimal point tensed, a doubled letter
-  # name run together; and a number too long for one breath, broken after its hundreds with its counter written
-  # onto its last run. The model that writes a line's spoken words is shown them as examples.
+  # Runs said in one breath, each as its reading spelled part by part and then as it is written for the voice: the
+  # decimal point tensed and its final consonant carried onto the figure after it, letter names run together; a
+  # number's own words kept as they are spelled, with nothing carried onto the figure or the unit after them; and a
+  # number too long for one breath, broken after its hundreds with its counter written onto its last run. The model
+  # that writes a line's spoken words is shown them as examples.
   sounded:
     - [오점오, 오쩌모]
     - [칠점이, 칠쩌미]
     - [영점오점오, 영쩌모쩌모]
-    - [구십구점오, 구십꾸쩌모]
+    - [구십구점오, 구십구쩌모]
+    - [십이 퍼센트, 십이퍼센트]
+    - [삼십일점오 퍼센트, 삼십일쩌모퍼센트]
     - [브이엘엘엠, 브이에레렘]
     - [유알엘, 유아렐]
     - [삼천오백십 번, 삼천오백 십번]
@@ -99,8 +102,14 @@ figures:
   native_ones: ["", 한, 두, 세, 네, 다섯, 여섯, 일곱, 여덟, 아홉]
   # The native tens, ten to ninety, nothing for zero.
   native_tens: ["", 열, 스물, 서른, 마흔, 쉰, 예순, 일흔, 여든, 아흔]
+  # The native counts one to nine as they are said alone, nothing for zero.
+  native_ones_alone: ["", 하나, 둘, 셋, 넷, 다섯, 여섯, 일곱, 여덟, 아홉]
   # Twenty as a counter takes it with no ones after it.
   twenty: 스무
+  # Zero as it is also said figure by figure.
+  zero: 공
+  # The figures 0 to 9 as a name's figures are said in English, one by one.
+  english_digits: [제로, 원, 투, 쓰리, 포, 파이브, 식스, 세븐, 에잇, 나인]
   # One as an ordinal says it before figures.ordinal.
   first: 첫
   # The months said otherwise than their Sino-Korean figure, by the figure.
@@ -171,6 +180,8 @@ figures:
   fraction: "{bottom}분의 {top}"
   # The decimal point, between a whole part and its figures, and between the parts of a version.
   point: 점
+  # The decimal point as it sounds in one breath, tensed.
+  point_tensed: 쩜
   # An {amount} of dollars and of won.
   dollars: "{amount} 달러"
   won: "{amount} 원"
@@ -185,4 +196,5 @@ figures:
     "%": " 퍼센트"
     "°": 도
     "℃": 도
-
+  # The other words a percent sign is said in.
+  percent_also: [프로]

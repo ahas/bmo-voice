@@ -3,6 +3,7 @@
 //! marked. Everything here is mechanical; no model is asked.
 
 pub mod figures;
+pub mod numbers;
 pub mod reading;
 pub mod spoken;
 pub mod unconverted;
