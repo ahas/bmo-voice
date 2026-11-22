@@ -194,7 +194,16 @@ async fn brief(
   }
 
   match held.state {
-    SynthesisState::Failed => return Err(format!("briefing {} failed", held.id)),
+    // A briefing that never voiced names why, and that its words stand: what the room hears of them is its
+    // caller's to say (`docs/boundary-api.md`, 「Briefings」).
+    SynthesisState::Failed => {
+      return Err(format!(
+        "briefing {} was never voiced: {}; its words stand as briefing {}",
+        held.id,
+        held.failure.as_deref().unwrap_or("the engine gave no reason"),
+        held.id,
+      ));
+    }
     SynthesisState::Stopped => return Err(format!("briefing {} was stopped", held.id)),
     _ => {}
   }

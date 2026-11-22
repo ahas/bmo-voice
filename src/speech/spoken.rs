@@ -1,16 +1,17 @@
 //! A line's spoken words derived from its written words (`docs/boundary-api.md`, 「How the engine derives the spoken
 //! words」): a model on a slot of agency's co-worker pool writes them with judgement, the agreed readings of the voice
 //! name table handed to it first, and the check holds the answer to what a voice can say. An answer that fails is
-//! asked again, as is every refusal and every silence on the way, each wait longer than the one before, until the
-//! policy's count of tries is spent; the readings the model chose for names the table did not hold are written into
-//! it.
+//! asked again, as is every refusal and every silence on the way and every slot the pool holds back — a held slot
+//! tells what holds it, and one held past its try's span fails that try — each wait longer than the one before,
+//! until the policy's count of tries is spent; the readings the model chose for names the table did not hold are
+//! written into it.
 
 use std::time::Duration;
 
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::context::Context;
+use crate::context::{Clocks, Context};
 use crate::script::reading::{Language, VoiceName};
 use crate::script::unconverted::{Unconverted, unconverted};
 use crate::store::voices;
@@ -30,8 +31,9 @@ pub const MOST_SPOKEN: usize = 30_000;
 /// The source label a slot is asked under, the caller's own.
 const SOURCE: &str = "voice";
 
-/// How often a slot still waiting in its line, or a session still busy, is asked again.
-const LOOK_AGAIN: Duration = Duration::from_secs(2);
+/// How often a slot still waiting in its line, or a session still busy, is asked again: the pace a derivation's own
+/// pacing keeps by default (`crate::context::Clocks`).
+pub const LOOK_AGAIN: Duration = Duration::from_secs(2);
 
 /// The answer the model is asked for.
 #[derive(Debug, Deserialize)]
@@ -66,8 +68,9 @@ impl Language {
   }
 }
 
-/// How the tries of one line's derivation are paced (`docs/boundary-api.md`, 「The clocks」): the wait after the first
-/// try that failed, doubled after each one after it up to the longest, and how many tries fail before the line does.
+/// How the tries of one line's derivation are paced (`docs/boundary-api.md`, 「The clocks」): the span of the first
+/// try, doubled after each one after it up to the longest, which is both how long that try may wait in the pool's
+/// line for a slot and the wait after it once it has failed, and how many tries fail before the line does.
 #[derive(Clone, Copy, Debug)]
 pub struct Pacing {
   /// The wait after the first try that failed.
@@ -76,6 +79,8 @@ pub struct Pacing {
   pub longest_wait: Duration,
   /// How many tries fail before the line does.
   pub tries: u32,
+  /// How often the pool is asked again whether a waiting slot has its turn.
+  pub ask_again: Duration,
 }
 
 impl Pacing {
@@ -113,7 +118,13 @@ pub async fn derived(
       Some(agency) => {
         let standing = match held.take() {
           Some(standing) => Ok(standing),
-          None => stand(context, agency, id).await,
+          None => {
+            let mut waiting = |why: &str| {
+              told(&format!("try {tried} of {} waits in the role's line for a slot: {why}", pacing.tries))
+            };
+
+            stand(context, agency, id, pacing, tried, &mut waiting).await
+          }
         };
 
         match standing {
@@ -357,9 +368,17 @@ fn is_identifier(written: &str) -> bool {
     && written.chars().any(|letter| letter.is_ascii_digit())
 }
 
-// A slot asked under the synthesis's owner and a key drawn for it, let in, and a role's session started on it,
-// which agency binds the slot to; a slot whose session would not start is given back.
-async fn stand(context: &Context, agency: &Agency, id: i64) -> Result<Held, String> {
+// A slot asked under the synthesis's owner and a key drawn for it, let in within the `pacing`'s span for its `tried`
+// try — what the line holds it for told as it stands — and a role's session started on it, which agency binds the
+// slot to; a slot whose session would not start is given back.
+async fn stand(
+  context: &Context,
+  agency: &Agency,
+  id: i64,
+  pacing: Pacing,
+  tried: u32,
+  told: &mut (dyn FnMut(&str) + Send),
+) -> Result<Held, String> {
   let spoken = &context.settings.spoken;
   let owner = owner(id);
   let ask = SlotAsk {
@@ -372,12 +391,12 @@ async fn stand(context: &Context, agency: &Agency, id: i64) -> Result<Held, Stri
   };
   let slot = agency.ask_slot(&ask).await.map_err(|why| format!("no slot was given: {why}"))?;
   let token = slot.token.clone();
-  let slot = match admitted(agency, slot).await {
+  let slot = match admitted(agency, &context.clocks, slot, pacing, tried, told).await {
     Ok(slot) => slot,
     Err(why) => {
       give_back(agency, &token, "cancelled: not let in", true).await;
 
-      return Err(format!("the slot was not let in: {why}"));
+      return Err(why);
     }
   };
   let start = json!({
@@ -475,23 +494,41 @@ async fn one_try(
   })
 }
 
-// A slot waited on in its role's line, its admission asked again and again until the pool lets it in: the line lets
-// in only a request whose owner is asking now. One the admission answers given back is asked about no more.
-async fn admitted(agency: &Agency, mut slot: Slot) -> Result<Slot, UnitError> {
+// A slot waited on in its role's line: its admission asked again on the pacing's own while the pool holds it back,
+// since the line lets in only a request whose owner is asking now, and what the pool holds it for told each time it
+// changes. A slot the pool gives back before it is let in is asked about no more; one not let in within the span its
+// try is waited for gives that try up, naming what held it.
+async fn admitted(
+  agency: &Agency,
+  clocks: &Clocks,
+  mut slot: Slot,
+  pacing: Pacing,
+  tried: u32,
+  told: &mut (dyn FnMut(&str) + Send),
+) -> Result<Slot, String> {
+  // A try may stand in the role's line for as long as the line waits after it, so the pacing's tries bound a road
+  // that cannot carry the work as surely as they bound an answer that will not stand.
+  let span = pacing.wait_after(tried);
+  let due = clocks.now() + span;
+  let mut said = String::new();
+
   while !slot.admitted() {
     if slot.ended() {
       let by = slot.ended_by.as_deref().unwrap_or("agency");
       let why = slot.outcome.as_deref().map(|outcome| format!(": {outcome}")).unwrap_or_default();
 
-      return Err(UnitError::Refused {
-        unit: "agency",
-        status: 409,
-        code: None,
-        error: format!("slot {} was {} by {by} before it was let in{why}", slot.token, slot.state),
-      });
+      return Err(format!("slot {} was {} by {by} before it was let in{why}", slot.token, slot.state));
     }
 
-    tokio::time::sleep(LOOK_AGAIN).await;
+    let held = held_for(agency, &slot.token).await;
+
+    if held != said {
+      told(&held);
+
+      said = held;
+    }
+
+    clocks.until(clocks.now() + pacing.ask_again).await;
 
     // Agency not reached is asked again about the same slot, which keeps its place in the line.
     match agency.admit(&slot.token).await {
@@ -502,11 +539,27 @@ async fn admitted(agency: &Agency, mut slot: Slot) -> Result<Slot, UnitError> {
           status: 502 | 503, ..
         },
       ) => {}
-      Err(why) => return Err(why),
+      Err(why) => return Err(why.to_string()),
+    }
+
+    // A try's span is spent only once its line has been asked again and stands there still.
+    if !slot.admitted() && clocks.now() >= due {
+      return Err(format!("the pool did not let it in within {} s: {said}", span.as_secs()));
     }
   }
 
   Ok(slot)
+}
+
+// What the pool holds a waiting slot for, in its own words kept on one line, or that it has said no reason.
+async fn held_for(agency: &Agency, token: &str) -> String {
+  match agency.held(token).await {
+    Ok(request) => match request.held_for.as_deref().map(str::trim) {
+      Some(held) if !held.is_empty() => held.lines().collect::<Vec<_>>().join("; "),
+      _ => "the pool has given no reason for holding the slot".to_owned(),
+    },
+    Err(why) => format!("the held slot could not be read: {why}"),
+  }
 }
 
 // The one turn's body: the turn's own parts alone, its road the session's.

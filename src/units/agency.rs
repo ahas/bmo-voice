@@ -1,7 +1,8 @@
 //! Agency, as its `docs/api.md` states it (「slots, reservations and places」, 「sessions」): a slot of its
 //! co-worker pool asked under a role, let in and given back, everything an owner holds given back at once, and the
-//! role's session started on it with its turns. No call carries a clock: a slot waits in its role's line while its
-//! owner asks, and a turn runs for as long as agency takes.
+//! role's session started on it with its turns. No call carries a clock of its own: an admission is asked again
+//! while the pool holds the request back and says what for, and how long a line may stand there is the
+//! derivation's pacing to say; a turn runs for as long as agency takes.
 
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
@@ -39,6 +40,8 @@ pub struct Slot {
   pub state: String,
   pub ended_by: Option<String>,
   pub outcome: Option<String>,
+  /// What the pool holds the request back for, in its own words, where it has any.
+  pub held_for: Option<String>,
 }
 
 impl Slot {
@@ -135,8 +138,17 @@ impl Agency {
         state: answered.state,
         ended_by: answered.ended_by,
         outcome: answered.outcome,
+        held_for: None,
       },
     })
+  }
+
+  /// The request as the pool holds it, read by its token: its state and what it is held back for, which an
+  /// admission never answers.
+  pub async fn held(&self, token: &str) -> Result<Slot, UnitError> {
+    let request = self.caller.request(Method::GET, &["slot-requests", token]);
+
+    self.caller.json(request).await
   }
 
   /// Everything an owner holds given back: each slot it asked, waiting or let in, and each session agency bound

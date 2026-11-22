@@ -223,6 +223,7 @@ impl Default for Clocks {
         first_wait: Duration::from_secs(spans.spoken_first_wait_seconds),
         longest_wait: Duration::from_secs(spans.spoken_longest_wait_seconds),
         tries: spans.spoken_tries,
+        ask_again: crate::speech::spoken::LOOK_AGAIN,
       },
       clock: Arc::new(RuntimeClock),
     }

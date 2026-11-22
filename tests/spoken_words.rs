@@ -2,9 +2,11 @@
 //! line's spoken words given by its caller are held to the check and refused naming the first word that fails, never
 //! mended; a line given its written words alone has them derived on a slot of agency's pool, the agreed readings
 //! handed over first, an answer that fails asked again naming the word, and the readings the model chose kept
-//! without writing over a row that stands; with no agency named the line waits, saying so; every try goes out under a
-//! name of its own, and a line whose tries are spent fails saying why; and a line stopped while its words are derived
-//! gives back what it holds of agency.
+//! without writing over a row that stands; with no agency named the line waits, saying so; a slot the pool holds
+//! back says what it is held for while the line waits, and one never let in ends the line naming that, its one
+//! slot to a try and each of them given back; every try goes out under a name of its own, and a line whose tries
+//! are spent fails saying why, its briefing carrying that why as its own; and a line stopped while its words are
+//! derived gives back what it holds of agency.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
@@ -13,7 +15,7 @@ use std::time::Duration;
 use axum::body::Body;
 use axum::extract::{Path, State};
 use axum::http::{Request, StatusCode, Uri};
-use axum::routing::{delete, patch, post};
+use axum::routing::{delete, get, post};
 use bmo_voice::context::{Clocks, Context};
 use bmo_voice::events::Events;
 use bmo_voice::http::{Served, router};
@@ -31,11 +33,13 @@ use super::scratch::{Scratch, address_of};
 
 const TOKEN: &str = "a-test-token";
 
-/// A derivation's tries paced in milliseconds, three to a line, so no test waits on the policy's seconds.
+/// A derivation's tries paced in milliseconds, three to a line and the pool asked again every two, so no test waits
+/// on the policy's seconds.
 const QUICK: Pacing = Pacing {
-  first_wait: Duration::from_millis(10),
-  longest_wait: Duration::from_millis(20),
+  first_wait: Duration::from_millis(40),
+  longest_wait: Duration::from_millis(80),
   tries: 3,
+  ask_again: Duration::from_millis(2),
 };
 
 /// The policy's own pacing, whose first wait outlasts what a test reads.
@@ -400,6 +404,8 @@ struct Asked {
   owners_released: Mutex<Vec<String>>,
   ended: Mutex<Vec<String>>,
   answers: Mutex<Vec<String>>,
+  /// Where the pool is to hold every slot back, the sentence it says why; the slot is never let in while it stands.
+  hold: Mutex<Option<String>>,
 }
 
 // What marks a stand-in turn's answer as a turn that failed with no answer, its reason after it.
@@ -449,7 +455,17 @@ async fn stand_in_agency(asked: Arc<Asked>) -> std::net::SocketAddr {
     )
     .route(
       "/slot-requests/{token}",
-      patch(|State(asked): State<Arc<Asked>>, axum::Json(change): axum::Json<Value>| async move {
+      // The request as the pool holds it: its state and what it is held back for, which no admission answers.
+      get(|State(asked): State<Arc<Asked>>| async move {
+        let held = asked.hold.lock().unwrap().clone();
+        let state = if held.is_some() { "waiting" } else { "active" };
+
+        axum::Json(
+          json!({ "token": "slot-1", "role": "transliterator", "state": state, "heldFor": held,
+            "endedBy": null, "outcome": null }),
+        )
+      })
+      .patch(|State(asked): State<Arc<Asked>>, axum::Json(change): axum::Json<Value>| async move {
         match change["state"].as_str() {
           Some("finished") => {
             asked.given_back.lock().unwrap().push(change);
@@ -459,8 +475,14 @@ async fn stand_in_agency(asked: Arc<Asked>) -> std::net::SocketAddr {
             asked.bound.lock().unwrap().push(change);
             axum::Json(slot_of("active"))
           }
-          // Its admission: its turn comes on the owner's second ask.
+          // Its admission: its turn comes on the owner's second ask, unless the pool is held to answer nothing.
           None => {
+            if asked.hold.lock().unwrap().is_some() {
+              return axum::Json(
+                json!({ "request": Value::Null, "state": "waiting", "endedBy": null, "outcome": null, "demand": null }),
+              );
+            }
+
             let (request, state) = match asked.admissions.fetch_add(1, Ordering::SeqCst) {
               0 => (Value::Null, "waiting"),
               _ => (slot_of("active"), "active"),
@@ -750,6 +772,163 @@ async fn a_line_whose_tries_are_spent_fails_saying_why_each_try_under_a_name_of_
   assert_eq!(given_back.len(), 1, "the slot is given back once: {given_back:?}");
   assert_eq!(given_back[0]["outcome"], "failed", "{given_back:?}");
   assert_eq!(*asked.ended.lock().unwrap(), ["transliterator@run:1"], "and its session ended");
+}
+
+#[tokio::test]
+async fn a_slot_the_pool_holds_back_tells_what_it_is_held_for_while_the_line_waits() {
+  let scratch = Scratch::new().await;
+  let asked = Arc::new(Asked::default());
+
+  *asked.hold.lock().unwrap() = Some(
+    "Nothing can carry the work on the road it was asked on.\nclaude-01 is at its limit until two oclock."
+      .to_owned(),
+  );
+
+  // The policy's own pacing, whose first try still stands in the line while the test reads it.
+  let engine =
+    router(served(&scratch, Some(stand_in_agency(Arc::clone(&asked)).await), policy_pacing()).await);
+  let (status, made) = call(
+    &engine,
+    "POST",
+    "/syntheses",
+    Some(json!({ "voiceName": "voice-a", "text": "Qwen is up." })),
+  )
+  .await;
+
+  assert_eq!(status, StatusCode::CREATED, "{made}");
+
+  let id = made["id"].as_i64().expect("an id");
+  let read = read_until(&engine, id, |read| {
+    read["waitingOn"].as_str().is_some_and(|on| on.contains("at its limit"))
+  })
+  .await;
+  let on = read["waitingOn"].as_str().unwrap_or_default();
+
+  assert_eq!(read["state"], "waiting", "{read}");
+  assert_eq!(read["spoken"], Value::Null);
+  assert_eq!(read["wait"]["on"], "words", "the line still waits on its words: {read}");
+  assert!(on.contains("waits in the role's line for a slot"), "{on}");
+  assert!(on.contains("Nothing can carry the work on the road it was asked on"), "{on}");
+  assert!(
+    read["failure"].is_null(),
+    "a line the pool has not yet refused keeps its reason as its wait, not as an end: {read}"
+  );
+}
+
+#[tokio::test]
+async fn a_slot_never_let_in_ends_the_line_naming_what_held_it_and_asks_one_slot_to_a_try() {
+  let scratch = Scratch::new().await;
+  let asked = Arc::new(Asked::default());
+
+  *asked.hold.lock().unwrap() = Some("claude-01 is at its limit until two oclock.".to_owned());
+
+  let engine = engine(&scratch, Some(stand_in_agency(Arc::clone(&asked)).await)).await;
+  let (status, made) = call(
+    &engine,
+    "POST",
+    "/syntheses",
+    Some(json!({ "voiceName": "voice-a", "text": "Qwen is up." })),
+  )
+  .await;
+
+  assert_eq!(status, StatusCode::CREATED, "{made}");
+
+  let id = made["id"].as_i64().expect("an id");
+  let read = read_until(&engine, id, |read| read["state"] == "failed").await;
+  let failure = read["failure"].as_str().unwrap_or_default();
+
+  assert!(failure.contains("did not stand after 3 tries"), "{read}");
+  assert!(failure.contains("the pool did not let it in within"), "{failure}");
+  assert!(failure.contains("claude-01 is at its limit"), "{failure}");
+
+  let slots = asked.slots.lock().unwrap().clone();
+
+  assert_eq!(slots.len(), 3, "one slot is asked to a try, and no more: {slots:?}");
+  assert_eq!(
+    slots
+      .iter()
+      .map(|slot| slot["requestKey"].as_str().unwrap_or_default())
+      .collect::<std::collections::BTreeSet<_>>()
+      .len(),
+    3,
+    "each try asks under a key of its own: {slots:?}"
+  );
+  assert!(
+    asked.starts.lock().unwrap().is_empty(),
+    "no session starts on a road that never let a slot in"
+  );
+
+  let given_back = asked.given_back.lock().unwrap().clone();
+
+  assert_eq!(given_back.len(), 3, "each slot held back is given back: {given_back:?}");
+  assert!(
+    given_back
+      .iter()
+      .all(|given| given["outcome"] == "cancelled: not let in" && given["cancel"] == true),
+    "cancelled, since no turn ran on any of them: {given_back:?}"
+  );
+}
+
+#[tokio::test]
+async fn a_briefing_never_voiced_carries_why_on_its_member_and_is_told_with_it() {
+  let scratch = Scratch::new().await;
+  let asked = Arc::new(Asked::default());
+
+  *asked.answers.lock().unwrap() = vec!["no object".to_owned(); 3];
+
+  let engine = engine(&scratch, Some(stand_in_agency(Arc::clone(&asked)).await)).await;
+  let (status, taken) = call(
+    &engine,
+    "POST",
+    "/briefings",
+    Some(
+      json!({ "voiceName": "voice-a", "text": "The backup finished.", "language": "ko", "chatId": 7, "kind": "summary",
+        "title": "The backup", "plays": false }),
+    ),
+  )
+  .await;
+
+  assert_eq!(status, StatusCode::CREATED, "{taken}");
+
+  let id = taken["id"].as_i64().expect("an id");
+  let mut over = taken;
+
+  // Its end is kept once its `finishedAt` stands; its state reads failed a moment sooner, off its synthesis.
+  for _ in 0..400 {
+    (_, over) = call(&engine, "GET", &format!("/briefings/{id}"), None).await;
+
+    if over["finishedAt"].is_i64() {
+      break;
+    }
+
+    tokio::time::sleep(Duration::from_millis(25)).await;
+  }
+
+  assert_eq!(over["state"], "failed", "{over}");
+  assert_eq!(
+    over["text"].as_str(),
+    Some("The backup finished."),
+    "a briefing that was never voiced keeps its words"
+  );
+
+  let failure = over["failure"].as_str().unwrap_or_default();
+
+  assert!(failure.contains("did not stand after 3 tries"), "{over}");
+
+  let (_, page) = call(&engine, "GET", "/events?kinds=briefing.ended", None).await;
+  let told = page["items"]
+    .as_array()
+    .expect("a page")
+    .iter()
+    .find(|event| event["data"]["id"] == id)
+    .unwrap_or_else(|| panic!("briefing {id}'s end is not told: {page}"));
+
+  assert_eq!(told["data"]["state"], "failed", "{told}");
+  assert_eq!(
+    told["data"]["failure"].as_str().unwrap_or_default(),
+    failure,
+    "the end an agent reads from its own wait is the end the stream tells"
+  );
 }
 
 #[tokio::test]

@@ -366,6 +366,8 @@ pub struct Briefing {
   pub state: SynthesisState,
   /// How long its sound runs; null until it is done.
   pub duration_ms: Option<i64>,
+  /// Why it ended without a sound, its synthesis's own sentence naming where it ended; null on every other.
+  pub failure: Option<String>,
   /// Whether a listener plays it by itself.
   pub plays: bool,
   /// Whether it is a summary or a speech still awaiting its line.

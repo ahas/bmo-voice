@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.35.
+Fixed at 0.1.0-rev.36.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -131,7 +131,8 @@ flowchart TD
   - `demandId`: the master's demand the line holds its card by, null before the grant;
   - `since`: when the synthesis began to wait on what it waits on now.
 - **`waitingOn` is an English sentence saying the same,** for a person or a log:
-  - while its words are derived, how the derivation stands (「How the engine derives the spoken words」);
+  - while its words are derived, how the derivation stands (「How the engine derives the spoken words」), and while
+    it waits for a slot of the pool, which try of how many stands in the role's line and what agency holds it for;
   - while its card is not granted, that the card is being asked of the master until it first answers, then the
     master's reason (every card in use, a card held by a claim or a lower tier, the service starting), its place in
     the line, or the master not reached;
@@ -154,7 +155,7 @@ Four clocks end a synthesis that nothing else would end. Their spans are the pol
 | the caller's | `caller_gone_seconds`, 120 | a synthesis taken in through `POST /syntheses` that its caller has not read for the span | its caller has gone, not having read it for the span |
 | the node's answer | `node_answer_seconds`, 60 | each call the line makes to reach its node: the node service's target for it, and each command on the node's shell | the node, and that it did not answer within the span |
 | the node's progress | `node_still_seconds`, 600 | a line on its node that stands still: its stage on the voice server unchanged and no line of that server moving | the node, the stage the line stood at, and the span |
-| the spoken words' tries | `spoken_first_wait_seconds`, 5, doubled up to `spoken_longest_wait_seconds`, 300, over `spoken_tries`, 10 | a line whose spoken words are derived: the wait after each try that failed, and how many tries fail before the line does (「How the engine derives the spoken words」) | that its spoken words did not stand after so many tries, and why the last one failed |
+| the spoken words' tries | `spoken_first_wait_seconds`, 5, doubled up to `spoken_longest_wait_seconds`, 300, over `spoken_tries`, 10 | a line whose spoken words are derived: how long its try may stand in the pool's line for a slot and the wait after each try that failed — one span, serving both — and how many tries fail before the line does (「How the engine derives the spoken words」) | that its spoken words did not stand after so many tries, and why the last one failed |
 
 - **A caller reads its synthesis** by `GET /syntheses/{synthesisId}`, by its sound, or by a `POST` naming its key;
   each read starts the caller's clock again. A synthesis taken in starts it, and so does one taken up as the
@@ -278,16 +279,21 @@ server any other way.
   from then on. A chosen reading that holds what the check finds is not kept, and neither is one for an
   identifier, a run of seven or more hexadecimal characters holding a digit: it names one commit or one digest and
   is never read again.
-- **A slot waits in its role's line while the engine asks for its admission,** again every two seconds until it
-  is let in, with no bound on how long: the line lets in only a request whose owner is asking now. Each
-  admission answers the request's `state`: `waiting` or `reserved` is asked again, `active` is let in, and
-  `released` or `cancelled` is a request given back, whose `endedBy` and `outcome` say who gave it back and
-  why, and which is never asked about again.
+- **A slot waits in its role's line while the engine asks for its admission,** again every two seconds: the line
+  lets in only a request whose owner is asking now. Each admission
+  answers the request's `state`: `waiting` or `reserved` is asked again, `active` is let in, and `released` or
+  `cancelled` is a request given back, whose
+  `endedBy` and `outcome` say who gave it back and why, and which is never asked about again. While it stands
+  there the engine reads the request by its token, and the `heldFor` it answers — that nothing can carry the work
+  on the road it was asked on, and when that road reopens — is told as the synthesis's `waitingOn` as it stands,
+  so a line the pool cannot place names its own blockage rather than saying nothing. A slot not let in within the
+  span its own try is waited for (「The clocks」) is given back, and its try has failed naming what held it; the
+  next try asks a new slot under a key of its own.
 - **A slot's owner is its synthesis,** `voice:synthesis:<synthesisId>`, and its request key that owner and a
   number drawn at random for the ask, so no key a given-back request spent is asked again, by this process or
-  the next. A slot waiting while agency is not reached is asked about again, never left for a new one; one
-  agency no longer holds, or given back before it was let in, is dropped and a new one asked under a key of
-  its own.
+  the next. A slot waiting while agency is not reached is asked about again while its try still stands, and is left
+  for a new one only once that try is spent; one agency no longer holds, or given back before it was let in, is
+  dropped and a new one asked under a key of its own.
 - **Agency is the truth at start.** Before the lines an earlier process left unspoken are taken up, everything
   the owner of each such synthesis holds is given back (`DELETE /slot-requests?owner=`): every slot it asked,
   waiting or let in, and every session agency bound one of them to. A slot a process that is gone left holds
@@ -295,14 +301,16 @@ server any other way.
 - **Derived spoken words hold at most 30,000 characters,** the bound a caller's `spoken` is held to; a longer
   answer does not stand and is asked again, as one that fails the check is.
 - **A try that fails is asked again, each wait longer, and the tries are counted.** An answer that fails the check,
-  one that does not read, a turn that ended with no answer, a slot or a session agency refuses, agency not reached
-  and no agency named are each a try that failed, asked again after the spoken words' clock's wait (「The clocks」):
-  five seconds after the first, twice as long after each one after it, and never longer than five minutes. While it
-  waits, `waitingOn` says which it was, why, which try of how many it was and how long the next is waited for. Spoken
-  words that stand are kept as the synthesis's `spoken`, and its card is asked after.
+  one that does not read, a turn that ended with no answer, a slot or a session agency refuses, a slot not let in
+  within the span its try stands for, agency not reached and no agency named are each a try that failed, asked again
+  after the spoken words' clock's wait (「The clocks」): five seconds for the first try and the wait after it, twice
+  as long for each one after, and never longer than five minutes. The same span serves both, so the tries bound a
+  road that cannot carry the work as surely as they bound an answer that will not stand. While it waits, `waitingOn`
+  says which it was, why, which try of how many it was and how long the next is waited for. Spoken words that stand
+  are kept as the synthesis's `spoken`, and its card is asked after.
 - **A line whose tries are spent fails.** Once the tenth try has failed, its session is ended, its slot given back,
   and the synthesis fails as a clock ends one, its `failure` saying that its spoken words did not stand after so many
-  tries and why the last one failed. A slot's wait in its role's line is no try and is not counted.
+  tries and why the last one failed.
 - **A derivation ended from outside gives back what it holds.** A synthesis stopped, or ended by its caller's clock,
   while its spoken words are derived has everything its owner holds of agency given back
   (`DELETE /slot-requests?owner=`), the slot and the session of the try it was ended under among them.
@@ -335,9 +343,11 @@ server any other way.
 - **It is spoken as a synthesis is.** `POST /briefings` answers at once, state `waiting`; the engine reads the
   words into a script by its own reading rules (「Script readings」), and the script is the written words of a
   synthesis in the named voice, `spoken` its spoken words where the caller gave them and derived where it did
-  not (「The spoken words」), spoken on the voice server of the card granted it. `text` is the script. Its `state` and
-  `durationMs` are its synthesis's, and `synthesisId` names it, whose `wait` and `waitingOn` say what it waits
-  on and whose `failure` says why a failed one ended. `text` must hold something to say, within a synthesis's bounds (「Syntheses」); a `spoken` that is empty or
+  not (「The spoken words」), spoken on the voice server of the card granted it. `text` is the script. Its `state`,
+  `durationMs` and `failure` are its synthesis's, and `synthesisId` names it, whose `wait` and `waitingOn` say what
+  it waits on; the `failure` a briefing carries is its own sentence for why it was never voiced, naming where it
+  ended — its spoken words never standing, or the line on its node — so its caller, which owns what the room hears
+  of those words, is told without reading past it. `text` must hold something to say, within a synthesis's bounds (「Syntheses」); a `spoken` that is empty or
   fails the check is 422 `unconverted-run`, a voice no list holds is 404 `not-found`, a voice that is not served is
   422 `retired-voice`, and an emotion outside the policy's is 422 `unknown-emotion`.
 - **A key makes a briefing once,** as it does a synthesis (「Syntheses」): the key is its synthesis's, and a `POST`
@@ -514,7 +524,8 @@ The co-worker pool and its role's sessions (its `docs/api.md`, 「slots, reserva
 | Call | Route | Used for |
 |---|---|---|
 | a slot | `POST /slot-requests` with `owner` `voice:synthesis:<synthesisId>`, `requestKey` `voice:synthesis:<synthesisId>:<drawn>`, a number drawn at random for the ask, `role`, `source` `voice`, and `provider` and `model` where the settings name them | the slot the derivation runs on, with its token, its state and the provider, model and effort it is let in on |
-| its admission and its end | `PATCH /slot-requests/{token}` | asked with no state, again and again while its `state` is `waiting` or `reserved`, until it is `active`; `released` or `cancelled`, with `endedBy` and `outcome`, ends the asking and a new slot is asked; given back with `finished` and its outcome, `cancel` where no turn ran; never bound by the engine |
+| its admission and its end | `PATCH /slot-requests/{token}` | asked with no state, again and again while its `state` is `waiting` or `reserved`, until it is `active` or its try's span is spent; `released` or `cancelled`, with `endedBy` and `outcome`, ends the asking and a new slot is asked; given back with `finished` and its outcome, `cancel` where no turn ran |
+| why it is held | `GET /slot-requests/{token}` | read each time its admission is asked while it waits: its `heldFor`, what cannot carry the work on the road it was asked on and when that road reopens, told as the synthesis's `waitingOn` |
 | everything a synthesis holds | `DELETE /slot-requests?owner=voice:synthesis:<synthesisId>` | asked as the service starts, for each synthesis an earlier process left unspoken, before it is taken up: its slots given back and the sessions bound to them ended |
 | a session | `POST /sessions` with `scope` `role`, `slot` the slot's token, `line`, `systemPrompt`, `labels` naming the synthesis and `toolsAllowed` empty | the derivation's role's session, on the slot's role, provider, model and effort, agency binding the slot to it; `422` `slot-not-active` or `contradicts-slot` and `503` `line-not-carried` give the slot back and a new one is asked |
 | its turns | `POST /sessions/{sessionId}/turns` with `prompt`, `resume` `fresh`, `name`, `title`, `chat` 0 (the derivation stands under no room), `hearsWords` false and `variables` empty | one try on the session's road, answered once it ends; its `answer` is the model's, else its `text` blocks joined, and where it wrote neither its `outcome` and `reason` say how it ended |
@@ -607,7 +618,7 @@ declares the nouns `listen`, `brief` and `brief-attach` when asked `nouns`, so t
 |---|---|
 | `nouns` | answers `listen`, `brief` and `brief-attach`, one a line |
 | `listen <file>…` | asks `POST /transcriptions` for the files in `--language` and waits for it to end, however long it takes; prints what was heard, or the transcription as JSON with `--json` |
-| `brief` | asks `POST /briefings` for a line spoken in `--voice` for the room `--chat`, of kind `--kind` (`summary`, `full` or `speech`), with `--text`, and optional `--spoken`, `--title`, `--emotion`, `--message` and `--plays`; waits for the engine to speak it, however long it takes, then prints its id, or the briefing as JSON with `--json` |
+| `brief` | asks `POST /briefings` for a line spoken in `--voice` for the room `--chat`, of kind `--kind` (`summary`, `full` or `speech`), with `--text`, and optional `--spoken`, `--title`, `--emotion`, `--message` and `--plays`; waits for the engine to speak it, however long it takes, then prints its id, or the briefing as JSON with `--json`; one that ends `failed` ends 1 naming the briefing twice over and the engine's sentence for why it was never voiced, and one that ends `stopped` says it was stopped |
 | `brief-attach <document> <file> [voice]` | speaks the text the file holds as a document's narration and attaches its sound to that document of the archive, waiting at most `--within` minutes for the synthesis (「Narrating a document」) |
 | `health` | asks the service the settings name for `GET /health`, with its token, and exits 0 where it answers ready, 1 where it answers otherwise or nothing listens; it waits for the answer however long it takes |
 | `mcp` | runs the harness plugin's MCP server; `--address` and `--token` name the engine |

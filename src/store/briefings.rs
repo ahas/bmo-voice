@@ -9,7 +9,7 @@ use crate::wire::{Briefing, BriefingKind, BriefingQuery, SynthesisState};
 // Every column a briefing is answered from, its synthesis's beside its own.
 const COLUMNS: &str = r#"SELECT "b"."run_id", "b"."chat_id", "b"."message_id", "b"."kind", "b"."title",
   "b"."synthesis_id", "b"."plays", "b"."awaits_line", "b"."voice_message_id", "b"."sound_path", "b"."started_at",
-  "b"."finished_at", "s"."voice_name", "s"."text", "s"."emotion", "s"."state", "s"."duration_ms"
+  "b"."finished_at", "s"."voice_name", "s"."text", "s"."emotion", "s"."state", "s"."duration_ms", "s"."failure"
   FROM "voice_briefings" "b" LEFT JOIN "voice_syntheses" "s" ON "s"."id" = "b"."synthesis_id""#;
 
 /// One row as the table keeps it, with its synthesis's state, and where its sound was kept.
@@ -48,6 +48,7 @@ fn row_of(row: &QueryResult) -> Result<Row, StoreError> {
       synthesis_id,
       state,
       duration_ms: row.try_get("", "duration_ms")?,
+      failure: row.try_get("", "failure")?,
       plays: plays != 0,
       awaits_line: awaits_line != 0,
       voice_message_id: row.try_get("", "voice_message_id")?,
