@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.39.
+Fixed at 0.1.0-rev.40.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
