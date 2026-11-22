@@ -618,7 +618,7 @@ async fn written_words_alone_are_derived_on_a_slot_the_agreed_readings_first_and
 
   *asked.answers.lock().unwrap() = vec![
     r#"{"spoken": "넉스트와 Qwen 모델", "readings": []}"#.to_owned(),
-    r#"{"spoken": "넉스트와 퀜 모델", "readings": [{"written": "Qwen", "said": "퀜"}, {"written": "Nuxt", "said": "눅스트"}, {"written": "7dae3520e72b", "said": "칠디에이이"}]}"#
+    r#"{"spoken": "넉스트와 퀜 모델", "readings": [{"written": "Qwen", "said": "퀜"}, {"written": "Nuxt", "said": "눅스트"}, {"written": "7dae3520e72b", "said": "칠디에이이"}, {"written": "11월", "said": "십일월"}, {"written": "12일", "said": "시비일"}]}"#
       .to_owned(),
   ];
 
@@ -627,7 +627,7 @@ async fn written_words_alone_are_derived_on_a_slot_the_agreed_readings_first_and
 
   store
     .execute(
-      r#"INSERT INTO "voice_names" ("written", "ko", "en", "set_at") VALUES ('Nuxt', '넉스트', '', 0)"#,
+      r#"INSERT INTO "voice_names" ("written", "ko", "en", "set_at") VALUES ('Nuxt', '넉스트', '', 0), ('11월', '시비뤌', '', 0)"#,
     )
     .await
     .expect("an agreed reading is written");
@@ -652,6 +652,11 @@ async fn written_words_alone_are_derived_on_a_slot_the_agreed_readings_first_and
 
   assert_eq!(prompts.len(), 2, "the failed answer is asked again: {prompts:?}");
   assert!(prompts[0].contains("- Nuxt: 넉스트"), "the agreed readings come first: {}", prompts[0]);
+  assert!(
+    !prompts[0].contains("시비뤌"),
+    "a row the check refuses is no agreed reading: {}",
+    prompts[0]
+  );
   assert!(prompts[0].contains("Nuxt and the Qwen model"), "{}", prompts[0]);
   assert!(prompts[1].contains("\"Qwen\"") && prompts[1].contains("Latin letter"), "{}", prompts[1]);
 
@@ -702,6 +707,16 @@ async fn written_words_alone_are_derived_on_a_slot_the_agreed_readings_first_and
 
   assert_eq!(qwen, "퀜");
   assert_eq!(nuxt, "넉스트", "a row that stands is never written over");
+
+  let month: String = store.fetch_one(reading("11월").as_str()).await.expect("the row stands").get("ko");
+  let misread: i64 = store
+    .fetch_one(r#"SELECT count(*) AS "rows" FROM "voice_names" WHERE "written" = '12일'"#)
+    .await
+    .expect("the table is read")
+    .get("rows");
+
+  assert_eq!(month, "십일월", "a row the check refuses is written over by a reading that passes");
+  assert_eq!(misread, 0, "a chosen reading that misreads its figures is not kept");
 
   let hashes: i64 = store
     .fetch_one(r#"SELECT count(*) AS "rows" FROM "voice_names" WHERE "written" = '7dae3520e72b'"#)

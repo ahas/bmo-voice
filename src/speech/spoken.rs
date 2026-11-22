@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 
 use crate::context::{Clocks, Context};
 use crate::script::reading::{Language, VoiceName};
-use crate::script::unconverted::{Finding, found, unconverted};
+use crate::script::unconverted::{Finding, found};
 use crate::store::voices;
 use crate::units::UnitError;
 use crate::units::agency::{Agency, Slot, SlotAsk, Turned};
@@ -329,7 +329,13 @@ fn turn_prompt(
 async fn agreed(context: &Context, language: Language) -> Result<Vec<(String, String)>, String> {
   let names = voices::said_names(&context.db).await.map_err(|why| why.to_string())?;
 
-  Ok(names.into_iter().filter_map(|name| reading_of(name, language)).collect())
+  Ok(
+    names
+      .into_iter()
+      .filter_map(|name| reading_of(name, language))
+      .filter(|(written, said)| found(written, said, language).is_none())
+      .collect(),
+  )
 }
 
 fn reading_of(name: VoiceName, language: Language) -> Option<(String, String)> {
@@ -341,21 +347,51 @@ fn reading_of(name: VoiceName, language: Language) -> Option<(String, String)> {
   (!said.trim().is_empty()).then_some((name.written, said))
 }
 
-// Each reading the model chose kept in the voice name table, where its spelling stands in no row, is no identifier
-// and its reading passes the check; a row the table holds is left as it stands.
+// Each reading the model chose kept in the voice name table, where it is no identifier's and passes the check as the
+// spoken words of its spelling: as a new row where the spelling stands in none, and over a row the check refuses;
+// any other row the table holds is left as it stands.
 async fn keep_readings(context: &Context, language: Language, chosen: &[Chosen]) {
   for reading in chosen {
     let written = reading.written.trim();
     let said = reading.said.trim();
 
-    if written.is_empty() || is_identifier(written) || unconverted(said, language).is_some() {
+    if written.is_empty() || is_identifier(written) || found(written, said, language).is_some() {
       continue;
     }
 
-    if let Err(why) = voices::keep_reading(&context.db, written, language, said, crate::now_ms()).await {
+    let kept = match voices::keep_reading(&context.db, written, language, said, crate::now_ms()).await {
+      Ok(true) => Ok(()),
+      Ok(false) => mend_refused(context, language, written, said).await,
+      Err(why) => Err(why.to_string()),
+    };
+
+    if let Err(why) = kept {
       eprintln!("voice: the reading of {written} was not kept: {why}");
     }
   }
+}
+
+// The row the table holds for a spelling written over with a chosen reading, where the check refuses the reading the
+// row holds.
+async fn mend_refused(
+  context: &Context,
+  language: Language,
+  written: &str,
+  said: &str,
+) -> Result<(), String> {
+  let held = voices::said_name(&context.db, written).await.map_err(|why| why.to_string())?;
+  let Some((spelling, refused)) = held.and_then(|row| reading_of(row, language)) else {
+    return Ok(());
+  };
+
+  if found(&spelling, &refused, language).is_none() {
+    return Ok(());
+  }
+
+  voices::mend_reading(&context.db, &spelling, language, &refused, said, crate::now_ms())
+    .await
+    .map(|_| ())
+    .map_err(|why| why.to_string())
 }
 
 // The shortest run of hexadecimal characters taken for an identifier: a commit hash as git abbreviates it.

@@ -230,6 +230,12 @@ fn counter_reading(after: &str) -> Option<Reading> {
     .map(|counter| counter.reading)
 }
 
+/// A whole number said the way the counter after it asks, directly or one space after it; none where the word
+/// after it is no counter.
+pub(crate) fn counted(figures: &str, after: &str) -> Option<String> {
+  counter_reading(after).map(|reading| reading(figures))
+}
+
 // A decimal as its whole part, the point, and the figures after the point one by one; three parts or more
 // are a version, each part a whole number.
 fn dotted_reading(head: &str, tail: &str) -> String {

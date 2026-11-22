@@ -181,6 +181,47 @@ pub async fn keep_reading(
   Ok(kept.is_some())
 }
 
+/// The row the voice name table holds for a spelling, matched whatever its case; none where it holds none.
+pub async fn said_name(db: &DatabaseConnection, written: &str) -> Result<Option<VoiceName>, StoreError> {
+  one(
+    db,
+    r#"SELECT "written"::text AS "written", "ko", "en" FROM "voice_names" WHERE "written" = $1"#,
+    vec![written.into()],
+  )
+  .await?
+  .map(|row| {
+    Ok(VoiceName {
+      written: row.try_get("", "written")?,
+      ko: row.try_get("", "ko")?,
+      en: row.try_get("", "en")?,
+    })
+  })
+  .transpose()
+}
+
+/// A reading the spoken words' check refused written over with one it passes, in the language's column, only while
+/// the row still holds the refused reading, so a correction set meanwhile stands. Answers whether it was written.
+pub async fn mend_reading(
+  db: &DatabaseConnection,
+  written: &str,
+  language: Language,
+  refused: &str,
+  said: &str,
+  now: i64,
+) -> Result<bool, StoreError> {
+  let sql = match language {
+    Language::Ko => {
+      r#"UPDATE "voice_names" SET "ko" = $3, "set_at" = $4 WHERE "written" = $1 AND "ko" = $2 RETURNING 1 AS "kept""#
+    }
+    Language::En => {
+      r#"UPDATE "voice_names" SET "en" = $3, "set_at" = $4 WHERE "written" = $1 AND "en" = $2 RETURNING 1 AS "kept""#
+    }
+  };
+  let kept = one(db, sql, vec![written.into(), refused.into(), said.into(), now.into()]).await?;
+
+  Ok(kept.is_some())
+}
+
 /// A names table first made given its seed names; a table that holds any row is left as it is. Answers whether
 /// it seeded.
 pub async fn seed_names(

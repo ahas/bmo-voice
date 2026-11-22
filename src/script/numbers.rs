@@ -242,13 +242,26 @@ impl NumberWords for Korean {
 
   fn whole(&self, figures: &str, after: &str) -> Vec<String> {
     let words = figure_words();
+    let trimmed = figures.trim_start_matches('0');
+
+    // A counter that asks a reading of its own is said with that reading alone, an hour also on a twelve-hour clock.
+    if let Some(counted) = figures::counted(trimmed, after) {
+      let mut said = vec![counted];
+
+      if let Ok(n @ 13..=24) = trimmed.parse::<u64>()
+        && after.trim_start().starts_with(words.hour.as_str())
+      {
+        said.push(figures::native(&(n - 12).to_string()));
+      }
+
+      return said;
+    }
+
     let mut said = vec![figures::sino_korean(figures), spelled_in_english(figures)];
 
     if by_figure(figures) {
       said.extend([figures::spelled(figures), spelled_with_zero(figures)]);
     }
-
-    let trimmed = figures.trim_start_matches('0');
 
     let Ok(n) = trimmed.parse::<u64>() else {
       return said;
@@ -275,12 +288,8 @@ impl NumberWords for Korean {
       }
     }
 
-    if after.starts_with(words.month.as_str()) {
-      said.extend(words.months.get(trimmed).cloned());
-    }
-
-    // An hour of a twenty-four-hour clock, said on a twelve-hour one.
-    if (13..=24).contains(&n) && (after.starts_with(words.hour.as_str()) || after.starts_with(':')) {
+    // The hour of a clock time, said on a twelve-hour clock.
+    if (13..=24).contains(&n) && after.starts_with(':') {
       said.push(figures::native(&(n - 12).to_string()));
     }
 

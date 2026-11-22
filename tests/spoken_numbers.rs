@@ -7,7 +7,7 @@ use bmo_voice::script::reading::Language;
 use bmo_voice::script::unconverted::{Finding, found};
 
 /// Written words and spoken words that say every number of them as written, each in a reading its context allows.
-const SAID: [(&str, &str); 23] = [
+const SAID: [(&str, &str); 24] = [
   (
     "검증 3893번, CPU 12% 사용 중입니다.",
     "검증 삼천팔백 구십삼번, 시피유 십이퍼센트 사용 중입니다.",
@@ -25,6 +25,7 @@ const SAID: [(&str, &str); 23] = [
   ("처리량은 13,615건입니다.", "처리량은 만삼천육백 십오건입니다."),
   ("2026년 11월 23일 오후 3시", "이천 이십육년 십일월 이십삼일 오후 세 시"),
   ("6월과 10월", "유월과 시월"),
+  ("12개월 동안 22시에", "십이개월 동안 오후 열시에"),
   ("14:30에 시작", "오후 두시 삼십분에 시작"),
   ("접속 코드는 0427입니다.", "접속 코드는 공사이칠입니다."),
   ("1만 명", "만 명"),
@@ -43,7 +44,7 @@ const SAID: [(&str, &str); 23] = [
 ];
 
 /// Spoken words that say a number otherwise than as written, the number the check names, and the language.
-const MISREAD: [(&str, &str, &str, Language); 9] = [
+const MISREAD: [(&str, &str, &str, Language); 12] = [
   ("CPU 12% 사용 중", "시피유 시비퍼센트 사용 중", "12%", Language::Ko),
   ("12개 파일", "시비개 파일", "12", Language::Ko),
   ("11월 23일", "시비뤌 이십삼일", "11", Language::Ko),
@@ -52,6 +53,9 @@ const MISREAD: [(&str, &str, &str, Language); 9] = [
   ("3893번", "삼천팔백 구십번", "3893", Language::Ko),
   ("12개 중 3개", "열두개 중 네개", "3", Language::Ko),
   ("10시", "시시", "10", Language::Ko),
+  ("12개 파일", "십이개 파일", "12", Language::Ko),
+  ("3시에", "삼시에", "3", Language::Ko),
+  ("6월", "육월", "6", Language::Ko),
   ("CPU at 12%", "CPU at twenty percent", "12%", Language::En),
 ];
 

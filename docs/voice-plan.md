@@ -157,10 +157,12 @@ the voice nodes. What a caller does with the sound is the caller's.
 - **Its rows are the agreed readings every line's spoken words are derived with** (`docs/boundary-api.md`, 「How the
   engine derives the spoken words」): the rows with a reading in the line's language are handed to the model as
   readings to apply as they stand, and the model reads whatever else the line needs with its own judgement. No
-  row is applied to a line by the engine itself.
+  row is applied to a line by the engine itself, and a row whose reading the check refuses for its own spelling,
+  a figure in it not said as written, is not handed over.
 - **A reading the model chose is written in as a row,** for a spelling the table does not hold, so the same name is
-  read the same way next time. A spelling the table holds is never written over. An identifier, a commit hash or
-  a digest, is no name and gets no row.
+  read the same way next time. A spelling the table holds is never written over, unless its row holds a reading
+  the check refuses, which the next chosen reading that passes replaces. An identifier, a commit hash or a digest,
+  is no name and gets no row.
 - **A row is the owner's to correct,** and a correction wins from then on: `scripts/voice-names.ts` lists the table,
   `--set <spelling> <korean> <english>` writes a row, `--remove <spelling>` takes one off. A Korean reading carries
   no roman letter and an English one no Hangul.
@@ -174,10 +176,11 @@ the voice nodes. What a caller does with the sound is the caller's.
   spoken words」). The rules are the reading table's, kept with it.
 - **The check reads the figures with the same words.** Every number of the written words is looked for in the
   spoken words in each reading the language's words give it: Sino-Korean; figure by figure, zero said either way,
-  or as a name's figures are said in English; native, as a count alone or before a counter; an hour on a
-  twelve-hour clock; a month by its own word; a decimal with its point said plain or tensed and carried. Spoken
-  words that say it in none are refused, naming the reading these rules give it where it stands. An English line's
-  numbers are read the same way in English words.
+  or as a name's figures are said in English; native, as a count alone; an hour on a twelve-hour clock; a decimal
+  with its point said plain or tensed and carried. A number before a counter that asks a reading of its own is
+  looked for in that reading alone: a native count, an hour, a month by its own word. Spoken words that say it in
+  none are refused, naming the reading these rules give it where it stands. An English line's numbers are read the
+  same way in English words.
 - **A figure's reading the model writes wrongly is settled the way a name's is:** a row of `voice_names` holds the
   spelling and its Korean reading, and every derivation applies it as it stands (`docs/store.md`). The months and
   days of a date are seeded there, so a month and its counter are read as one word every time.

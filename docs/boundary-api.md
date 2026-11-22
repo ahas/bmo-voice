@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.37.
+Fixed at 0.1.0-rev.38.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -246,7 +246,8 @@ server any other way.
     private use area;
   - a number of the written words that the spoken words do not say, in any of the readings the line's language has
     for it: a whole number in its own words, figure by figure, as a count, as an hour, or by a name's figures in
-    English; a decimal or a version as its parts and its points, a point tensed and carried as above; and one
+    English, and one before a counter that asks a reading of its own, a native count, an hour or a month, in that
+    reading alone; a decimal or a version as its parts and its points, a point tensed and carried as above; and one
     followed by a percent sign with the sign's word after it. A number written onto a Latin letter or among the
     marks of code is a name's or the code's and is not looked for, and a run of three parts or more is also said
     where its parts are each said, as a date is. The spaces and the sentence punctuation of the spoken words do not
@@ -281,13 +282,16 @@ server any other way.
   and its own give-back after the session's end finishes a slot agency may already have given back.
 - **The agreed readings come first, the model's judgement after:** every row of the voice name table
   (`docs/store.md`, `voice_names`) with a reading in the line's language is handed over as a reading to apply
-  as it stands, and the model reads whatever else the words need with its own judgement.
+  as it stands, and the model reads whatever else the words need with its own judgement. A row whose reading the
+  check refuses as the spoken words of its own spelling, a number in it not said as written above all, is no
+  agreed reading and is not handed over.
 - **A reading the model chose is kept:** its answer names each name it read that the readings did not hold, and
   each is written into the voice name table, so the same spelling is read the same way next time. A spelling
   the table holds is never written over: the owner's correction of a row (`scripts/voice-names.ts --set`) wins
-  from then on. A chosen reading that holds what the check finds is not kept, and neither is one for an
-  identifier, a run of seven or more hexadecimal characters holding a digit: it names one commit or one digest and
-  is never read again.
+  from then on. The one exception is a row the check refuses, which the next chosen reading that passes writes
+  over, so long as the row still holds the reading refused. A chosen reading the check refuses against its
+  spelling is not kept, and neither is one for an identifier, a run of seven or more hexadecimal characters
+  holding a digit: it names one commit or one digest and is never read again.
 - **A slot waits in its role's line while the engine asks for its admission,** again every two seconds: the line
   lets in only a request whose owner is asking now. Each admission
   answers the request's `state`: `waiting` or `reserved` is asked again, `active` is let in, and `released` or
