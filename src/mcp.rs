@@ -186,6 +186,7 @@ pub fn tools() -> Vec<VoiceTool> {
           style: asked.style,
           seed: asked.seed,
           key: asked.key,
+          asked_by: None,
         };
 
         client.create_synthesis(&synthesis).await

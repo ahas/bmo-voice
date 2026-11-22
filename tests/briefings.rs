@@ -29,6 +29,25 @@ const ROOM: i64 = -500;
 /// Spoken words a Korean voice says as they stand, given beside each line so none waits on a derivation.
 pub(crate) const SPOKEN: &str = "백업이 끝났습니다.";
 
+/// A line written straight into the store with its spoken words standing, no emotion, key or asker, as no route took
+/// it in.
+pub(crate) fn left_line<'a>(
+  voice_name: &'a str,
+  text: &'a str,
+  language: &'a str,
+) -> bmo_voice::store::syntheses::Asked<'a> {
+  bmo_voice::store::syntheses::Asked {
+    voice_name,
+    text,
+    spoken: Some(SPOKEN),
+    language,
+    emotion: None,
+    key: None,
+    asked_by: None,
+    at: 0,
+  }
+}
+
 /// The engine's routes on the scratch store, with one voice whose folder stands outside the voices root, nowhere a node
 /// holds, so every line in it fails to be spoken; one, `voice-b`, under the voices root, whose lines ask the master
 /// `master` names; and one, `voice-c`, whose folder declares no engine, as a retired voice's does.
@@ -1064,10 +1083,9 @@ async fn a_briefing_whose_voice_is_gone_as_it_is_taken_up_ends_failed_and_is_tol
   let served = served(&scratch, None, None).await;
   let context = Arc::clone(&served.context);
   let db = &context.db;
-  let Taken::New(synthesis_id) =
-    store::syntheses::insert(db, "voice-gone", "Gone.", Some(SPOKEN), "ko", None, None, 0)
-      .await
-      .expect("the store answers")
+  let Taken::New(synthesis_id) = store::syntheses::insert(db, &left_line("voice-gone", "Gone.", "ko"))
+    .await
+    .expect("the store answers")
   else {
     panic!("a new synthesis is taken in");
   };

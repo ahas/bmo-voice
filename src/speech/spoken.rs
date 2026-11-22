@@ -92,13 +92,15 @@ impl Pacing {
   }
 }
 
-/// The spoken words of `text` said in `language`, asked until they stand, or why the last try failed once the pacing's
-/// tries are spent; `told` is handed an English sentence each time how the derivation stands changes.
+/// The spoken words of `text` said in `language`, asked until they stand on slots asked for `asker`, or why the last
+/// try failed once the pacing's tries are spent; `told` is handed an English sentence each time how the derivation
+/// stands changes.
 pub async fn derived(
   context: &Context,
   id: i64,
   language: Language,
   text: &str,
+  asker: Option<&str>,
   told: &mut (dyn FnMut(&str) + Send),
 ) -> Result<String, String> {
   let pacing = context.clocks.spoken;
@@ -123,7 +125,7 @@ pub async fn derived(
               told(&format!("try {tried} of {} waits in the role's line for a slot: {why}", pacing.tries))
             };
 
-            stand(context, agency, id, pacing, tried, &mut waiting).await
+            stand(context, agency, id, asker, pacing, tried, &mut waiting).await
           }
         };
 
@@ -405,13 +407,14 @@ fn is_identifier(written: &str) -> bool {
     && written.chars().any(|letter| letter.is_ascii_digit())
 }
 
-// A slot asked under the synthesis's owner and a key drawn for it, let in within the `pacing`'s span for its `tried`
-// try — what the line holds it for told as it stands — and a role's session started on it, which agency binds the
-// slot to; a slot whose session would not start is given back.
+// A slot asked under the synthesis's owner and a key drawn for it, for the line's asker, let in within the `pacing`'s
+// span for its `tried` try — what the line holds it for told as it stands — and a role's session started on it, which
+// agency binds the slot to; a slot whose session would not start is given back.
 async fn stand(
   context: &Context,
   agency: &Agency,
   id: i64,
+  asker: Option<&str>,
   pacing: Pacing,
   tried: u32,
   told: &mut (dyn FnMut(&str) + Send),
@@ -423,6 +426,7 @@ async fn stand(
     owner,
     role: spoken.role.clone(),
     source: SOURCE.to_owned(),
+    asked_by: asker.map(str::to_owned),
     provider: spoken.provider.clone(),
     model: spoken.model.clone(),
   };

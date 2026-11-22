@@ -148,6 +148,9 @@ pub struct Synthesis {
   /// The caller's key for the line (`docs/boundary-api.md`, 「Syntheses」); null where none was given.
   #[serde(default)]
   pub key: Option<String>,
+  /// Who the caller said asks the line, kept as given (`docs/boundary-api.md`, 「Conventions」); null where it named none.
+  #[serde(default)]
+  pub asked_by: Option<String>,
   pub state: SynthesisState,
   /// What a synthesis that has not ended waits on: its words, its card or its node; null once it ended.
   #[serde(default)]
@@ -223,6 +226,9 @@ pub struct NewSynthesis {
   /// The caller's key for the line: a second call naming it while its synthesis has not failed answers that one.
   #[serde(default)]
   pub key: Option<String>,
+  /// Who asks the line, an opaque name handed on unread as the asker of the slot its spoken words are derived on.
+  #[serde(default)]
+  pub asked_by: Option<String>,
 }
 
 /// One transcription.
@@ -409,6 +415,9 @@ pub struct NewBriefing {
   /// The caller's key for the line: a second call naming it while its synthesis has not failed answers that briefing.
   #[serde(default)]
   pub key: Option<String>,
+  /// Who asks the line, an opaque name handed on unread as the asker of the slot its spoken words are derived on.
+  #[serde(default)]
+  pub asked_by: Option<String>,
 }
 
 /// A page of briefings, narrowed.

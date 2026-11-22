@@ -1,6 +1,7 @@
 //! The spoken words (`docs/boundary-api.md`, 「The spoken words」, 「How the engine derives the spoken words」): a
 //! line's spoken words given by its caller are held to the check and refused naming the first word that fails, never
-//! mended; a line given its written words alone has them derived on a slot of agency's pool, the agreed readings
+//! mended; a line given its written words alone has them derived on a slot of agency's pool asked for the asker the
+//! line names, a briefing's, a synthesis's and a line's taken up after a restart alike, the agreed readings
 //! handed over first, an answer that fails asked again naming the word, and the readings the model chose kept
 //! without writing over a row that stands; with no agency named the line waits, saying so; a slot the pool holds
 //! back says what it is held for while the line waits, and one never let in ends the line naming that, its one
@@ -676,6 +677,7 @@ async fn written_words_alone_are_derived_on_a_slot_the_agreed_readings_first_and
     slot.get("provider").is_none() && slot.get("model").is_none(),
     "the role's order picks the road: {slot}"
   );
+  assert!(slot.get("askedBy").is_none(), "a line naming no asker asks its slot for none: {slot}");
   assert!(
     asked.admissions.load(Ordering::SeqCst) >= 2,
     "a waiting slot's admission is asked again"
@@ -727,6 +729,84 @@ async fn written_words_alone_are_derived_on_a_slot_the_agreed_readings_first_and
   assert_eq!(hashes, 0, "an identifier is no name and gets no row");
 
   store.close().await.expect("the store connection closes");
+}
+
+// A line's asker reaches agency on every road a line comes in by, a restart's among them: the derivation of each runs
+// to its end, so the runtime is let go without waiting for the card it then asks.
+#[test]
+fn the_asker_a_line_names_asks_its_slot_a_briefing_a_synthesis_and_a_line_taken_up_alike() {
+  let runtime = tokio::runtime::Runtime::new().expect("a runtime");
+
+  runtime.block_on(the_asker_asks_the_slot());
+  runtime.shutdown_background();
+}
+
+async fn the_asker_asks_the_slot() {
+  let scratch = Scratch::new().await;
+  let asked = Arc::new(Asked::default());
+
+  *asked.answers.lock().unwrap() =
+    vec![r#"{"spoken": "퀜이 섰습니다.", "readings": []}"#.to_owned(); 3];
+
+  let served = served(&scratch, Some(stand_in_agency(Arc::clone(&asked)).await), QUICK).await;
+  let engine = router(Served {
+    context: Arc::clone(&served.context),
+    events: served.events.clone(),
+    token: served.token.clone(),
+  });
+  let line = json!({ "voiceName": "voice-a", "text": "Qwen is up.", "language": "ko" });
+  let mut briefing = line.clone();
+
+  briefing["chatId"] = json!(-5);
+  briefing["kind"] = json!("summary");
+  briefing["askedBy"] = json!("supervisor-a");
+
+  let (status, briefed) = call(&engine, "POST", "/briefings", Some(briefing)).await;
+
+  assert_eq!(status, StatusCode::CREATED, "{briefed}");
+
+  let briefed = briefed["synthesisId"].as_i64().expect("its synthesis");
+  let briefed = read_until(&engine, briefed, |read| read["spoken"].is_string()).await;
+  let mut synthesis = line;
+
+  synthesis["askedBy"] = json!("supervisor-b");
+
+  let (status, made) = call(&engine, "POST", "/syntheses", Some(synthesis)).await;
+
+  assert_eq!(status, StatusCode::CREATED, "{made}");
+  assert_eq!(made["askedBy"], "supervisor-b", "the member says who its caller said asks it: {made}");
+
+  read_until(&engine, made["id"].as_i64().expect("an id"), |read| read["spoken"].is_string()).await;
+
+  let mut store = PgConnection::connect(&address_of(&scratch.name)).await.expect("the store answers");
+
+  store
+    .execute(
+      r#"INSERT INTO "voice_syntheses" ("id", "voice_name", "text", "language", "asked_by", "state", "created_at")
+         VALUES (900, 'voice-a', 'Qwen is up.', 'ko', 'supervisor-c', 'waiting', 0)"#,
+    )
+    .await
+    .expect("a line a process left is written");
+  store.close().await.expect("the store connection closes");
+  bmo_voice::http::take_up(Arc::clone(&served.context), served.events.clone())
+    .await
+    .expect("the left line is taken up");
+  read_until(&engine, 900, |read| read["spoken"].is_string()).await;
+
+  let askers = asked
+    .slots
+    .lock()
+    .unwrap()
+    .iter()
+    .map(|slot| slot["askedBy"].clone())
+    .collect::<Vec<_>>();
+
+  assert_eq!(briefed["askedBy"], "supervisor-a", "a briefing's asker is its synthesis's: {briefed}");
+  assert_eq!(
+    askers,
+    [json!("supervisor-a"), json!("supervisor-b"), json!("supervisor-c")],
+    "each slot is asked for the line's asker, handed on as given"
+  );
 }
 
 #[tokio::test]

@@ -372,18 +372,17 @@ async fn create_synthesis(
   let at = crate::now_ms();
   // Held from the row's insert to its event, so no change told of it is numbered before its creation.
   let writing = served.events.write().await;
-  let id = match store::syntheses::insert(
-    &served.context.db,
-    &asked.voice_name,
-    &asked.text,
-    spoken.as_deref(),
-    language.code(),
-    asked.emotion.as_deref(),
+  let taken = store::syntheses::Asked {
+    voice_name: &asked.voice_name,
+    text: &asked.text,
+    spoken: spoken.as_deref(),
+    language: language.code(),
+    emotion: asked.emotion.as_deref(),
     key,
+    asked_by: asked.asked_by.as_deref(),
     at,
-  )
-  .await?
-  {
+  };
+  let id = match store::syntheses::insert(&served.context.db, &taken).await? {
     store::syntheses::Taken::New(id) => id,
     // Another call with this key took its synthesis in in the moment between: that one is the answer.
     store::syntheses::Taken::Held(held) => {
@@ -399,6 +398,7 @@ async fn create_synthesis(
     spoken: spoken.clone(),
     emotion: asked.emotion.clone(),
     key: key.map(str::to_owned),
+    asked_by: asked.asked_by.clone(),
     state: SynthesisState::Waiting,
     wait: None,
     waiting_on: None,
@@ -422,6 +422,7 @@ async fn create_synthesis(
     text: asked.text,
     spoken,
     language,
+    asked_by: asked.asked_by,
   };
 
   served.context.reads.read(id, served.context.clocks.now());
@@ -523,12 +524,13 @@ fn checked_spoken(
   }
 }
 
-// A line's two texts, the written words and the spoken words where they already stand, and the language the voice
-// says them in.
+// A line's two texts, the written words and the spoken words where they already stand, the language the voice
+// says them in, and who its caller said asks it, the asker its spoken words are derived for.
 struct Words {
   text: String,
   spoken: Option<String>,
   language: Language,
+  asked_by: Option<String>,
 }
 
 // A voice of an engine the voice does not speak is kept and never spoken, so it is refused before anything is taken
@@ -570,12 +572,13 @@ async fn derived_words(
   id: i64,
   language: Language,
   text: &str,
+  asker: Option<&str>,
 ) -> Result<String, String> {
   let mut told = |why: &str| {
     eprintln!("voice: synthesis {id} waits on its spoken words: {why}");
     context.waits.set(id, Wait::words(why));
   };
-  let words = crate::speech::spoken::derived(context, id, language, text, &mut told).await?;
+  let words = crate::speech::spoken::derived(context, id, language, text, asker, &mut told).await?;
 
   if let Err(why) = store::syntheses::set_spoken(&context.db, id, &words).await {
     eprintln!("voice: synthesis {id}'s spoken words were not kept: {why}");
@@ -806,14 +809,16 @@ impl Told {
 async fn speak_line(context: &Context, events: Events, id: i64, voice: voices::VoiceRow, words: Words) {
   let text = match words.spoken {
     Some(spoken) => spoken,
-    None => match derived_words(context, id, words.language, &words.text).await {
-      Ok(derived) => derived,
-      Err(why) => {
-        context.waits.clear(id);
+    None => {
+      match derived_words(context, id, words.language, &words.text, words.asked_by.as_deref()).await {
+        Ok(derived) => derived,
+        Err(why) => {
+          context.waits.clear(id);
 
-        return failed(context, events, id, None, &why).await;
+          return failed(context, events, id, None, &why).await;
+        }
       }
-    },
+    }
   };
   let out = sound_path(context, id);
   if let Some(folder) = out.parent().map(std::path::Path::to_path_buf) {
@@ -1038,18 +1043,17 @@ async fn create_briefing(
   // Held from the rows' insert to their events, so no change told of them, a stop's above all, is numbered before
   // their creation.
   let writing = served.events.write().await;
-  let synthesis_id = match store::syntheses::insert(
-    db,
-    &asked.voice_name,
-    &script,
-    spoken_words.as_deref(),
-    language.code(),
-    asked.emotion.as_deref(),
+  let taken = store::syntheses::Asked {
+    voice_name: &asked.voice_name,
+    text: &script,
+    spoken: spoken_words.as_deref(),
+    language: language.code(),
+    emotion: asked.emotion.as_deref(),
     key,
+    asked_by: asked.asked_by.as_deref(),
     at,
-  )
-  .await?
-  {
+  };
+  let synthesis_id = match store::syntheses::insert(db, &taken).await? {
     store::syntheses::Taken::New(id) => id,
     store::syntheses::Taken::Held(held) => {
       drop(writing);
@@ -1082,6 +1086,7 @@ async fn create_briefing(
     text: script,
     spoken: spoken_words,
     language,
+    asked_by: asked.asked_by,
   };
 
   eprintln!(
@@ -1132,6 +1137,7 @@ pub async fn take_up(context: Arc<Context>, events: Events) -> Result<usize, Sto
       text: row.text,
       spoken: row.spoken,
       language,
+      asked_by: row.asked_by,
     };
 
     speak_apart(Arc::clone(&context), events.clone(), id, briefing, voice, words);

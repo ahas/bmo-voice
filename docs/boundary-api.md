@@ -1,6 +1,6 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.38.
+Fixed at 0.1.0-rev.39.
 
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
@@ -31,9 +31,12 @@ The common wire format and the API design rules are bmo-chat's `docs/conventions
   last item. A list takes `after`, the cursor its route states, and `limit`, 1 to 1,000 and 100 where
   absent.
 - **A byte answer** is a member's `sound`, carries OGG/Opus, and honours `Range`.
-- **Nothing in the API names an agent, an owner or a worker.** Who a caller speaks for is its own business. A
-  briefing carries the room and the line its caller names, as the numbers the caller gives, which the engine
-  keeps and matches on and never reads into.
+- **The engine knows no agent, no owner and no worker.** Who a caller speaks for is its own business, and nothing
+  the engine does turns on it. A briefing carries the room and the line its caller names, as the numbers the
+  caller gives, which the engine keeps and matches on and never reads into. A line may carry `askedBy`, who its
+  caller says asks it, an opaque name the engine keeps as given and hands on unread as the asker of the slot its
+  spoken words are derived on (「How the engine derives the spoken words」), so the pool's role may follow that
+  asker; the engine never matches on it, checks it or reads it into anything else.
 
 ## Health
 
@@ -91,13 +94,14 @@ asking `Accept: application/json`.
 
 | Route | Body or query | Answer |
 |---|---|---|
-| `POST /syntheses` | `voiceName`, `text`, `spoken?`, `language?`, `emotion?`, `style?`, `seed?`, `key?` | 201, the synthesis; 200, the one its `key` already names |
+| `POST /syntheses` | `voiceName`, `text`, `spoken?`, `language?`, `emotion?`, `style?`, `seed?`, `key?`, `askedBy?` | 201, the synthesis; 200, the one its `key` already names |
 | `GET /syntheses/{synthesisId}` | | one synthesis |
 | `GET /syntheses/{synthesisId}/sound` | | the sound, OGG/Opus, with `Range` |
 
 - **A synthesis:** `id`, `voiceName`, `text` (the written words), `spoken` (the words the voice says, null until
-  they stand; 「The spoken words」), `emotion`, `key` (the caller's key, null where none was given), `state`,
-  `wait`, `waitingOn`, `failure`, `durationMs` (null until done) and `createdAt`.
+  they stand; 「The spoken words」), `emotion`, `key` (the caller's key, null where none was given), `askedBy`
+  (who the caller said asks the line, null where it named none), `state`, `wait`, `waitingOn`, `failure`,
+  `durationMs` (null until done) and `createdAt`.
 - **A synthesis is answered at once;** the speaking runs apart on the voice server of the card the arbiter's
   master grants it (「The voice servers and the card」), and the caller reads the member again until its
   state is `done` or `failed`. `done` carries `durationMs`, the sound's length read from its Ogg pages.
@@ -262,6 +266,11 @@ server any other way.
   `transliterator` where they name none, on the road its role's order picks, or on the provider and model they
   name where they name the two together. The role is a registration of agency's (its `docs/agent-roles.md`) and
   must stand there; the engine creates none.
+- **For the line's asker,** the slot naming as its `askedBy` the `askedBy` the line was taken in with, and none
+  where it named none, a line an earlier process left taken up with the asker it was taken in with. A role whose
+  agents follow their asker, the transliterator as agency seeds it, so goes out on the road of the supervisor
+  that asked the line, and on its agents' own where that road cannot answer or no asker is named (agency's
+  `docs/role-agents.md`, 「An agent that follows its asker」); a road the settings name stands over the asker's.
 - **In one role's session for the whole derivation,** started on the slot once it is let in, so the session
   runs as the slot's role on the provider, model and effort the slot was let in on; on the runner line
   `[spoken]` names, `search` where it names none, its instructions the engine's own (`prompts/spoken-words.md`)
@@ -332,7 +341,7 @@ server any other way.
 
 | Route | Body or query | Answer |
 |---|---|---|
-| `POST /briefings` | `voiceName`, `text`, `spoken?`, `language?`, `chatId`, `messageId?`, `kind`, `title?`, `emotion?`, `plays?`, `key?` | 201, the briefing; 200, the one its `key` already names |
+| `POST /briefings` | `voiceName`, `text`, `spoken?`, `language?`, `chatId`, `messageId?`, `kind`, `title?`, `emotion?`, `plays?`, `key?`, `askedBy?` | 201, the briefing; 200, the one its `key` already names |
 | `GET /briefings` | `chatId?`, `messageId?`, `kind?`, `awaitsLine?`, `after`, `limit` | a page of briefings, newest first |
 | `GET /briefings/{briefingId}` | | one briefing |
 | `POST /briefings/{briefingId}/line` | `messageId`, a number or null | the briefing |
@@ -356,7 +365,8 @@ server any other way.
 - **It is spoken as a synthesis is.** `POST /briefings` answers at once, state `waiting`; the engine reads the
   words into a script by its own reading rules (「Script readings」), and the script is the written words of a
   synthesis in the named voice, `spoken` its spoken words where the caller gave them and derived where it did
-  not (「The spoken words」), spoken on the voice server of the card granted it. `text` is the script. Its `state`,
+  not (「The spoken words」), spoken on the voice server of the card granted it. `text` is the script, and the
+  `askedBy` the caller names is its synthesis's (「Conventions」). Its `state`,
   `durationMs` and `failure` are its synthesis's, and `synthesisId` names it, whose `wait` and `waitingOn` say what
   it waits on; the `failure` a briefing carries is its own sentence for why it was never voiced, naming where it
   ended — its spoken words never standing, or the line on its node — so its caller, which owns what the room hears
@@ -536,7 +546,7 @@ The co-worker pool and its role's sessions (its `docs/api.md`, 「slots, reserva
 
 | Call | Route | Used for |
 |---|---|---|
-| a slot | `POST /slot-requests` with `owner` `voice:synthesis:<synthesisId>`, `requestKey` `voice:synthesis:<synthesisId>:<drawn>`, a number drawn at random for the ask, `role`, `source` `voice`, and `provider` and `model` where the settings name them | the slot the derivation runs on, with its token, its state and the provider, model and effort it is let in on |
+| a slot | `POST /slot-requests` with `owner` `voice:synthesis:<synthesisId>`, `requestKey` `voice:synthesis:<synthesisId>:<drawn>`, a number drawn at random for the ask, `role`, `source` `voice`, `askedBy` where the line names one, and `provider` and `model` where the settings name them | the slot the derivation runs on, with its token, its state and the provider, model and effort it is let in on |
 | its admission and its end | `PATCH /slot-requests/{token}` | asked with no state, again and again while its `state` is `waiting` or `reserved`, until it is `active` or its try's span is spent; `released` or `cancelled`, with `endedBy` and `outcome`, ends the asking and a new slot is asked; given back with `finished` and its outcome, `cancel` where no turn ran |
 | why it is held | `GET /slot-requests/{token}` | read each time its admission is asked while it waits: its `heldFor`, what cannot carry the work on the road it was asked on and when that road reopens, told as the synthesis's `waitingOn` |
 | everything a synthesis holds | `DELETE /slot-requests?owner=voice:synthesis:<synthesisId>` | asked as the service starts, for each synthesis an earlier process left unspoken, before it is taken up: its slots given back and the sessions bound to them ended |

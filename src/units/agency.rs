@@ -16,8 +16,8 @@ pub struct Agency {
   caller: Caller,
 }
 
-/// A slot asked of the co-worker pool: on the road its role's order picks, or on the provider and model named
-/// together.
+/// A slot asked of the co-worker pool for the supervisor `asked_by` names, opaque to the engine, or for none: on the
+/// road its role's order picks, or on the provider and model named together.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SlotAsk {
@@ -25,6 +25,8 @@ pub struct SlotAsk {
   pub owner: String,
   pub role: String,
   pub source: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub asked_by: Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub provider: Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]

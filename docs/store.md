@@ -93,6 +93,7 @@ One row per text handed to the engine.
 | `language` | the language the line is said in, `ko` or `en`; null on a row taken in before lines named one, which is said in its voice's |
 | `emotion` | the emotion it was asked for; null where none was |
 | `key` | the caller's key for the line (`docs/boundary-api.md`, 「Syntheses」); null where none was given. No two rows that have not failed hold one key |
+| `asked_by` | who the caller said asks the line (`docs/boundary-api.md`, 「Conventions」), kept as given and handed on as its derivation slot's asker; null where none was named |
 | `state` | `waiting`, `speaking`, `done`, `failed` or `stopped` |
 | `failure` | why a `failed` row ended, an English sentence naming the node, the stage and the clock where one of them ended it, or `its reason was not kept` where the engine never held one; null on every other |
 | `duration_ms` | the sound's length once it is done; null before |

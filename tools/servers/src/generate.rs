@@ -190,6 +190,7 @@ pub async fn generate_at(settings: &Path, asked: &Asked, pace: Pace) -> Answer {
       style: None,
       seed: None,
       key: None,
+      asked_by: None,
     })
     .await;
   let taken = match taken {

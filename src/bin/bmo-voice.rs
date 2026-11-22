@@ -185,6 +185,7 @@ async fn brief(
       emotion,
       plays,
       key: None,
+      asked_by: None,
     })
     .await
     .map_err(|why| why.to_string())?;
@@ -254,6 +255,7 @@ async fn brief_attach(
       style: None,
       seed: None,
       key: None,
+      asked_by: None,
     })
     .await
     .map_err(|why| why.to_string())?;

@@ -21,7 +21,9 @@ use serde_json::{Value, json};
 use tokio::sync::watch;
 use tokio::time::Instant;
 
-use super::briefings::{Cards, IN_USE, Line, SPOKEN, call, cards_master, line_master, served_with};
+use super::briefings::{
+  Cards, IN_USE, Line, SPOKEN, call, cards_master, left_line, line_master, served_with,
+};
 use super::scratch::Scratch;
 
 const LONG: Duration = Duration::from_secs(600);
@@ -435,10 +437,9 @@ async fn a_synthesis_is_answered_in_the_state_its_wait_makes_it_and_with_no_wait
   let engine = router(served);
 
   // A row no process speaks, so the wait set here is the only one it holds, and its stored state stays `waiting`.
-  let Taken::New(id) =
-    store::syntheses::insert(&context.db, "voice-b", "A short line.", Some(SPOKEN), "en", None, None, 0)
-      .await
-      .expect("the store answers")
+  let Taken::New(id) = store::syntheses::insert(&context.db, &left_line("voice-b", "A short line.", "en"))
+    .await
+    .expect("the store answers")
   else {
     panic!("a new synthesis is taken in");
   };
