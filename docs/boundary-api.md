@@ -255,7 +255,18 @@ server any other way.
     followed by a percent sign with the sign's word after it. A number written onto a Latin letter or among the
     marks of code is a name's or the code's and is not looked for, and a run of three parts or more is also said
     where its parts are each said, as a date is. The spaces and the sentence punctuation of the spoken words do not
-    count, and the check names the written number with the reading the engine would give it.
+    count, and the check names the written number with the reading the engine would give it;
+  - in a Korean line, a word of the written words written in Hangul that the spoken words leave out, move or spell
+    otherwise. Every run of Hangul syllables of the written words is looked for in the spoken words' own syllables,
+    in its order, so the spaces and the punctuation do not count and the words the rules add, a time's counters
+    among them, are allowed. A run changes only at its joins as the rules change them: a particle or a copula
+    written onto a figure, a name or a mark may stand in its other form, contracted or not
+    (`data/ko/voice-script.yaml`), a name's final consonant may be carried into a run after it that opens on no
+    sound, and a run's own final consonant onto a name after it. A word of code, a path or an address, one holding a
+    slash, a mark of code or a call's empty parentheses, and a span the script marks as code are said for what they
+    are or left out, and are not looked for. Where a derivation handed the model agreed readings, a Hangul spelling
+    one of them reads otherwise is a name, said as its reading or as written, and only the rest of its word is
+    looked for. An English line's words are not looked for. The check names the written word it did not find.
 - **A `spoken` a caller passed that fails the check is refused** 422 `unconverted-run`, the sentence naming the
   first word that failed and what it holds, so a caller that claims to have converted a line and did not is
   caught; it corrects that word and asks again. A derived one that fails is asked of the model again.
@@ -293,7 +304,8 @@ server any other way.
   (`docs/store.md`, `voice_names`) with a reading in the line's language is handed over as a reading to apply
   as it stands, and the model reads whatever else the words need with its own judgement. A row whose reading the
   check refuses as the spoken words of its own spelling, a number in it not said as written above all, is no
-  agreed reading and is not handed over.
+  agreed reading and is not handed over. A name's reading is held to the check's letters, marks and numbers alone:
+  it may say the Hangul of its spelling otherwise, as the owner's correction of a misspelled name does.
 - **A reading the model chose is kept:** its answer names each name it read that the readings did not hold, and
   each is written into the voice name table, so the same spelling is read the same way next time. A spelling
   the table holds is never written over: the owner's correction of a row (`scripts/voice-names.ts --set`) wins

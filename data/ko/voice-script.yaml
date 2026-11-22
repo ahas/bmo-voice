@@ -90,6 +90,11 @@ particles:
   # The pairs whose open form also follows a syllable closed by ㄹ, written as the pairs above are.
   open_after_rieul:
     - [으로, 로]
+  # The copula's forms that contract after an open syllable, written as the pairs above are. They are not fitted
+  # to a title; the check of a line's spoken words takes either form where one is written onto a figure or a name.
+  contracted:
+    - [이었, 였]
+    - [이어, 여]
 
 figures:
   # The figures 0 to 9 said one by one, and in Sino-Korean.

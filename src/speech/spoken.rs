@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 
 use crate::context::{Clocks, Context};
 use crate::script::reading::{Language, VoiceName};
-use crate::script::unconverted::{Finding, found};
+use crate::script::unconverted::{Finding, found_agreed, found_in_reading};
 use crate::store::voices;
 use crate::units::UnitError;
 use crate::units::agency::{Agency, Slot, SlotAsk, Turned};
@@ -199,20 +199,18 @@ async fn tried_once(context: &Context, agency: &Agency, standing: Held, turn: &T
 
       Came::Missed(Missed::Road(how), None, None)
     }
-    Ok(Tried::Answered(answer)) => {
-      match answer.and_then(|answer| checked(&answer, turn.text, turn.language).map(|()| answer)) {
-        Ok(answer) => {
-          release(agency, standing, "answered").await;
-          keep_readings(context, turn.language, &answer.readings).await;
+    Ok(Tried::Answered(answer)) => match answer {
+      Ok(answer) => {
+        release(agency, standing, "answered").await;
+        keep_readings(context, turn.language, &answer.readings).await;
 
-          Came::Spoken(answer.spoken.trim().to_owned())
-        }
-        Err(Refusal::Unread(why)) => Came::Missed(Missed::Answer(why), Some(standing), None),
-        Err(Refusal::Unconverted(found)) => {
-          Came::Missed(Missed::Answer(found.to_string()), Some(standing), Some(found))
-        }
+        Came::Spoken(answer.spoken.trim().to_owned())
       }
-    }
+      Err(Refusal::Unread(why)) => Came::Missed(Missed::Answer(why), Some(standing), None),
+      Err(Refusal::Unconverted(found)) => {
+        Came::Missed(Missed::Answer(found.to_string()), Some(standing), Some(found))
+      }
+    },
     Err(why) => {
       let missed = Missed::Road(format!("the turn did not answer: {why}"));
 
@@ -249,7 +247,7 @@ struct Held {
   session: String,
 }
 
-// What one try came to: the answer its turn wrote, read, or how a turn that wrote none ended.
+// What one try came to: the answer its turn wrote, read and held to the check, or how a turn that wrote none ended.
 enum Tried {
   Answered(Result<Answer, Refusal>),
   Ended(String),
@@ -261,14 +259,19 @@ enum Refusal {
   Unconverted(Finding),
 }
 
-// Whether an answer's spoken words pass the check against the written words and stand within the bound every line is
-// spoken within.
-fn checked(answer: &Answer, written: &str, language: Language) -> Result<(), Refusal> {
+// Whether an answer's spoken words pass the check against the written words, a name the agreed readings the model was
+// handed spell in Hangul said as their reading or as written, and stand within the bound every line is spoken within.
+fn checked(
+  answer: &Answer,
+  written: &str,
+  language: Language,
+  agreed: &[(String, String)],
+) -> Result<(), Refusal> {
   if answer.spoken.trim().chars().count() > MOST_SPOKEN {
     return Err(Refusal::Unread(format!("the spoken words run past {MOST_SPOKEN} characters")));
   }
 
-  match found(written, &answer.spoken, language) {
+  match found_agreed(written, &answer.spoken, language, agreed) {
     Some(found) => Err(Refusal::Unconverted(found)),
     None => Ok(()),
   }
@@ -335,7 +338,7 @@ async fn agreed(context: &Context, language: Language) -> Result<Vec<(String, St
     names
       .into_iter()
       .filter_map(|name| reading_of(name, language))
-      .filter(|(written, said)| found(written, said, language).is_none())
+      .filter(|(written, said)| found_in_reading(written, said, language).is_none())
       .collect(),
   )
 }
@@ -357,7 +360,7 @@ async fn keep_readings(context: &Context, language: Language, chosen: &[Chosen])
     let written = reading.written.trim();
     let said = reading.said.trim();
 
-    if written.is_empty() || is_identifier(written) || found(written, said, language).is_some() {
+    if written.is_empty() || is_identifier(written) || found_in_reading(written, said, language).is_some() {
       continue;
     }
 
@@ -386,7 +389,7 @@ async fn mend_refused(
     return Ok(());
   };
 
-  if found(&spelling, &refused, language).is_none() {
+  if found_in_reading(&spelling, &refused, language).is_none() {
     return Ok(());
   }
 
@@ -530,7 +533,10 @@ async fn one_try(
   let body = turn_body(&turn.name, &turn_prompt(turn.language, &agreed, turn.text, turn.failed));
 
   Ok(match agency.turn(&held.session, &body).await? {
-    Turned::Wrote(written) => Tried::Answered(read_answer(&written)),
+    Turned::Wrote(written) => Tried::Answered(
+      read_answer(&written)
+        .and_then(|answer| checked(&answer, turn.text, turn.language, &agreed).map(|()| answer)),
+    ),
     ended @ Turned::Ended { .. } => Tried::Ended(ended.to_string()),
   })
 }
@@ -652,12 +658,23 @@ pub mod testing {
   /// The spoken words of an answer the model wrote for the written words `text`, where it reads and passes the
   /// check, else why not.
   pub fn answer(written: &str, text: &str, language: Language) -> Result<String, String> {
+    answer_agreed(written, text, language, &[])
+  }
+
+  /// The spoken words of an answer as `answer` reads them, the model having been handed the agreed readings
+  /// `agreed`.
+  pub fn answer_agreed(
+    written: &str,
+    text: &str,
+    language: Language,
+    agreed: &[(String, String)],
+  ) -> Result<String, String> {
     let answer = read_answer(written).map_err(|why| match why {
       Refusal::Unread(why) => why,
       Refusal::Unconverted(found) => found.to_string(),
     })?;
 
-    match checked(&answer, text, language) {
+    match checked(&answer, text, language, agreed) {
       Ok(()) => Ok(answer.spoken),
       Err(Refusal::Unconverted(found)) => Err(found.to_string()),
       Err(Refusal::Unread(why)) => Err(why),

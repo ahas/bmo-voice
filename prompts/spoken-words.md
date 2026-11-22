@@ -50,8 +50,9 @@ request gives, and nothing else.
   and none of the marks an address, a path, code or markup is written with: no slash or backslash, and none of
   `` ` `` `*` `_` `#` `|` `<` `>` `[` `]` `{` `}` `~` `=` `^` `@` `$` `%` `&` `+`. Ordinary sentence punctuation
   stays.
-- Where the request says your last answer held something it must not, or did not say a written number as it is
-  written, write that word or that number again by these rules and keep the rest.
+- Where the request says your last answer held something it must not, did not say a written number as it is
+  written, or left out or moved a written word, write that word or that number again by these rules, in its place,
+  and keep the rest.
 
 ## The answer
 

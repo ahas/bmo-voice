@@ -53,7 +53,8 @@ static NUMBER: LazyLock<Regex> =
 static WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\S+").expect("a word"));
 
 // The marks code is written with; a word holding one is code, said in a few words or left out.
-const CODE: &[char] = &['`', '_', '=', '@', '<', '>', '{', '}', '[', ']', '|', '\\', '^', '&', '*'];
+pub(super) const CODE_MARKS: &[char] =
+  &['`', '_', '=', '@', '<', '>', '{', '}', '[', ']', '|', '\\', '^', '&', '*'];
 
 // More parts than this make a version too long to spell out every reading of; it is read by its parts alone.
 const MOST_JOINED_PARTS: usize = 4;
@@ -70,9 +71,9 @@ struct Number<'a> {
 // A word of the written words whose figures are a name's or code's: written onto a Latin letter, among the marks
 // of code, or a private mark the script makes.
 fn names_or_code(word: &str) -> bool {
-  word
-    .chars()
-    .any(|character| character.is_ascii_alphabetic() || CODE.contains(&character) || is_private(character))
+  word.chars().any(|character| {
+    character.is_ascii_alphabetic() || CODE_MARKS.contains(&character) || is_private(character)
+  })
 }
 
 fn is_private(character: char) -> bool {

@@ -728,6 +728,39 @@ pub fn standing_particle(text: &str) -> Option<&'static str> {
   })
 }
 
+/// Every way a run of Hangul syllables written onto something else may be spelled once a particle it opens with is
+/// fitted to how that is said: the run with each form of that particle, or the run alone where it opens with none.
+pub fn particle_forms(run: &str) -> Vec<String> {
+  let pairs = PAIRS
+    .iter()
+    .map(|pair| [pair.closed, pair.open])
+    .chain(
+      VOICE_SCRIPT
+        .particles
+        .contracted
+        .iter()
+        .map(|[closed, open]| [closed.as_str(), open.as_str()]),
+    )
+    .collect::<Vec<_>>();
+  let Some(form) = pairs
+    .iter()
+    .flatten()
+    .copied()
+    .filter(|form| run.starts_with(form))
+    .max_by_key(|form| form.len())
+  else {
+    return vec![run.to_owned()];
+  };
+  let rest = &run[form.len()..];
+
+  pairs
+    .iter()
+    .filter(|pair| pair.contains(&form))
+    .flatten()
+    .map(|particle| format!("{particle}{rest}"))
+    .collect()
+}
+
 /// Each title's particle settled by how the title ends as it stands.
 pub fn with_particles(script: &str) -> String {
   let particle = &VOICE_SCRIPT.spoken.title_particle;

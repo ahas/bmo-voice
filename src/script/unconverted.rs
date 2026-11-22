@@ -1,8 +1,9 @@
 //! What a line's spoken words left unconverted or misread (docs/boundary-api.md, 「The spoken words」): a letter of a
 //! script the voice's language does not write, a digit, a mark an address, a path, code or markup is written with,
-//! or a number of the written words they do not say. It only finds; nothing here mends a word, since the spoken words
-//! are a model's to write.
+//! a number of the written words they do not say, or a word of the written words they leave out or move. It only
+//! finds; nothing here mends a word, since the spoken words are a model's to write.
 
+use super::dropped::{Dropped, dropped};
 use super::numbers::{Misread, misread};
 use super::reading::Language;
 use super::spoken::holds_korean;
@@ -80,12 +81,13 @@ pub fn unconverted(spoken: &str, language: Language) -> Option<Unconverted> {
   })
 }
 
-/// What the check found in a line's spoken words: a word holding what no spoken word may, or a number of the written
-/// words they do not say as it is written.
+/// What the check found in a line's spoken words: a word holding what no spoken word may, a number of the written
+/// words they do not say as it is written, or a word of the written words they leave out or move.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Finding {
   Unconverted(Unconverted),
   Misread(Misread),
+  Dropped(Dropped),
 }
 
 impl std::fmt::Display for Finding {
@@ -96,14 +98,38 @@ impl std::fmt::Display for Finding {
         f,
         "the spoken words do not say the written \"{written}\" as it is written; its figures read {said}"
       ),
+      Self::Dropped(Dropped { word }) => write!(
+        f,
+        "the spoken words leave out the written word \"{word}\" or say it out of its place; every word written in \
+         the line's own letters is said as spelled, in its order"
+      ),
     }
   }
 }
 
 /// The first thing the check finds in `spoken`, the spoken words of the written words `written`: a word left
-/// unconverted first, then a number they do not say; none where the line can be said as it stands.
+/// unconverted first, then a number they do not say, then a word they leave out or move; none where the line can be
+/// said as it stands.
 pub fn found(written: &str, spoken: &str, language: Language) -> Option<Finding> {
-  unconverted(spoken, language)
+  found_agreed(written, spoken, language, &[])
+}
+
+/// The first thing the check finds in `spoken` as `found` does, a Hangul spelling that an agreed reading of `agreed`
+/// reads otherwise taken for a name, said as its reading or as written.
+pub fn found_agreed(
+  written: &str,
+  spoken: &str,
+  language: Language,
+  agreed: &[(String, String)],
+) -> Option<Finding> {
+  found_in_reading(written, spoken, language)
+    .or_else(|| dropped(written, spoken, language, agreed).map(Finding::Dropped))
+}
+
+/// What the check finds in a name's reading as the spoken words of its spelling: a word left unconverted, then a
+/// number it does not say. A reading may say the letters of its spelling otherwise, so no word is looked for.
+pub fn found_in_reading(spelling: &str, said: &str, language: Language) -> Option<Finding> {
+  unconverted(said, language)
     .map(Finding::Unconverted)
-    .or_else(|| misread(written, spoken, language).map(Finding::Misread))
+    .or_else(|| misread(spelling, said, language).map(Finding::Misread))
 }

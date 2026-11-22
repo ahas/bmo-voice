@@ -36,12 +36,14 @@ pub struct SpokenWords {
   pub attached_english: String,
 }
 
-/// The particles that change with the sound before them, each as its closed form and its open form.
+/// The particles that change with the sound before them, each as its closed form and its open form, and the copula's
+/// forms that contract after an open syllable.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ParticleWords {
   pub pairs: Vec<[String; 2]>,
   pub open_after_rieul: Vec<[String; 2]>,
+  pub contracted: Vec<[String; 2]>,
 }
 
 /// The words a figure is read in.
