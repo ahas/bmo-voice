@@ -35,9 +35,9 @@ function cardRead(fields: Record<string, unknown> = {}): Record<string, unknown>
   return {
     version: "0.1.0",
     desktop: false,
-    occupants: ["joy", "comfyui", "voice"],
-    ranks: [["joy"], ["comfyui", "voice"]],
-    tiers: { joy: 0, comfyui: 2, voice: 2 },
+    occupants: ["trainer", "comfyui", "voice"],
+    ranks: [["trainer"], ["comfyui", "voice"]],
+    tiers: { trainer: 0, comfyui: 2, voice: 2 },
     claim: null,
     lockHeldBy: [OTHER_HOLDER],
     busy: true,

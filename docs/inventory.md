@@ -342,7 +342,7 @@ duplicates them.
 | `prompts/agents/voice-polish/instructions.md`, `prompts/agents/voice-reading/instructions.md` (2, inside the set above) | bmo-gate | The reading and polishing gates are the gate's stages; their instructions stand in the gate's `prompts/`, and this repository runs them through `POST /stages/{stage}/runs` |
 | `bot/bmo-server/src/verbs/benches/gate_eval/gates/{voice_polish,voice_reading}.{rs,toml}` (4) | bmo-gate | The gate's evaluation members; this repository serves them a line's script reading (`docs/boundary-api.md`) |
 | `client/server/api/voice-briefing.get.ts`, `voice-briefing.post.ts`, `voice-briefing.post.test.ts` (3) | bmo-web | The switch on the console's agents screen, read and moved through the receiver |
-| `chat/chat/kakao/voice-video.ts`, `voice-video.test.ts` (2) | bmo-kakaotalk | A provider's voice and video message handling |
+| `chat/chat/kakao/voice-video.ts`, `voice-video.test.ts` (2) | the KakaoTalk provider | A provider's voice and video message handling |
 | `tools/song/scripts/song/voice_host.py`, `voice_key.py`, `tools/song/src/song-voice.test.ts`, `song-voice-key.test.ts` (4) | bmo-song | The song bench's own voice parts |
 | `android/**` (32), `client/server/api/app/android.apk.get.ts`, `repo/repo/android-release.ts` and its test, `scripts/build/android.ts` and its test (5) | dropped | The native briefing app is dropped by archive document #301 (「앱: bmo-app」) |
 
