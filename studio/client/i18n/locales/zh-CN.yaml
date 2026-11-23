@@ -1,0 +1,307 @@
+# The script studio's words in Simplified Chinese (docs/script-studio.md, 「Access and service」): the studio's own
+# keys under `script`, and every key bmo-ui reads under `common` and `files`. A deployment speaking Chinese generates
+# the screen with this pack.
+script:
+  title:
+    # The line editor's heading.
+    edit_line: 编辑台词
+    # The episode panel's heading.
+    episodes: 剧集
+    # The line list's heading.
+    lines: 台词列表
+    # The sign-in card's heading.
+    login: 登录工作室
+    # The span editor's heading.
+    range: 发声区间
+    # The page's title.
+    studio: 台词工作室
+  label:
+    all_files: 全部文件
+    all_seasons: 全部季
+    annotated_line: 带情感标签的台词
+    # Whether the voiced character appears in the episode.
+    agent_appears: 角色出场
+    # Whether the voiced character really speaks in the episode.
+    agent_speaks: 角色说话
+    clip_id: 片段 ID
+    delivery: 语气
+    # {progress}: how many downloads are done of how many.
+    downloads: "下载 {progress}"
+    emotion: 情感
+    end: 结束
+    english_line: 英文台词
+    events: 非语言声音
+    file_path: 声音文件路径
+    has_lines: 有台词或候选
+    # {n}: the number of lines.
+    line_count: "台词 {n} 条"
+    lines: 台词
+    music: 背景音乐
+    new_line: 新台词
+    no_range: 无区间
+    none: 无
+    notes: 备注
+    overlap: 与其他说话人重叠
+    password: 密码
+    playable: 可播放
+    review_note: 依据与审核备注
+    review_state: 审核状态
+    reviewed: 已审核
+    source: 来源
+    speaks: 有发声
+    speaks_unknown: 发声未确认
+    start: 开始
+    # The line under the page's title.
+    subtitle: 语音资料记录
+    unclassified: 未分类
+    unknown: 未确认
+    user_id: 名称
+    whole_video: 整个视频
+    "yes": "是"
+    zoom_range: 缩放到区间
+  action:
+    add: 添加
+    delete: 删除
+    discard: 放弃
+    download_original: 下载原文件
+    export_csv: 导出 CSV
+    login: 登录
+    logout: 退出登录
+    play_range: 播放区间
+    refresh: 刷新
+    set_now: 设为当前位置
+    step_back: −0.1 秒
+    step_forward: +0.1 秒
+    view_range: 查看区间
+  placeholder:
+    annotated_line: "<悲伤> …"
+    english_line: 按听到的内容写下英文台词
+    episode_pick: 选择剧集
+    events: 选择笑声、哭声等声音
+    notes: 背景音、说话人重叠、不确定的转写
+    review_note: 已核对的场景、来源、无台词出场
+    title_search: 搜索标题
+  aria:
+    check_state: 核对状态
+    downloads: 下载
+    edit_panel: 台词编辑面板
+    episode_panel: 剧集面板
+    episode_panel_width: 剧集面板宽度
+    episode_pick: 选择剧集
+    episode_search: 搜索剧集
+    line_range: 台词区间
+    lines_panel: 台词列表面板
+    lines_panel_width: 台词面板宽度
+    open_lines: 打开台词列表
+    playback_rate: 播放速度
+    season: 季
+    video: 剧集视频；按左右方向键每次移动 0.1 秒
+    video_and_edit: 视频与台词编辑
+    video_info: 视频及其详情
+    video_width: 视频与编辑器宽度
+    view_range: 查看此区间
+  status:
+    dirty: 有未保存的更改
+    download_complete: 下载完成
+    download_failed: 下载失败
+    download_queued: 排队中
+    downloading: 正在下载
+    episodes_loading: 正在加载剧集…
+    loading: 正在加载工作室…
+    needs_review: 需要审核
+    unsaved: 未保存
+  message:
+    add_lines: 请添加已核对的台词。
+    check_download: 请通过上方的原文件下载核对文件。
+    check_ranges: 请核对每条台词的开始和结束。
+    delete_confirm: 要删除所选台词吗？
+    discard_confirm: 要放弃未保存的更改吗？
+    file_path_hint: 记录提取出的声音文件路径。
+    lines_after_pick: 选择剧集后即可看到台词。
+    logout_confirm: 不保存就退出登录吗？
+    no_subtitles: 尚未找到该视频的英文字幕。可以手动设置区间。
+    pick_episode: 请选择剧集。
+    pick_line: 请从列表中选择台词，或新添加一条。
+    range_hint: 拖动手柄，或用左右方向键每次移动 0.1 秒。
+    range_in_video: 请在视频时长内设置开始和结束。
+    review_hint: 核对台词和区间，设为已审核后保存。
+    save_to_apply: 保存后生效。
+    saved: 已保存。
+    source_note: "这是核对角色台词所用的来源。它们是粉丝整理的剧本，并不代表已找到所有台词或已审核视频。"
+    subtitle_match: 区间为空的台词会在保存时与英文字幕比对。只有在一处匹配的台词才会设定时间。
+    time_format: 时间请按 02:13.450 的格式填写。
+    wait_download: 下载完成后即可播放视频。
+  error:
+    bad_sign_in: 请输入名称和密码。
+    episode_failed: 无法加载剧集。
+    load_failed: 无法加载工作室。
+    reload_failed: 无法重新读取列表。
+    request_failed: 无法处理请求。
+    save_failed: 无法保存。
+    sign_in_throttled: 登录尝试过多，请稍后再试。
+    sign_in_unavailable: 无法验证登录。
+    video_unplayable: 无法播放视频。
+    wrong_sign_in: 名称或密码不正确。
+common:
+  title:
+    discard_changes: 要放弃未保存的更改吗？
+    share: 共享
+  action:
+    add_choice: '添加“{value}”'
+    cancel: 取消
+    choose_all: 全选
+    choose_none: 全不选
+    close: 关闭
+    close_all_tabs: 关闭所有标签页
+    close_other_tabs: 关闭其他标签页
+    close_right_tabs: 关闭右侧标签页
+    collapse: 收起
+    copy: 复制
+    create_link: 创建链接
+    discard: 放弃
+    exit_fullscreen: 退出全屏
+    expand: 展开
+    fit_screen: 适应屏幕
+    fullscreen: 全屏
+    more: 更多
+    mute: 静音
+    next_month: 下个月
+    next_picture: 下一张图片
+    next_year: 下一年
+    next_years: 后续年份
+    page_back: 上一页
+    page_forward: 下一页
+    pause: 暂停
+    pin: 置顶
+    play: 播放
+    play_now: 立即播放
+    previous_month: 上个月
+    previous_picture: 上一张图片
+    previous_year: 上一年
+    previous_years: 之前年份
+    save: 保存
+    see_all: 查看全部
+    share: 共享
+    skip_back: "后退 {n} 秒"
+    skip_forward: "前进 {n} 秒"
+    subtitles: 字幕
+    turn_picture: 旋转图片
+    unmute: 取消静音
+    unpin: 取消置顶
+    unshare: 停止共享
+    zoom_in: 放大
+    zoom_out: 缩小
+  aria:
+    close_named: "关闭 {name}"
+    column_width: "{name} 的宽度"
+    decrease: 减少
+    download_named: "下载 {name}"
+    image_zoom: "{title} 的缩放"
+    increase: 增加
+    member_permission: "{name} 的权限"
+    more_notices: "还有 {n} 条通知"
+    others_count: "等 {n} 人"
+    pinned_named: "{name}，已置顶"
+    play_named: "播放 {name}"
+    player_named: "{name} 播放器"
+    share_address: 共享地址
+    speed_named: "播放速度 {speed}"
+    window_move: 移动窗口 · 方向键
+    window_resize: 调整窗口大小 · 方向键
+  error:
+    choices_find_failed: 搜索失败。
+    editor_failed: 无法加载编辑器。
+    link_copy_failed: 无法复制链接。
+    member_change_failed: 无法更改权限。
+    member_search_failed: 无法搜索用户。
+    member_share_failed: 无法共享。
+    members_read_failed: 无法读取共享对象。
+    picture_failed: 无法加载图片。
+    share_create_failed: 无法创建链接。
+    share_read_failed: 无法读取链接。
+    unshare_failed: 无法停用链接。
+    video_failed: 无法加载视频。
+  label:
+    # A dayjs format the day is written in.
+    day_format: YYYY年M月D日
+    days: "{d} 天"
+    days_hours: "{d} 天 {h} 小时"
+    expired: 已过期
+    expiry: 到期
+    forever: 永久
+    hours: "{h} 小时"
+    hours_minutes: "{h} 小时 {m} 分钟"
+    left_days: "剩余 {n} 天"
+    left_hours: "剩余 {n} 小时"
+    left_minutes: "剩余 {n} 分钟"
+    left_under_minute: 剩余不到 1 分钟
+    link: 链接
+    members: 成员
+    minutes: "{m} 分钟"
+    minutes_seconds: "{m} 分 {s} 秒"
+    palette_forest: 森林
+    palette_lemon: 柠檬
+    palette_sea: 海洋
+    palette_sunset: 晚霞
+    palette_teal: 青绿
+    palette_violet: 紫罗兰
+    permission_edit: 编辑
+    permission_read: 查看
+    play_position: 播放位置
+    properties: 属性
+    seconds: "{n} 秒"
+    share_until: "截至 {date}"
+    short_day_format: M月D日
+    speed_normal: "{speed} 正常"
+    subtitles_off: 关
+    theme_forest: 森林
+    theme_sea: 海洋
+    theme_sunset: 晚霞
+    theme_teal: 青绿
+    theme_violet: 紫罗兰
+    unplayable: 无法播放
+    volume: 音量
+  message:
+    link_copied: 链接已复制。
+    preview_badge: 徽标
+    preview_field: 输入框
+    preview_link: 链接
+    preview_meta: 详情
+    preview_note: 备注
+  placeholder:
+    member_search: 按名称搜索
+    search: 搜索
+  status:
+    brightness: "亮度 {n}%"
+    copied: 已复制
+    loading: 正在加载…
+    members_loading: 正在加载共享对象…
+    muted: 已静音
+    next_in: "{n} 秒后播放"
+    no_choices: 没有项目
+    no_match: 没有匹配项
+    no_members: 未与任何人共享
+    picture_loading: 正在加载图片…
+    share_loading: 正在加载链接…
+    speed: "速度 {speed}"
+    subtitles_off: 字幕已关闭
+    subtitles_on: "字幕 {name}"
+    turned: "已旋转到 {degrees} 度"
+    unmuted: 已取消静音
+    video_loading: 正在加载视频…
+    volume: "音量 {n}%"
+    went_back: "已后退 {n} 秒"
+    went_forward: "已前进 {n} 秒"
+files:
+  action:
+    keep_both: 保留两者
+    replace: 替换
+    skip: 跳过
+  aria:
+    name_field: 名称
+  label:
+    progress: "{done}/{all}（{percent}）"
+  message:
+    conflict: 有些名称已被使用。
+  status:
+    uploading: 正在上传…

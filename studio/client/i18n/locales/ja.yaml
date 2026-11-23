@@ -1,0 +1,307 @@
+# The script studio's words in Japanese (docs/script-studio.md, 「Access and service」): the studio's own keys under
+# `script`, and every key bmo-ui reads under `common` and `files`. A deployment speaking Japanese generates the
+# screen with this pack.
+script:
+  title:
+    # The line editor's heading.
+    edit_line: セリフを編集
+    # The episode panel's heading.
+    episodes: エピソード
+    # The line list's heading.
+    lines: セリフ一覧
+    # The sign-in card's heading.
+    login: スタジオにログイン
+    # The span editor's heading.
+    range: 発話区間
+    # The page's title.
+    studio: セリフスタジオ
+  label:
+    all_files: すべてのファイル
+    all_seasons: すべてのシーズン
+    annotated_line: 感情タグ付きのセリフ
+    # Whether the voiced character appears in the episode.
+    agent_appears: キャラクター登場
+    # Whether the voiced character really speaks in the episode.
+    agent_speaks: キャラクター発話
+    clip_id: クリップ ID
+    delivery: 話し方
+    # {progress}: how many downloads are done of how many.
+    downloads: "ダウンロード {progress}"
+    emotion: 感情
+    end: 終了
+    english_line: 英語のセリフ
+    events: 非言語音
+    file_path: 音声ファイルのパス
+    has_lines: セリフまたは候補あり
+    # {n}: the number of lines.
+    line_count: "セリフ {n} 件"
+    lines: セリフ
+    music: BGM
+    new_line: 新しいセリフ
+    no_range: 区間なし
+    none: なし
+    notes: メモ
+    overlap: 他の話者と重なり
+    password: パスワード
+    playable: 再生可能
+    review_note: 根拠とレビューメモ
+    review_state: レビュー状態
+    reviewed: レビュー済み
+    source: 出典
+    speaks: 発話あり
+    speaks_unknown: 発話未確認
+    start: 開始
+    # The line under the page's title.
+    subtitle: 音声データの記録
+    unclassified: 未分類
+    unknown: 未確認
+    user_id: 名前
+    whole_video: 動画全体
+    "yes": "はい"
+    zoom_range: 区間にズーム
+  action:
+    add: 追加
+    delete: 削除
+    discard: 破棄
+    download_original: 元ファイルをダウンロード
+    export_csv: CSV をエクスポート
+    login: ログイン
+    logout: ログアウト
+    play_range: 区間を再生
+    refresh: 更新
+    set_now: 現在位置に設定
+    step_back: −0.1 秒
+    step_forward: +0.1 秒
+    view_range: 区間を表示
+  placeholder:
+    annotated_line: "<悲しみ> …"
+    english_line: 聞こえたとおりの英語のセリフ
+    episode_pick: エピソードを選択
+    events: 笑い声や泣き声などを選択
+    notes: 背景音、話者の重なり、不確かな書き起こし
+    review_note: 確認した場面、出典、発話のない登場
+    title_search: タイトルを検索
+  aria:
+    check_state: 確認状態
+    downloads: ダウンロード
+    edit_panel: セリフ編集パネル
+    episode_panel: エピソードパネル
+    episode_panel_width: エピソードパネルの幅
+    episode_pick: エピソードを選択
+    episode_search: エピソードを検索
+    line_range: セリフの区間
+    lines_panel: セリフ一覧パネル
+    lines_panel_width: セリフパネルの幅
+    open_lines: セリフ一覧を開く
+    playback_rate: 再生速度
+    season: シーズン
+    video: エピソードの動画。左右の矢印キーで 0.1 秒ずつ移動します
+    video_and_edit: 動画とセリフ編集
+    video_info: 動画とその詳細
+    video_width: 動画とエディターの幅
+    view_range: この区間を表示
+  status:
+    dirty: 未保存の変更があります
+    download_complete: ダウンロード完了
+    download_failed: ダウンロード失敗
+    download_queued: 待機中
+    downloading: ダウンロード中
+    episodes_loading: エピソードを読み込んでいます…
+    loading: スタジオを読み込んでいます…
+    needs_review: 要レビュー
+    unsaved: 未保存
+  message:
+    add_lines: 確認したセリフを追加してください。
+    check_download: 上の元ファイルのダウンロードからファイルを確認してください。
+    check_ranges: セリフごとに開始と終了を確認してください。
+    delete_confirm: 選択したセリフを削除しますか？
+    discard_confirm: 未保存の変更を破棄しますか？
+    file_path_hint: 抽出した音声ファイルのパスを記録します。
+    lines_after_pick: エピソードを選ぶとセリフが表示されます。
+    logout_confirm: 保存せずにログアウトしますか？
+    no_subtitles: この動画の英語字幕はまだ見つかっていません。区間は手動で設定できます。
+    pick_episode: エピソードを選んでください。
+    pick_line: 一覧からセリフを選ぶか、新しく追加してください。
+    range_hint: ハンドルをドラッグするか、左右のキーで 0.1 秒ずつ移動してください。
+    range_in_video: 動画の長さの範囲内で開始と終了を設定してください。
+    review_hint: セリフと区間を確認し、レビュー済みにしてから保存してください。
+    save_to_apply: 保存すると反映されます。
+    saved: 保存しました。
+    source_note: "キャラクターのセリフを照合した出典です。ファンによる台本のため、すべてのセリフが見つかったことや動画がレビュー済みであることを意味しません。"
+    subtitle_match: 区間が空のセリフは、保存時に英語字幕と照合されます。一か所だけで一致したセリフにのみ時刻が設定されます。
+    time_format: 時刻は 02:13.450 のように入力します。
+    wait_download: ダウンロードが完了すると動画を再生できます。
+  error:
+    bad_sign_in: 名前とパスワードを入力してください。
+    episode_failed: エピソードを読み込めませんでした。
+    load_failed: スタジオを読み込めませんでした。
+    reload_failed: 一覧を再読み込みできませんでした。
+    request_failed: リクエストを処理できませんでした。
+    save_failed: 保存できませんでした。
+    sign_in_throttled: ログインの試行が多すぎます。しばらくしてからもう一度お試しください。
+    sign_in_unavailable: ログインを確認できませんでした。
+    video_unplayable: 動画を再生できません。
+    wrong_sign_in: 名前またはパスワードが一致しません。
+common:
+  title:
+    discard_changes: 未保存の変更を破棄しますか？
+    share: 共有
+  action:
+    add_choice: '「{value}」を追加'
+    cancel: キャンセル
+    choose_all: すべて選択
+    choose_none: すべて解除
+    close: 閉じる
+    close_all_tabs: すべてのタブを閉じる
+    close_other_tabs: 他のタブを閉じる
+    close_right_tabs: 右側のタブを閉じる
+    collapse: 折りたたむ
+    copy: コピー
+    create_link: リンクを作成
+    discard: 破棄
+    exit_fullscreen: 全画面表示を終了
+    expand: 展開
+    fit_screen: 画面に合わせる
+    fullscreen: 全画面表示
+    more: その他
+    mute: ミュート
+    next_month: 翌月
+    next_picture: 次の画像
+    next_year: 翌年
+    next_years: 次の年の範囲
+    page_back: 前へ
+    page_forward: 次へ
+    pause: 一時停止
+    pin: 固定
+    play: 再生
+    play_now: 今すぐ再生
+    previous_month: 前月
+    previous_picture: 前の画像
+    previous_year: 前年
+    previous_years: 前の年の範囲
+    save: 保存
+    see_all: すべて表示
+    share: 共有
+    skip_back: "{n} 秒戻る"
+    skip_forward: "{n} 秒進む"
+    subtitles: 字幕
+    turn_picture: 画像を回転
+    unmute: ミュート解除
+    unpin: 固定を解除
+    unshare: 共有を停止
+    zoom_in: 拡大
+    zoom_out: 縮小
+  aria:
+    close_named: "{name} を閉じる"
+    column_width: "{name} の幅"
+    decrease: 減らす
+    download_named: "{name} をダウンロード"
+    image_zoom: "{title} のズーム"
+    increase: 増やす
+    member_permission: "{name} の権限"
+    more_notices: "他 {n} 件の通知"
+    others_count: "他 {n} 人"
+    pinned_named: "{name}、固定済み"
+    play_named: "{name} を再生"
+    player_named: "{name} プレーヤー"
+    share_address: 共有アドレス
+    speed_named: "再生速度 {speed}"
+    window_move: ウィンドウを移動 · 矢印キー
+    window_resize: ウィンドウのサイズを変更 · 矢印キー
+  error:
+    choices_find_failed: 検索できませんでした。
+    editor_failed: エディターを読み込めませんでした。
+    link_copy_failed: リンクをコピーできませんでした。
+    member_change_failed: 権限を変更できませんでした。
+    member_search_failed: ユーザーを検索できませんでした。
+    member_share_failed: 共有できませんでした。
+    members_read_failed: 共有先を読み込めませんでした。
+    picture_failed: 画像を読み込めませんでした。
+    share_create_failed: リンクを作成できませんでした。
+    share_read_failed: リンクを読み込めませんでした。
+    unshare_failed: リンクを無効にできませんでした。
+    video_failed: 動画を読み込めませんでした。
+  label:
+    # A dayjs format the day is written in.
+    day_format: YYYY年M月D日
+    days: "{d}日"
+    days_hours: "{d}日 {h}時間"
+    expired: 期限切れ
+    expiry: 有効期限
+    forever: 無期限
+    hours: "{h}時間"
+    hours_minutes: "{h}時間 {m}分"
+    left_days: "残り {n} 日"
+    left_hours: "残り {n} 時間"
+    left_minutes: "残り {n} 分"
+    left_under_minute: 残り 1 分未満
+    link: リンク
+    members: メンバー
+    minutes: "{m}分"
+    minutes_seconds: "{m}分 {s}秒"
+    palette_forest: 森
+    palette_lemon: レモン
+    palette_sea: 海
+    palette_sunset: 夕焼け
+    palette_teal: ティール
+    palette_violet: バイオレット
+    permission_edit: 編集
+    permission_read: 閲覧
+    play_position: 再生位置
+    properties: プロパティ
+    seconds: "{n}秒"
+    share_until: "{date} まで"
+    short_day_format: M月D日
+    speed_normal: "{speed} 標準"
+    subtitles_off: オフ
+    theme_forest: 森
+    theme_sea: 海
+    theme_sunset: 夕焼け
+    theme_teal: ティール
+    theme_violet: バイオレット
+    unplayable: 再生できません
+    volume: 音量
+  message:
+    link_copied: リンクをコピーしました。
+    preview_badge: バッジ
+    preview_field: 入力欄
+    preview_link: リンク
+    preview_meta: 詳細
+    preview_note: メモ
+  placeholder:
+    member_search: 名前で検索
+    search: 検索
+  status:
+    brightness: "明るさ {n}%"
+    copied: コピーしました
+    loading: 読み込み中…
+    members_loading: 共有先を読み込み中…
+    muted: ミュート中
+    next_in: "{n} 秒後に再生"
+    no_choices: 項目がありません
+    no_match: 一致する項目がありません
+    no_members: 共有先がありません
+    picture_loading: 画像を読み込み中…
+    share_loading: リンクを読み込み中…
+    speed: "速度 {speed}"
+    subtitles_off: 字幕オフ
+    subtitles_on: "字幕 {name}"
+    turned: "{degrees} 度回転しました"
+    unmuted: ミュートを解除しました
+    video_loading: 動画を読み込み中…
+    volume: "音量 {n}%"
+    went_back: "{n} 秒戻りました"
+    went_forward: "{n} 秒進みました"
+files:
+  action:
+    keep_both: 両方を残す
+    replace: 置き換える
+    skip: スキップ
+  aria:
+    name_field: 名前
+  label:
+    progress: "{all} 件中 {done} 件 ({percent})"
+  message:
+    conflict: すでに使われている名前があります。
+  status:
+    uploading: アップロード中…

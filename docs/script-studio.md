@@ -44,12 +44,15 @@ A studio for checking the provided source material and recording the line spans 
   the exact version bmo-ui is built on, so its install resolves the patched versions of the libraries beneath it;
   a pin left to float lets the install take a newer version the patches never reach.
 - **The screen's words** are keys: the studio's own under `script.*`, and every key bmo-ui reads. The repository
-  carries both packs, English and Korean, `studio/client/i18n/locales/en.yaml` and
-  `studio/client/i18n/locales/ko.yaml`; every key bmo-ui reads is answered in each, the keys its share-link
-  dialog adds among them. The deployment generates the screen in Korean from the packed Korean file; a
-  deployment that speaks another language hands the generate step its own pack, the file `BMO_SCRIPT_PACK`
-  names, in the language `BMO_SCRIPT_LANGUAGE` names, answering the same keys, and English stands where none is
-  named. The deployment names the zone every time the screen shows in `BMO_SCRIPT_ZONE`, `Asia/Seoul` where it
+  carries four packs, English, Korean, Japanese and Simplified Chinese, `en.yaml`, `ko.yaml`, `ja.yaml` and
+  `zh-CN.yaml` under `studio/client/i18n/locales/`, each language named in its own script in
+  `studio/client/i18n/languages.json`; each holds the very keys of the English pack, and every key
+  bmo-ui reads is answered in each, the keys its share-link dialog adds among them. The screen speaks one language,
+  chosen when it is generated: the language `BMO_SCRIPT_LANGUAGE` names (`en`, `ko`, `ja` or `zh-CN`) from its
+  packed file, or, where the deployment hands the generate step a pack of its own in the file `BMO_SCRIPT_PACK`
+  names, from that file, answering the same keys; English stands where neither names a language. The component
+  library's words and the names of days and months follow the same language. The deployment generates the screen
+  in Korean. The deployment names the zone every time the screen shows in `BMO_SCRIPT_ZONE`, `Asia/Seoul` where it
   names none. A refusal of the server is shown as the pack's `script.error.<code>` where it has one, and as the
   server's own sentence otherwise.
 - **The tags a line is stored with** are data, not words: the emotion, delivery, music, overlap and non-verbal sound

@@ -1,13 +1,20 @@
 import { resolve } from "node:path";
+import languages from "./i18n/languages.json";
 
-// The language the screen speaks: English from its own words, or the pack a deployment hands the generate step
-// (docs/script-studio.md, 「Access and service」).
+// The packs the repository carries, each language named in its own script (docs/script-studio.md, 「Access and
+// service」); each pack stands in `i18n/locales/` under its language's code.
+const PACKED: Record<string, string> = languages;
+
+// The language the screen speaks, and the pack it reads it from: the pack a deployment hands the generate step, else
+// the packed one of the language named, else English.
 const pack = process.env.BMO_SCRIPT_PACK;
-const language = pack === undefined || pack === "" ? "en" : (process.env.BMO_SCRIPT_LANGUAGE ?? "en");
-const locales = [{ code: "en", language: "en", name: "English", file: "en.yaml" }];
+const named = process.env.BMO_SCRIPT_LANGUAGE ?? "en";
+const handed = pack !== undefined && pack !== "";
+const language = handed || named in PACKED ? named : "en";
+const locales = [{ code: "en", language: "en", name: PACKED.en, file: "en.yaml" }];
 
-if (language !== "en" && pack !== undefined) {
-  locales.push({ code: language, language, name: language, file: resolve(pack) });
+if (language !== "en") {
+  locales.push({ code: language, language, name: PACKED[language] ?? language, file: handed ? resolve(pack) : `${language}.yaml` });
 }
 
 export default defineNuxtConfig({

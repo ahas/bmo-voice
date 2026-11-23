@@ -12,10 +12,15 @@
 <script setup lang="ts">
 import * as libraryLocales from "@nuxt/ui/locale";
 import { TOOLTIP_PROVIDER } from "bmo-ui/app/domain/tooltip";
-// The Korean names of the days and months the library writes a date with, loaded for the pack it speaks.
+// The names of the days and months the library writes a date with, loaded for every pack the repository carries.
+import "dayjs/locale/ja";
 import "dayjs/locale/ko";
+import "dayjs/locale/zh-cn";
 
-// The component library's own words, in the language the screen speaks, English where it has none.
+// The component library's own words, in the language the screen speaks, English where it has none. The library
+// names a regional language with an underscore in lower case, `zh_cn` for `zh-CN`.
 const { locale } = useI18n();
-const libraryLocale = computed(() => (libraryLocales as Record<string, typeof libraryLocales.en>)[locale.value] ?? libraryLocales.en);
+const libraryLocale = computed(
+  () => (libraryLocales as Record<string, typeof libraryLocales.en>)[locale.value.toLowerCase().replace("-", "_")] ?? libraryLocales.en
+);
 </script>

@@ -11,7 +11,8 @@ How a commit of this repository goes live. The testbed deploys it from the repos
   packed in their `vendor/` folders (`docs/layout.md`, 「The rules the layout keeps」), links
   the settings from the data root's `env/voice.toml` as the release's `settings.toml`, and, before the flip,
   generates the script studio's screen into `studio/client/.output/public`, where the studio's server serves it
-  from. The screen is generated in Korean, from the pack this repository holds, `studio/client/i18n/locales/ko.yaml`.
+  from. The screen is generated in Korean, from the Korean one of the packs this repository holds,
+  `studio/client/i18n/locales/ko.yaml`.
 - **The hosted tool:** before the flip, the release's `voice-servers-tool`, the manifest and its entries' schemas
   of `tools/servers/` are copied into its `.placed/` and put into the tool host's registry for this service with
   `room.tools` and `room.send` allowed (`docs/boundary-api.md`, 「The hosted tool」). The tool host reads the
