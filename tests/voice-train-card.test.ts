@@ -7,7 +7,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { pickCard, probeCommand, runStep } from "../scripts/lib/voice-train";
+import { cardState, parseProbe, pickCard, probeCommand, runStep, trainingNode } from "../scripts/lib/voice-train";
 
 import type { ArbiterState, CardProbe, TrainNode } from "../scripts/lib/voice-train";
 import type { ShellRun } from "../scripts/lib/node-shell";
@@ -28,6 +28,45 @@ const idleOwn = probe();
 const idleShared = probe({ server: true, serverPid: SERVER_PID, arbiter: arbiter({ lockHeldBy: [SERVER_PID] }) });
 const heldOwn = probe({ arbiter: arbiter({ lockHeldBy: [OTHER_HOLDER] }) });
 const heldShared = probe({ server: true, serverPid: SERVER_PID, arbiter: arbiter({ lockHeldBy: [OTHER_HOLDER] }) });
+
+// The node arbiter's card read as it answers (bmo-arbiter's docs/api.md, 「The card」), the driver's card under
+// `device`, its lock held by another occupant's turn client.
+function cardRead(fields: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    version: "0.1.0",
+    desktop: false,
+    occupants: ["joy", "comfyui", "voice"],
+    ranks: [["joy"], ["comfyui", "voice"]],
+    tiers: { joy: 0, comfyui: 2, voice: 2 },
+    claim: null,
+    lockHeldBy: [OTHER_HOLDER],
+    busy: true,
+    queue: [],
+    places: [],
+    typicalHoldMs: {},
+    units: { items: [], more: false },
+    device: { name: "card", totalMiB: 12282, usedMiB: 858, freeMiB: 11424, utilizationPercent: 0, processes: [] },
+    stage: { waiting: false, waitingMs: 0, graphs: 0, waits: 0, waitedMs: 0 },
+    ram: { dumpsMiB: 0, availableMiB: 59436, maxMiB: null, floorMiB: 0, dump: "disk" },
+    rules: { loadedAt: 1, error: null },
+    ...fields,
+  };
+}
+
+function probeAnswer(read: Record<string, unknown>): string {
+  return `env=yes\nserver=active\nserver_pid=${SERVER_PID}\nunits=\narbiter=${JSON.stringify(read)}\n`;
+}
+
+test("the probe reads the node arbiter's card read and takes the card the driver names", () => {
+  expect(probeCommand).toContain("/card\"");
+
+  const held = parseProbe(probeAnswer(cardRead()));
+
+  expect(trainingNode(held)).toBe(true);
+  expect(held.arbiter?.lockHeldBy).toEqual([OTHER_HOLDER]);
+  expect(cardState(held)).toBe(`in use (pid ${OTHER_HOLDER})`);
+  expect(cardState(parseProbe(probeAnswer(cardRead({ device: undefined }))))).toBe("no card");
+});
 
 function named(entries: [string, CardProbe][]): { name: string; probe: CardProbe }[] {
   return entries.map(([name, one]) => ({ name, probe: one }));
@@ -78,11 +117,7 @@ function heldNode(): { node: TrainNode; written: Map<string, string> } {
     name: "n2",
     shell: {
       run: async (command, input) => {
-        if (command === probeCommand) {
-          const state = { card: { name: "card" }, lockHeldBy: [OTHER_HOLDER], claim: null, queue: [] };
-
-          return answer(`env=yes\nserver=active\nserver_pid=${SERVER_PID}\nunits=\narbiter=${JSON.stringify(state)}\n`);
-        }
+        if (command === probeCommand) return answer(probeAnswer(cardRead()));
 
         const file = /cat > (\S+)$/.exec(command)?.[1];
 

@@ -332,9 +332,10 @@ the voice nodes. What a caller does with the sound is the caller's.
     voice server.
   - `run --experiment <name> --step <label> --node <name>… --home <name> [--carry <path>]… [--bring <path>]… --
     <command…>` does one step from start to end on one of the nodes it names.
-- **A card is the node's card arbiter's to tell about and to hand over** (bmo-arbiter's `docs/api.md`, 「The node
-  arbiter's units」, `docs/node-arbiter.md`, 「The hold」): a node whose arbiter does not answer, or answers for no
-  card, takes no step.
+- **A card is the node's card arbiter's to tell about and to hand over** (bmo-arbiter's `docs/api.md`, 「The
+  card」, `docs/node-arbiter.md`, 「The hold」): its card read on the node's loopback names the card as the driver
+  sees it, the pids holding the card lock, the claim standing and the tickets in line. A node whose arbiter does
+  not answer, or names no card the driver sees, takes no step.
 - **A node takes a step while no other training step runs there,** whoever else holds, claims or waits for its
   card: the step asks the arbiter for its turn and waits in the node's queue, and what stands on the card is the
   arbiter's to move. A step waits, asking once a minute, only while every node it may use runs a training step.

@@ -9,8 +9,8 @@ import type { NodeShell } from "./node-shell";
 // One step of a voice-training experiment placed on a card, fed what it needs, waited out and its results brought
 // into the record (docs/voice-plan.md, 「Placing a step on a card」). The operations machine is the one place every
 // node's shell is reached from, so the choosing, the carrying and the waiting all happen here and the node only runs
-// the step. What stands on a card is the node's card arbiter's to say, through its hold (the arbiter's docs/api.md,
-// 「The node arbiter's hold」, 「The node arbiter's units」), and handing the card over is its queue's: the step asks
+// the step. What stands on a card is the node's card arbiter's to say, through its card read (the arbiter's
+// docs/api.md, 「The card」), and handing the card over is its queue's: the step asks
 // for its turn through the arbiter's turn client whoever holds the card, waits in line, and holds the card lock from
 // its start to its end (「The turn client」).
 
@@ -36,7 +36,7 @@ const BRING_PATH = /^(?!\/)(?!.*\.\.)[A-Za-z0-9_.*/-]+$/;
 
 export type CardKind = "own" | "shared";
 
-// What the node's card arbiter says of its card, as its units route answers: the card the driver names, or none; the
+// What the node's card arbiter says of its card, as its card read answers: the card the driver names, or none; the
 // pids holding the card lock; the claimant the card waits for, or none; and the tickets in line.
 export interface ArbiterState {
   card: unknown;
@@ -65,7 +65,7 @@ export const probeCommand = [
   `printf 'server=%s\\n' "$(systemctl --user is-active ${SERVER_UNIT} 2>/dev/null)"`,
   `printf 'server_pid=%s\\n' "$(systemctl --user show -p MainPID --value ${SERVER_UNIT} 2>/dev/null)"`,
   `printf 'units=%s\\n' "$(systemctl --user list-units --plain --no-legend --state=active 'bmo-voice-*' 2>/dev/null | awk '{print $1}' | grep -vx '${SERVER_UNIT}' | paste -sd, -)"`,
-  `printf 'arbiter=%s\\n' "$(set -a; . "$HOME/${ARBITER_ENV}" 2>/dev/null; set +a; python3 -c 'import json, os, urllib.request; print(json.dumps(json.load(urllib.request.urlopen("http://127.0.0.1:%s/units" % os.environ.get("CARD_TURN_PORT", "${TURN_PORT}")))))' 2>/dev/null)"`,
+  `printf 'arbiter=%s\\n' "$(set -a; . "$HOME/${ARBITER_ENV}" 2>/dev/null; set +a; python3 -c 'import json, os, urllib.request; print(json.dumps(json.load(urllib.request.urlopen("http://127.0.0.1:%s/card" % os.environ.get("CARD_TURN_PORT", "${TURN_PORT}")))))' 2>/dev/null)"`,
 ].join("\n");
 
 export function parseProbe(text: string): CardProbe {
@@ -82,10 +82,11 @@ export function parseProbe(text: string): CardProbe {
   let arbiter: ArbiterState | null = null;
 
   try {
-    const read = JSON.parse(values.get("arbiter") ?? "") as Partial<ArbiterState>;
+    // The card read carries the card as the driver says it under `device`, absent where the driver names none.
+    const read = JSON.parse(values.get("arbiter") ?? "") as Partial<Omit<ArbiterState, "card">> & { device?: unknown };
 
     arbiter = {
-      card: read.card ?? null,
+      card: read.device ?? null,
       lockHeldBy: Array.isArray(read.lockHeldBy) ? read.lockHeldBy.filter((one) => Number.isInteger(one) && one > 0) : [],
       claim: read.claim ?? null,
       queue: Array.isArray(read.queue) ? read.queue : [],
