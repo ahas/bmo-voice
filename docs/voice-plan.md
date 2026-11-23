@@ -202,25 +202,29 @@ the voice nodes. What a caller does with the sound is the caller's.
   - **`voice.toml`,** which says what the voice is: its engine, the run and step its adapter was trained at, the
     words of each delivery clip it has, and the temperature and top-p every line of it is sampled with;
   - **`lora.pt`,** the adapter: its two matrices for each linear it names, and the scale they are added at;
-  - **`reference.wav`,** where the voice has one: its delivery clip, takes of its own in its own language;
+  - **`reference.wav`,** where the voice has one: its delivery clip in its own language, takes of its own or the
+    recorded speech it was trained on;
   - **`reference.<language>.wav`,** where the voice has one: its delivery clip for lines of another language, a
     take of its own in that language, `reference.en.wav` for English.
 - **The adapter carries the voice, and a delivery clip carries how it speaks.** The adapter alone gives the
   timbre; the pitch, pace and mood of a line asked bare are whatever the model draws for that text, so two lines
   differ. A voice whose folder holds `reference.wav`, with the words it says as `reference_words` in its
   `voice.toml`, has every piece of every line asked with that clip in the place S2-Pro reads a reference from, so
-  every line and every piece of it is spoken the way the clip is. The clip is a take of the voice's own, asked
-  bare, so it ends on the voice's own fall. A server reads a clip's codes once and keeps them on the host through
+  every line and every piece of it is spoken the way the clip is. The clip is whole sentences that end on the
+  voice's own fall, since the model ends a piece the way its reference ends: a take of the voice's own asked bare,
+  or lines of the recorded speech its adapter was trained on, cut at the quiet after them. A server reads a clip's codes once and keeps them on the host through
   every load after; a clip it could not read is read again by the next line, and the line is spoken without it. A voice with no clip speaks its first piece bare. The row holds no
   reference either way.
 - **A line is spoken on the clip of its language.** A voice's clip carries its language's accent into every line
   spoken on it, so a line in another language than the voice's own is spoken on that language's clip,
   `reference.<language>.wav` with its words as `reference_words_<language>`, where the folder holds both, and on
   the voice's own clip otherwise. A Korean line is spoken on the Korean clip, an English line on the English one.
-- **A language's clip is chosen by measurement and swapped by hand:** takes of one delivery sentence in that
-  language drawn bare on several seeds, each measured with `synth/voice-cer.py` in that language, and the take
-  heard most exactly, most surely in that language and ending on the deepest fall placed as the clip, its words
-  written beside it. Another take is put in its place the same way, the file and its words replaced together, and
+- **A language's clip is chosen by measurement and swapped by hand:** the candidates are takes of one delivery
+  sentence in that language drawn bare on several seeds and, where the voice was trained on recorded speech in that
+  language, a few of its recorded lines joined; each is measured with `synth/voice-cer.py` in that language, on the
+  candidate itself and on lines spoken on it, and the one heard most exactly, most surely in that language, ending on
+  the deepest fall and, where the voice copies a speaker, speaking most like that speaker is placed as the clip, its
+  words written beside it. Another is put in its place the same way, the file and its words replaced together, and
   the next push brings it to the nodes (「How a voice is measured」).
 - **The voices table says which one speaks** (`docs/store.md`): one row per voice, at most one current. The current
   voice is the chat agent's where its registration names none.
