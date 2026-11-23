@@ -82,7 +82,7 @@ text = """
 listen = "127.0.0.1:{{port.voice.server}}"
 address = "http://127.0.0.1:{{port.voice.server}}"
 token_file = "voice.token"
-database = "postgres:///bmo_voice?host=/var/run/postgresql"
+database = "postgres:///bmo_voice?host={{postgres.host}}&port={{postgres.port}}"
 data_root = "{{data_root}}"
 
 [units.node]
@@ -113,7 +113,7 @@ voice = "bmo"
 [[line]]
 file = "~/.config/bmo-arbiter/env"
 key = "CARD_DECLARATIONS"
-value = "{{home}}/.local/share/bmo-voice/deploy"
+value = "{{prefix}}/bmo-voice/deploy"
 
 [[line]]
 file = "env/web-console.env"
@@ -166,7 +166,7 @@ set -eu
 from="$(mktemp -d)"
 trap 'rm -rf "$from"' EXIT
 uvx --from huggingface_hub hf download ahas-io/bmo-voice --local-dir "$from" >/dev/null
-cd "$HOME/.local/share/bmo-voice/deploy"
+cd "$BMO_INSTALL_PREFIX/bmo-voice/deploy"
 bun scripts/voice-install.ts --add bmo --checkpoint "$from"
 cp "$from"/reference*.wav "$BMO_DATA_DIR/voice/voices/bmo/"
 '''
