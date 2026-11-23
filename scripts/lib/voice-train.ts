@@ -6,12 +6,13 @@ import { VOICE_PLACE, VOICE_SERVICE } from "./voice-node";
 
 import type { NodeShell } from "./node-shell";
 
-// One step of a voice-training experiment placed on a free card, fed what it needs, waited out and its results
-// brought into the record (docs/voice-plan.md, 「Placing a step on a card」). The operations machine is the one place
-// every node's shell is reached from, so the choosing, the carrying and the waiting all happen here and the node only
-// runs the step. Whether a card is free is the node's card arbiter's to say, through its hold (the arbiter's
-// docs/api.md, 「The node arbiter's hold」, 「The node arbiter's units」), and the step itself waits its turn and
-// holds the card lock through the arbiter's turn client (「The turn client」).
+// One step of a voice-training experiment placed on a card, fed what it needs, waited out and its results brought
+// into the record (docs/voice-plan.md, 「Placing a step on a card」). The operations machine is the one place every
+// node's shell is reached from, so the choosing, the carrying and the waiting all happen here and the node only runs
+// the step. What stands on a card is the node's card arbiter's to say, through its hold (the arbiter's docs/api.md,
+// 「The node arbiter's hold」, 「The node arbiter's units」), and handing the card over is its queue's: the step asks
+// for its turn through the arbiter's turn client whoever holds the card, waits in line, and holds the card lock from
+// its start to its end (「The turn client」).
 
 // Where the experiments stand under the account's home on every node.
 export const TRAIN_PLACE = "bmo-voice-train";
@@ -107,17 +108,20 @@ export function trainingNode(probe: CardProbe): boolean {
   return probe.env && probe.arbiter !== null && probe.arbiter.card !== null;
 }
 
-// Free: no claim on the card, nobody holding its lock but the voice server, nobody in line for it but to rest, and no
-// step of training running on the node.
-export function cardFree(probe: CardProbe): boolean {
+// A node that takes a step: a training node where no step of training runs. Whoever else holds, claims or waits for
+// its card, the step asks the arbiter's queue for its turn there, and the arbiter moves what stands on the card.
+export function takesStep(probe: CardProbe): boolean {
+  return trainingNode(probe) && probe.units.length === 0;
+}
+
+// Idle: no claim on the card, nobody holding its lock but the voice server, and nobody in line for it but to rest.
+export function cardIdle(probe: CardProbe): boolean {
   const arbiter = probe.arbiter;
 
-  return trainingNode(probe)
-    && arbiter !== null
+  return arbiter !== null
     && arbiter.claim === null
     && arbiter.lockHeldBy.every((pid) => pid === probe.serverPid)
-    && arbiter.queue.every((ticket) => ticket.rest === true)
-    && probe.units.length === 0;
+    && arbiter.queue.every((ticket) => ticket.rest === true);
 }
 
 // A card the voice server stands on is shared with it, loaded or not, since a synthesis may load it at any moment.
@@ -142,11 +146,17 @@ export function cardState(probe: CardProbe): string {
   return waiting > 0 ? `asked for (${waiting} in line)` : "free";
 }
 
-// The first free card, a card of its own before one shared with the voice server, in the order the nodes were given.
+// The card a step goes to among the nodes that take one: an idle card before a busy one, and among either a card of
+// its own before one shared with the voice server, in the order the nodes were given.
 export function pickCard<T extends { probe: CardProbe }>(looked: readonly T[]): T | null {
-  const free = looked.filter((one) => cardFree(one.probe));
+  const rank = (probe: CardProbe): number => (cardIdle(probe) ? 0 : 2) + (cardKind(probe) === "own" ? 0 : 1);
+  let best: T | null = null;
 
-  return free.find((one) => cardKind(one.probe) === "own") ?? free[0] ?? null;
+  for (const one of looked) {
+    if (takesStep(one.probe) && (best === null || rank(one.probe) < rank(best.probe))) best = one;
+  }
+
+  return best;
 }
 
 // One file as a listing names it: its path under the home, its size and its whole-second mtime.
@@ -366,8 +376,9 @@ async function start(plan: StepPlan, node: TrainNode, card: CardKind): Promise<v
   ].join("\n");
 
   // The unit runs a file rather than a command line, since systemd expands `$` and `%` in the line it is given. The
-  // step's command runs inside the turn client, which waits for the voice's turn on the card, holds the card lock
-  // around it and exits with its code, or 3 where the voice has no place on the node.
+  // step's command runs inside the turn client, which waits in the node's queue for the voice's turn on the card
+  // however long what stands there takes to give way, holds the card lock around the whole command without giving
+  // way, and exits with its code, or 3 where the voice has no place on the node.
   await must(node, `mkdir -p ${dir}/steps && cat > ${dir}/${steps}.cmd`, `${plan.command}\n`);
   await must(node, `cat > ${dir}/${steps}.run`, `${turn}\necho $? > ${steps}.code\n`);
   await must(
@@ -419,7 +430,7 @@ async function bring(plan: StepPlan, node: TrainNode, deps: StepDeps): Promise<v
   }
 }
 
-// One step from start to end: a free card chosen and fed, the step run apart and waited out, and what it made
+// One step from start to end: a card chosen and fed, the step run apart and waited out, and what it made
 // brought into the record.
 export async function runStep(plan: StepPlan, deps: StepDeps): Promise<StepEnd> {
   const named = checkStepNames(plan.experiment, plan.step, plan.bring);
@@ -440,18 +451,23 @@ export async function runStep(plan: StepPlan, deps: StepDeps): Promise<StepEnd> 
 
       const again = await probe(chosen.node);
 
-      if (again === null || !cardFree(again)) return null;
+      if (again === null || !takesStep(again)) return null;
 
       const card = cardKind(again);
+      const unit = stepUnit(plan.experiment, plan.step);
 
       await start(plan, chosen.node, card);
-      deps.say(`${plan.step}: running on ${chosen.node.name} (${card} card) as ${stepUnit(plan.experiment, plan.step)}`);
+      deps.say(
+        cardIdle(again)
+          ? `${plan.step}: running on ${chosen.node.name} (${card} card) as ${unit}`
+          : `${plan.step}: started on ${chosen.node.name} (${card} card) as ${unit}, waiting there for its turn on a card that is ${cardState(again)}`,
+      );
 
       return { node: chosen.node, card, started: deps.now() };
     });
 
     if (placed === null) {
-      if (!told) deps.say(`${plan.step}: every card it may use is taken; asking again every minute`);
+      if (!told) deps.say(`${plan.step}: every node it may use is running a training step; asking again every minute`);
       told = true;
       await deps.sleep(deps.waitMs ?? WAIT_MS);
     }

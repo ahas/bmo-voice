@@ -325,24 +325,31 @@ the voice nodes. What a caller does with the sound is the caller's.
 
 ### Placing a step on a card
 
-- **`scripts/voice-train.ts` runs one step of an experiment on a free card and brings its results home.** It works
+- **`scripts/voice-train.ts` runs one step of an experiment on a card and brings its results home.** It works
   from the operations machine, where every node is reached.
   - `nodes` says, for every node the node service lists or each one `--node` names, whether it carries the voice
-    environment and a card arbiter, whether its card is free, and whether the card is its own or shared with the
+    environment and a card arbiter, what stands on its card, and whether the card is its own or shared with the
     voice server.
   - `run --experiment <name> --step <label> --node <name>… --home <name> [--carry <path>]… [--bring <path>]… --
     <command…>` does one step from start to end on one of the nodes it names.
-- **A card is the node's card arbiter's to tell about** (bmo-arbiter's `docs/api.md`, 「The node arbiter's units」):
-  a node whose arbiter does not answer, or answers for no card, takes no step.
-- **A card is free** when the arbiter names no claim on it, nobody but the voice server holds its lock, nobody is in
-  line for it but to rest, and no training step is running on the node; a step waits, asking once a minute, while
-  every card it may use is taken. Choosing a card is done by one runner at a time, under `voice/locks/voice-train.lock`,
-  so steps launched together never pick the same card.
-- **The step takes its turn on the card through the arbiter's turn client** (「The turn client」), as the voice: it
-  waits for the turn, holds the card lock for as long as it runs, and lets go as it ends. A voice server on the same
-  card gives way to it as it gives way to any other occupant that asks.
-- **A card of its own is chosen before the voice server's.** The step is told in `BMO_VOICE_CARD`: `own` or
-  `shared`.
+- **A card is the node's card arbiter's to tell about and to hand over** (bmo-arbiter's `docs/api.md`, 「The node
+  arbiter's units」, `docs/node-arbiter.md`, 「The hold」): a node whose arbiter does not answer, or answers for no
+  card, takes no step.
+- **A node takes a step while no other training step runs there,** whoever else holds, claims or waits for its
+  card: the step asks the arbiter for its turn and waits in the node's queue, and what stands on the card is the
+  arbiter's to move. A step waits, asking once a minute, only while every node it may use runs a training step.
+- **An idle card is chosen before a busy one, and among either a card of its own before the voice server's.** A card
+  is idle when the arbiter names no claim on it, nobody but the voice server holds its lock, and nobody is in line
+  for it but to rest. Choosing a card is done by one runner at a time, under `voice/locks/voice-train.lock`, so steps
+  launched together never pick the same card. The step is told in `BMO_VOICE_CARD`: `own` or `shared`.
+- **The step takes its turn on the card through the arbiter's turn client** (「The turn client」), as the voice, at
+  the services' tier the arbiter's covenant gives training (bmo-arbiter's `docs/node-arbiter.md`, 「Priority and
+  yielding」). It waits for the turn, holds the card lock from its start to its end without giving way, and lets go
+  as it ends. What stands on the card when it asks gives way as the arbiter's rules say: a voice server resting
+  there, as it gives way to any occupant that asks; a server of the same tier that yields by its process, such as an
+  image engine, stopped by the card master while no demand stands on it and started again once the step has ended
+  (bmo-arbiter's `docs/placement.md`, 「Yielding by the process」); one in the middle of a request, once that
+  request ends; and a claim, once it ends.
 - **What the step needs is carried before it starts:** the experiment's folder but for what its runs write, and every
   path `--carry` names, wherever the node lacks a file or holds a different one; then the record's top-level files.
 - **The step runs apart,** as the transient user unit `bmo-voice-train-<experiment>-<step>`, its output in

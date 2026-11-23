@@ -1012,19 +1012,31 @@ async fn a_briefing_never_voiced_carries_why_on_its_member_and_is_told_with_it()
   assert_eq!(status, StatusCode::CREATED, "{taken}");
 
   let id = taken["id"].as_i64().expect("an id");
-  let mut over = taken;
+  // Its end is kept and told once its three tries have failed, which takes the longer the busier the machine, so the
+  // wait is on the told end itself, bounded.
+  let mut told = None;
 
-  // Its end is kept once its `finishedAt` stands; its state reads failed a moment sooner, off its synthesis.
-  for _ in 0..400 {
-    (_, over) = call(&engine, "GET", &format!("/briefings/{id}"), None).await;
+  for _ in 0..2_400 {
+    let (_, page) = call(&engine, "GET", "/events?kinds=briefing.ended", None).await;
 
-    if over["finishedAt"].is_i64() {
+    told = page["items"]
+      .as_array()
+      .expect("a page")
+      .iter()
+      .find(|event| event["data"]["id"] == id)
+      .cloned();
+
+    if told.is_some() {
       break;
     }
 
     tokio::time::sleep(Duration::from_millis(25)).await;
   }
 
+  let told = told.unwrap_or_else(|| panic!("briefing {id}'s end is not told"));
+  let (_, over) = call(&engine, "GET", &format!("/briefings/{id}"), None).await;
+
+  assert!(over["finishedAt"].is_i64(), "a told end is a kept end: {over}");
   assert_eq!(over["state"], "failed", "{over}");
   assert_eq!(
     over["text"].as_str(),
@@ -1035,14 +1047,6 @@ async fn a_briefing_never_voiced_carries_why_on_its_member_and_is_told_with_it()
   let failure = over["failure"].as_str().unwrap_or_default();
 
   assert!(failure.contains("did not stand after 3 tries"), "{over}");
-
-  let (_, page) = call(&engine, "GET", "/events?kinds=briefing.ended", None).await;
-  let told = page["items"]
-    .as_array()
-    .expect("a page")
-    .iter()
-    .find(|event| event["data"]["id"] == id)
-    .unwrap_or_else(|| panic!("briefing {id}'s end is not told: {page}"));
 
   assert_eq!(told["data"]["state"], "failed", "{told}");
   assert_eq!(

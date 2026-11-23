@@ -1,5 +1,5 @@
-// A step of a voice-training experiment put on a free card among the nodes, and what the nodes' cards are doing now
-// (docs/voice-plan.md, 「Placing a step on a card」).
+// A step of a voice-training experiment put on a card among the nodes, waiting there for its turn in the card
+// arbiter's queue, and what the nodes' cards are doing now (docs/voice-plan.md, 「Placing a step on a card」).
 //
 //   bun scripts/voice-train.ts nodes [--node <name>]...
 //   bun scripts/voice-train.ts run --experiment <name> --step <label> --node <name>... --home <name>

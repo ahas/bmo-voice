@@ -15,7 +15,7 @@ The voice engine, as one service of its own:
   voice node, taking its
   card turn through the card arbiter's own client, installed and updated by this repository's node scripts;
 - **voice training:** the lines a voice is trained on, written in the agent's manner, training stages placed
-  on a free card, a trained voice checked and installed;
+  on a card through the card arbiter's queue, a trained voice checked and installed;
 - **the script studio:** the screen and server where the lines a voice is trained on are recorded from the
   original material, with its Korean language pack in this repository;
 - **briefings:** a line spoken for a room and kept with its room, its line and its moment, told on the event
