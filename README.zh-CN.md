@@ -22,6 +22,19 @@
 与其他所有单元只通过标准 API 通信（`docs/boundary-api.md`）；在其他仓库中，只允许依赖基础库 `bmo-chat`、
 `bmo-chat-client`、`bmo-ui` 和 `bmo-text`。
 
+## 模型
+
+仓库中不包含权重。语音节点需要：
+
+| 内容 | 来源 | 许可证 |
+|---|---|---|
+| Fish Audio S2-Pro 基础权重 | `synth/engine.toml` 固定版本的 [`fishaudio/s2-pro`](https://huggingface.co/fishaudio/s2-pro)，由 `setup` 分发到各节点 | Fish Audio Research License：仅限研究与非商业用途 |
+| 引擎代码 fish-speech | `synth/engine.toml` 固定提交的 [`fishaudio/fish-speech`](https://github.com/fishaudio/fish-speech) | 其自身的许可证 |
+| 用于转写和声音评测的 Whisper | [`openai/whisper-large-v3-turbo`](https://huggingface.co/openai/whisper-large-v3-turbo) | MIT |
+| 训练好的声音 | 用本仓库的脚本以自己智能体的录音训练，或把 BMO 的声音 [`ahas-io/bmo-voice`](https://huggingface.co/ahas-io/bmo-voice) 复制到 voices 文件夹下 | 与基础模型相同：Fish Audio Research License |
+
+**Built with Fish Audio.** 本仓库代码采用 MIT 许可，但 S2-Pro 权重及在其上训练的声音不是。若要在付费服务、企业内部业务或托管 API 中使用这些声音，须先取得 Fish Audio 的许可（见 `docs/voice-plan.md`）。
+
 ## 目录
 
 | 目录 | 内容 |

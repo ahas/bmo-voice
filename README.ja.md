@@ -25,6 +25,19 @@
 他のユニットとはすべて標準 API だけでやり取りし(`docs/boundary-api.md`)、他のリポジトリのうち依存してよいのは
 基盤ライブラリの `bmo-chat`、`bmo-chat-client`、`bmo-ui`、`bmo-text` だけです。
 
+## モデル
+
+リポジトリに重みは含まれていません。音声ノードには次のものが必要です。
+
+| 何 | 入手先 | ライセンス |
+|---|---|---|
+| Fish Audio S2-Pro のベース重み | `synth/engine.toml` が固定するリビジョンの [`fishaudio/s2-pro`](https://huggingface.co/fishaudio/s2-pro)。`setup` が各ノードへ配ります | Fish Audio Research License：研究・非商用のみ |
+| エンジンのコード fish-speech | `synth/engine.toml` が固定するコミットの [`fishaudio/fish-speech`](https://github.com/fishaudio/fish-speech) | 独自のライセンス |
+| 文字起こしと声の測定に使う Whisper | [`openai/whisper-large-v3-turbo`](https://huggingface.co/openai/whisper-large-v3-turbo) | MIT |
+| 学習済みの声 | このリポジトリのスクリプトで自分のエージェントの録音から学習する、または BMO の声 [`ahas-io/bmo-voice`](https://huggingface.co/ahas-io/bmo-voice) を voices フォルダの下にコピー | ベースと同じ：Fish Audio Research License |
+
+**Built with Fish Audio.** このリポジトリのコードは MIT ですが、S2-Pro の重みとその上で学習した声は MIT ではありません。有料サービス、企業の社内業務、ホスティングされた API で声を使うには、先に Fish Audio のライセンスが必要です（`docs/voice-plan.md`）。
+
 ## フォルダ
 
 | フォルダ | 内容 |

@@ -27,6 +27,21 @@ The voice engine, as one service of its own:
 Every other unit is reached through standard APIs alone (`docs/boundary-api.md`), and of other repositories
 only the base libraries `bmo-chat`, `bmo-chat-client`, `bmo-ui` and `bmo-text` may be depended on.
 
+## Models
+
+The repository holds no weights. A voice node needs:
+
+| What | Where it comes from | Licence |
+|---|---|---|
+| Fish Audio S2-Pro, the base weights | [`fishaudio/s2-pro`](https://huggingface.co/fishaudio/s2-pro) at the revision `synth/engine.toml` pins; `setup` carries it to each node | Fish Audio Research License: research and non-commercial use only |
+| fish-speech, the engine's code | [`fishaudio/fish-speech`](https://github.com/fishaudio/fish-speech) at the commit `synth/engine.toml` pins | its own |
+| Whisper, for the transcriber and for measuring a voice | [`openai/whisper-large-v3-turbo`](https://huggingface.co/openai/whisper-large-v3-turbo) | MIT |
+| A trained voice | yours, trained by the scripts here on your agent's recorded lines; or BMO's own, [`ahas-io/bmo-voice`](https://huggingface.co/ahas-io/bmo-voice), copied under the voices folder | as its base: Fish Audio Research License |
+
+**Built with Fish Audio.** The code here is MIT; the S2-Pro weights and every voice trained on them are not, and a
+voice spoken for a paying service, a business's own operations or a hosted API needs Fish Audio's own licence
+first (`docs/voice-plan.md`).
+
 ## Folders
 
 | Folder | What it holds |

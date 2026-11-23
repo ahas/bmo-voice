@@ -25,6 +25,19 @@
 다른 모든 유닛과는 표준 API로만 통신하며(`docs/boundary-api.md`), 다른 저장소 가운데 의존할 수 있는 것은 기반
 라이브러리인 `bmo-chat`, `bmo-chat-client`, `bmo-ui`, `bmo-text`뿐입니다.
 
+## 모델
+
+저장소에는 가중치가 없습니다. 음성 노드에는 다음이 필요합니다.
+
+| 무엇 | 받는 곳 | 라이선스 |
+|---|---|---|
+| Fish Audio S2-Pro 베이스 가중치 | `synth/engine.toml`이 고정한 리비전의 [`fishaudio/s2-pro`](https://huggingface.co/fishaudio/s2-pro). `setup`이 각 노드로 옮깁니다 | Fish Audio Research License: 연구·비상업 용도만 |
+| 엔진 코드 fish-speech | `synth/engine.toml`이 고정한 커밋의 [`fishaudio/fish-speech`](https://github.com/fishaudio/fish-speech) | 자체 라이선스 |
+| 받아쓰기와 목소리 측정용 Whisper | [`openai/whisper-large-v3-turbo`](https://huggingface.co/openai/whisper-large-v3-turbo) | MIT |
+| 학습된 목소리 | 이 저장소의 스크립트로 내 에이전트의 녹음에 직접 학습하거나, BMO 목소리 [`ahas-io/bmo-voice`](https://huggingface.co/ahas-io/bmo-voice)를 voices 폴더 아래에 복사 | 베이스와 같음: Fish Audio Research License |
+
+**Built with Fish Audio.** 이 저장소의 코드는 MIT이지만, S2-Pro 가중치와 그 위에 학습한 목소리는 그렇지 않습니다. 유료 서비스, 회사 내부 업무, 호스팅 API에서 목소리를 쓰려면 먼저 Fish Audio의 라이선스를 받아야 합니다(`docs/voice-plan.md`).
+
 ## 폴더
 
 | 폴더 | 내용 |
