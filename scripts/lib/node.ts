@@ -52,9 +52,31 @@ async function ask<T>(method: "GET" | "POST", path: string, body?: unknown): Pro
   return read as T;
 }
 
-// Every node the service lists, by name, in the list's order.
+// Every node the service lists, by name, in the list's order: its pages read one after another, each after the last
+// name the one before ended on.
 export async function nodeNames(): Promise<string[]> {
-  return (await ask<{ nodes?: { name: string }[] }>("GET", "/nodes")).nodes?.map((node) => node.name) ?? [];
+  return await pagedNames(async (query) => await ask<NodePage>("GET", `/nodes${query}`));
+}
+
+// A page of the node list, as the node service answers one (its `docs/api.md`, 「Node reads」).
+export interface NodePage {
+  items?: { name: string }[];
+  more?: boolean;
+}
+
+// The names of every page `read` answers, the first asked with no query and each after it after the last name read.
+export async function pagedNames(read: (query: string) => Promise<NodePage>): Promise<string[]> {
+  const names: string[] = [];
+
+  for (;;) {
+    const query = names.length === 0 ? "" : `?after=${encodeURIComponent(names.at(-1) as string)}`;
+    const page = await read(query);
+    const items = page.items ?? [];
+
+    names.push(...items.map((node) => node.name));
+
+    if (page.more !== true || items.length === 0) return names;
+  }
 }
 
 // How a node is reached by its name.
