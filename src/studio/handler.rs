@@ -1,4 +1,4 @@
-//! Everything the server answers under `/bmo-script` (docs/script-studio.md, 「Access and service」 and 「Sign-in and
+//! Everything the server answers under `/voice-studio` (docs/script-studio.md, 「Access and service」 and 「Sign-in and
 //! sessions」).
 
 use std::collections::HashMap;
@@ -25,12 +25,12 @@ use super::review::{Fault, validate_review};
 use super::subtitles::{Speech, align_review, subtitle_file, subtitle_tracks};
 use crate::units::web::Web;
 
-pub const PREFIX: &str = "/bmo-script";
+pub const PREFIX: &str = "/voice-studio";
 
 /// The most of a request body the server reads.
 pub const BODY_LIMIT: usize = 2_000_000;
 
-const COOKIE: &str = "bmo_script";
+const COOKIE: &str = "voice_studio";
 const SESSION_MS: i64 = 7 * 86_400_000;
 /// How long a run of failed logins from one address counts against it, and how many it may make.
 pub const ATTEMPT_WINDOW_MS: i64 = 300_000;
@@ -459,7 +459,7 @@ async fn answer(
       let document = json!({ "exportedAt": exported_at, "source": script.source_url, "episodes": listed });
       let text = serde_json::to_string_pretty(&document).expect("an export is plain data");
 
-      return attachment("application/json; charset=utf-8", "bmo-script.json", text);
+      return attachment("application/json; charset=utf-8", "voice-studio.json", text);
     }
 
     let filename = if template { "metadata-template.csv" } else { "bmo-voice-metadata.csv" };

@@ -1,7 +1,7 @@
 """Transcribes the studio's supplied videos into English with word timings, keeping the provided subtitles apart
 (docs/script-studio.md, 「Automatic transcription」).
 
-usage: python3 studio/scripts/bmo-script-transcribe.py --queue <paths.json> [--root <data root>] [--model turbo]
+usage: python3 studio/scripts/voice-studio-transcribe.py --queue <paths.json> [--root <data root>] [--model turbo]
        [--device cuda|cpu] [--batch-size 8]
 """
 import argparse
@@ -13,8 +13,8 @@ import sys
 import sysconfig
 import time
 
-from bmo_script_audio import render_vtt
-from bmo_script_settings import prefix, studio, studio_root
+from voice_studio_audio import render_vtt
+from voice_studio_settings import prefix, studio, studio_root
 
 parser = argparse.ArgumentParser(description='Transcribe user-provided studio videos, keeping word timestamps and originals separate.')
 parser.add_argument('--root')

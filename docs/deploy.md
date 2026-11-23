@@ -18,9 +18,11 @@ How a commit of this repository goes live. The testbed deploys it from the repos
   `room.tools` and `room.send` allowed (`docs/boundary-api.md`, 「The hosted tool」). The tool host reads the
   registry's copy, so a session sees the new tool with no restart.
 - **The units:** the files under `deploy/`, each kept as a user unit by the testbed and marked for it:
-  `bmo-voice.service`, the voice service, the one whose health the deployment waits on; and `bmo-script.service`, the
-  script studio's server on port 3214, restarted by every deployment just before the voice service. Each starts only
-  where the data root holds `env/voice.toml`. The voice service's unit allows it 65,536 open files, and the service
+  `bmo-voice.service`, the voice service, the one whose health the deployment waits on; and
+  `bmo-voice-studio.service`, the script studio's server on port 3214, restarted by every deployment just before the
+  voice service. Each starts only where the data root holds `env/voice.toml`. `bmo-script.service`, the studio's
+  earlier unit, is marked retired: starting `bmo-voice-studio.service` stops it, and the deployment disables and
+  unlinks it once the voice service is up. The voice service's unit allows it 65,536 open files, and the service
   raises its own soft limit to its hard one as it starts, so a long line of waiting lines never runs it out. A stop
   waits for each process to end, and none is killed after a span: the voice service ends its event streams as it is
   asked to stop and ends once the calls it is answering have their answers, and the studio ends on the signal itself.
@@ -40,7 +42,7 @@ How a commit of this repository goes live. The testbed deploys it from the repos
   handed to `scripts/voice-lines.ts run --persona` (`docs/voice-lines.md`, 「The speech standard」): who the agent is
   and the world it lives in, how it talks and names itself, the people it may name, and a few invented example lines,
   a long line among them.
-- **The proxy:** the script studio's two locations are a settings file the install writes, `proxy/bmo-script.conf`
+- **The proxy:** the script studio's two locations are a settings file the install writes, `proxy/voice-studio.conf`
   under the data root (`install.toml`): the bare path redirected to the one with the slash and everything under it
   passed to the studio's port, with the request's host and scheme handed on, which the studio's origin check and its
   secure cookie read. The web server includes it once, `include <data root>/proxy/*.conf;` inside the server block

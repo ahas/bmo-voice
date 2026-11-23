@@ -1,7 +1,7 @@
 """Downloads the source material the manifest names into the studio's data root, resuming through .part files, with
 each video's subtitles (docs/script-studio.md, 「Media and downloads」).
 
-usage: python3 studio/scripts/bmo-script-download.py [--root <data root>]
+usage: python3 studio/scripts/voice-studio-download.py [--root <data root>]
 """
 import argparse
 import concurrent.futures
@@ -16,10 +16,10 @@ import threading
 import time
 import urllib.parse
 
-from bmo_script_settings import prefix, studio, studio_root
+from voice_studio_settings import prefix, studio, studio_root
 
 parser = argparse.ArgumentParser()
-# The data root: the one --root names, else the studio's own (BMO_SCRIPT_DATA, else the settings' data root).
+# The data root: the one --root names, else the studio's own (BMO_VOICE_STUDIO_DATA, else the settings' data root).
 parser.add_argument('--root')
 ROOT = pathlib.Path(parser.parse_args().root or studio_root())
 STUDIO = studio()

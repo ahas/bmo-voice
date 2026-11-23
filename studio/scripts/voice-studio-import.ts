@@ -1,7 +1,7 @@
 // Registers a batch of automatic lines into the studio's reviews (docs/script-studio.md, 「Importing speakers from web
 // scripts」), backing the records up first and writing an audit of what it did.
 //
-// usage: bun studio/scripts/bmo-script-import.ts --input batch.json [--root <data root>] [--dry-run]
+// usage: bun studio/scripts/voice-studio-import.ts --input batch.json [--root <data root>] [--dry-run]
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -15,7 +15,7 @@ const value = (flag: string) => {
   return i < 0 ? undefined : args[i + 1];
 };
 const input = value("--input");
-if (!input) throw Error("usage: bun studio/scripts/bmo-script-import.ts --input batch.json [--root <data root>] [--dry-run]");
+if (!input) throw Error("usage: bun studio/scripts/voice-studio-import.ts --input batch.json [--root <data root>] [--dry-run]");
 const root = value("--root") ?? studioRoot();
 const batch = JSON.parse(readFileSync(input, "utf8")) as ImportBatch;
 const studio = new Studio(root);

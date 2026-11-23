@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "bmo-script",
+      "name": "voice-studio",
       "devDependencies": {
         "@types/bun": "^1.4.3",
         "typescript": "5.9.3",

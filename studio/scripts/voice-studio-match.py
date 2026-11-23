@@ -2,7 +2,7 @@
 writes a batch the import script registers (docs/script-studio.md, 「Importing speakers from web scripts」). The lines
 it writes always carry the transcript's words.
 
-usage: python3 studio/scripts/bmo-script-match.py --references <file> --links <file> [--root <data root>]
+usage: python3 studio/scripts/voice-studio-match.py --references <file> --links <file> [--root <data root>]
 """
 import argparse
 import difflib
@@ -11,7 +11,7 @@ import json
 import pathlib
 import re
 
-from bmo_script_settings import notes, studio, studio_root
+from voice_studio_settings import notes, studio, studio_root
 
 p = argparse.ArgumentParser(description='Match speaker reference phrases to text transcribed from supplied videos. Outputs always use ASR words.')
 p.add_argument('--root')

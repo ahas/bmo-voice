@@ -40,9 +40,9 @@ function settings(): Settings {
   return read;
 }
 
-// The studio's data root: the folder `BMO_SCRIPT_DATA` names, else the voice folder's `studio/`.
+// The studio's data root: the folder `BMO_VOICE_STUDIO_DATA` names, else the voice folder's `studio/`.
 export function studioRoot(): string {
-  const named = process.env.BMO_SCRIPT_DATA;
+  const named = process.env.BMO_VOICE_STUDIO_DATA;
 
   return named === undefined || named === "" ? join(settings().data_root, "voice", "studio") : named;
 }

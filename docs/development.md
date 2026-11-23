@@ -15,9 +15,9 @@ How the script studio is run while it is being changed, without touching the liv
 ## The bench
 
 - **`bun studio/scripts/dev.ts`** runs two processes and makes the copy first where there is none:
-  - **the server**, the `script-studio` binary built and started by Cargo against the copy (`BMO_SCRIPT_DATA`), on
+  - **the server**, the `script-studio` binary built and started by Cargo against the copy (`BMO_VOICE_STUDIO_DATA`), on
     its own loopback port, signing people in against the web unit the development settings name;
-  - **the screen**, Nuxt's dev server under `/bmo-script/` with hot reload, passing `api`, `media` and `subtitle`
+  - **the screen**, Nuxt's dev server under `/voice-studio/` with hot reload, passing `api`, `media` and `subtitle`
     through to the server and keeping the request's Host header, which the server matches a write's Origin against.
 - **When either process ends the other is ended too.** A job that needs the bench starts it in the background, reads
   its output from a file, and takes it down before it ends. Its ports are fixed, so one bench runs at a time.

@@ -18,9 +18,9 @@ if (!existsSync(join(copy, "studio.db"))) {
 
 const env = {
   ...process.env,
-  BMO_SCRIPT_DATA: copy,
-  BMO_SCRIPT_PORT: String(API_PORT),
-  BMO_SCRIPT_DEV_API: `http://127.0.0.1:${API_PORT}`,
+  BMO_VOICE_STUDIO_DATA: copy,
+  BMO_VOICE_STUDIO_PORT: String(API_PORT),
+  BMO_VOICE_STUDIO_DEV_API: `http://127.0.0.1:${API_PORT}`,
 };
 
 // The server built and started by Cargo from the repository's one crate; a change to it is taken up by starting the

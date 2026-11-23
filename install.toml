@@ -4,7 +4,7 @@
 
 install = 1
 
-restart = "systemctl --user restart bmo-script.service bmo-voice.service"
+restart = "systemctl --user restart bmo-voice-studio.service bmo-voice.service"
 
 [[needs]]
 program = "cargo"
@@ -247,11 +247,11 @@ PY
 # The script studio's two proxy locations, written with the studio's port (docs/deploy.md, 「The proxy」); this
 # machine's web server includes the file once.
 [[settings]]
-file = "proxy/bmo-script.conf"
+file = "proxy/voice-studio.conf"
 mode = "644"
 text = '''
-location = /bmo-script { return 308 /bmo-script/; }
-location /bmo-script/ {
+location = /voice-studio { return 308 /voice-studio/; }
+location /voice-studio/ {
   proxy_pass http://127.0.0.1:{{port.voice.studio}};
   proxy_set_header Host $host;
   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

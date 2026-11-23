@@ -4,12 +4,12 @@ A studio for checking the provided source material and recording the line spans 
 
 ## Access and service
 
-- **Address:** the path `/bmo-script/` of the host whose web server includes the proxy locations the install writes
+- **Address:** the path `/voice-studio/` of the host whose web server includes the proxy locations the install writes
   (`docs/deploy.md`, 「The proxy」). The path goes to the
   service, which serves both the screen and its API; the path without the slash is redirected to it.
-- **Service:** `bmo-script.service` runs the `script-studio` binary on loopback, at the port `BMO_SCRIPT_PORT`
-  names, 3214 where it names none. The data root comes from `BMO_SCRIPT_DATA`, by default `voice/studio/` under the
-  data root, and the generated screen from `BMO_SCRIPT_STATIC`, by default `studio/client/.output/public` in the
+- **Service:** `bmo-voice-studio.service` runs the `script-studio` binary on loopback, at the port `BMO_VOICE_STUDIO_PORT`
+  names, 3214 where it names none. The data root comes from `BMO_VOICE_STUDIO_DATA`, by default `voice/studio/` under the
+  data root, and the generated screen from `BMO_VOICE_STUDIO_STATIC`, by default `studio/client/.output/public` in the
   release. A port of 0 is one the system chooses, named in the line the service prints as it starts listening.
 - **What is the deployment's own** stands in the settings' `[studio]` section (`docs/boundary-api.md`, 「Settings」),
   each part optional: `source_root`, the folder the source manifest's paths and the download records' keys stand
@@ -19,7 +19,7 @@ A studio for checking the provided source material and recording the line spans 
   address the media tools download the material from; and `cloud_home`, the folder of the manifest's paths the
   cloud's player names its videos below.
 - **The media tools under `studio/`** read the same settings, through `BMO_VOICE_SETTINGS` or the release's
-  `settings.toml`, and the same `BMO_SCRIPT_DATA`, so the server, the TypeScript tools and the Python tools stand on
+  `settings.toml`, and the same `BMO_VOICE_STUDIO_DATA`, so the server, the TypeScript tools and the Python tools stand on
   one data root. The Korean they write into records stands in `data/ko/`: the tags, their defaults and the group of
   a file at the top of the material in `studio-tags.json`, and the notes and the import's evidence sentence in
   `studio-notes.json`.
@@ -48,11 +48,11 @@ A studio for checking the provided source material and recording the line spans 
   `zh-CN.yaml` under `studio/client/i18n/locales/`, each language named in its own script in
   `studio/client/i18n/languages.json`; each holds the very keys of the English pack, and every key
   bmo-ui reads is answered in each, the keys its share-link dialog adds among them. The screen speaks one language,
-  chosen when it is generated: the language `BMO_SCRIPT_LANGUAGE` names (`en`, `ko`, `ja` or `zh-CN`) from its
-  packed file, or, where the deployment hands the generate step a pack of its own in the file `BMO_SCRIPT_PACK`
+  chosen when it is generated: the language `BMO_VOICE_STUDIO_LANGUAGE` names (`en`, `ko`, `ja` or `zh-CN`) from its
+  packed file, or, where the deployment hands the generate step a pack of its own in the file `BMO_VOICE_STUDIO_PACK`
   names, from that file, answering the same keys; English stands where neither names a language. The component
   library's words and the names of days and months follow the same language. The deployment generates the screen
-  in Korean. The deployment names the zone every time the screen shows in `BMO_SCRIPT_ZONE`, `Asia/Seoul` where it
+  in Korean. The deployment names the zone every time the screen shows in `BMO_VOICE_STUDIO_ZONE`, `Asia/Seoul` where it
   names none. A refusal of the server is shown as the pack's `script.error.<code>` where it has one, and as the
   server's own sentence otherwise.
 - **The tags a line is stored with** are data, not words: the emotion, delivery, music, overlap and non-verbal sound
@@ -66,8 +66,8 @@ A studio for checking the provided source material and recording the line spans 
 - **Accounts are the account service's.** The server asks the web unit's sign-in route with the name and the
   password (`docs/boundary-api.md`, 「bmo-web」); a sign-in it takes is a login, and the server lets the session it
   was given go at once. It never writes an account; an account is made or changed on the web unit's side.
-- **Session:** the studio's own, kept in its review database for seven days and carried by the `bmo_script` cookie
-  on `Path=/bmo-script` (HttpOnly, SameSite=Strict, Secure behind https).
+- **Session:** the studio's own, kept in its review database for seven days and carried by the `voice_studio` cookie
+  on `Path=/voice-studio` (HttpOnly, SameSite=Strict, Secure behind https).
 - **Throttle:** twenty logins per address in a five-minute window. Every login drops the counts whose window has
   passed.
 - **Origin:** any request other than GET or HEAD must carry an `Origin` whose host is the request's own host.
@@ -92,9 +92,9 @@ A studio for checking the provided source material and recording the line spans 
 - **Full collection:** every file under the source tree is collected recursively, with the subtitles its player
   points at.
 - **HTML sizes:** a remote server may inject code into HTML, so list size and response size are told apart.
-- **Resuming:** downloads resume through `.part`, and failures are not hidden. `studio/scripts/bmo-script-download.py`
+- **Resuming:** downloads resume through `.part`, and failures are not hidden. `studio/scripts/voice-studio-download.py`
   resumes them; the screen only reads the download records.
-- **Where the downloads go:** the data root `--root` names, else `BMO_SCRIPT_DATA`, else the default above.
+- **Where the downloads go:** the data root `--root` names, else `BMO_VOICE_STUDIO_DATA`, else the default above.
 - **Where they come from:** the settings' `cloud`: a video through the cloud's player page, named by its path below
   `cloud_home`, and its sound and subtitle addresses read off that page; any other file at its path under the
   cloud, the cloud named as the referrer of every request.
@@ -143,7 +143,7 @@ A studio for checking the provided source material and recording the line spans 
 
 ## Automatic transcription
 
-- **For videos with no English subtitles,** `studio/scripts/bmo-script-transcribe.py` makes an automatic English
+- **For videos with no English subtitles,** `studio/scripts/voice-studio-transcribe.py` makes an automatic English
   transcript from the original audio, on a virtual environment of its own built from
   `studio/scripts/asr-requirements.txt`, the paths handed on `--queue` as a JSON array.
 - **Output** goes to `asr/` in the data root: the transcript JSON, word timings and VTT. Provided subtitles are never
@@ -156,7 +156,7 @@ A studio for checking the provided source material and recording the line spans 
   Short common phrases, several candidates and low agreement are not registered.
 - **A registered row carries** the source address, the matching method, and whether the transcript, the speaker and
   the voice boundary need review.
-- **`studio/scripts/bmo-script-import.ts`** registers only after checking the original file's id and version, never
+- **`studio/scripts/voice-studio-import.ts`** registers only after checking the original file's id and version, never
   overwrites a manual record, backs up the records first, and writes the result count and the unmatched items to an
   audit file. Having found a source is not having every line of that episode.
 

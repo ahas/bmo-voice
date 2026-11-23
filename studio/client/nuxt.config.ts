@@ -7,8 +7,8 @@ const PACKED: Record<string, string> = languages;
 
 // The language the screen speaks, and the pack it reads it from: the pack a deployment hands the generate step, else
 // the packed one of the language named, else English.
-const pack = process.env.BMO_SCRIPT_PACK;
-const named = process.env.BMO_SCRIPT_LANGUAGE ?? "en";
+const pack = process.env.BMO_VOICE_STUDIO_PACK;
+const named = process.env.BMO_VOICE_STUDIO_LANGUAGE ?? "en";
 const handed = pack !== undefined && pack !== "";
 const language = handed || named in PACKED ? named : "en";
 const locales = [{ code: "en", language: "en", name: PACKED.en, file: "en.yaml" }];
@@ -28,7 +28,7 @@ export default defineNuxtConfig({
   // other path under the prefix with the page (docs/script-studio.md).
   ssr: false,
   app: {
-    baseURL: "/bmo-script/",
+    baseURL: "/voice-studio/",
     head: {
       htmlAttrs: { lang: language },
       meta: [{ name: "theme-color", content: "#18181b" }]
@@ -36,10 +36,10 @@ export default defineNuxtConfig({
   },
   appConfig: {
     // The library's words, and the zone and date words every time it shows is read in. The deployment names
-    // the zone in BMO_SCRIPT_ZONE; the runtime's own zone stands where it names none.
+    // the zone in BMO_VOICE_STUDIO_ZONE; the runtime's own zone stands where it names none.
     bmoUi: {
       locale: language,
-      zone: process.env.BMO_SCRIPT_ZONE ?? "Asia/Seoul",
+      zone: process.env.BMO_VOICE_STUDIO_ZONE ?? "Asia/Seoul",
       dateLocale: language
     }
   },
@@ -50,7 +50,7 @@ export default defineNuxtConfig({
   },
   nitro: {
     // A deployment generates into a release directory of its own and names it here.
-    output: { dir: process.env.BMO_SCRIPT_OUTPUT_DIR ?? ".output" }
+    output: { dir: process.env.BMO_VOICE_STUDIO_OUTPUT_DIR ?? ".output" }
   },
   // The development bench passes what the studio's server answers through to it; the Host header is kept, since
   // the server matches a write's Origin against it (docs/development.md).
@@ -58,8 +58,8 @@ export default defineNuxtConfig({
     nitro: {
       devProxy: Object.fromEntries(
         ["api", "media", "subtitle"].map((part) => [
-          `/bmo-script/${part}`,
-          { target: `${process.env.BMO_SCRIPT_DEV_API ?? "http://127.0.0.1:3215"}/bmo-script/${part}`, changeOrigin: false }
+          `/voice-studio/${part}`,
+          { target: `${process.env.BMO_VOICE_STUDIO_DEV_API ?? "http://127.0.0.1:3215"}/voice-studio/${part}`, changeOrigin: false }
         ])
       )
     }

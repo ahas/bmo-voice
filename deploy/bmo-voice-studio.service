@@ -1,0 +1,23 @@
+[Unit]
+Description=bmo-voice-studio: the script studio (docs/script-studio.md in the voice's repository)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=%h/.local/share/bmo/data/env/voice.toml
+
+[Service]
+# The studio runs out of the deploy tree: its binary in bin/, its settings in settings.toml, and the screen the
+# deployment generated into studio/client/.output/public, which it serves by default. Its port is the one the proxy
+# locations the install writes pass to (docs/deploy.md, 「The proxy」).
+Type=simple
+WorkingDirectory=%h/.local/share/bmo-voice/deploy
+ExecStart=%h/.local/share/bmo-voice/deploy/bin/script-studio
+Environment=BMO_VOICE_STUDIO_PORT=3214
+Restart=on-failure
+RestartSec=3
+# The studio ends on the stop signal itself, so a stop waits for it and never kills it after a span.
+TimeoutStopSec=infinity
+
+[Install]
+WantedBy=default.target
+# Restarted by every deployment just before the voice service, so it serves the release's screen.
+X-BMO-Deploy=restart

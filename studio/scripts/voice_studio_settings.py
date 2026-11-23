@@ -23,8 +23,8 @@ def studio():
 
 
 def studio_root():
-    """The studio's data root: the folder BMO_SCRIPT_DATA names, else the voice folder's studio/."""
-    named = os.environ.get('BMO_SCRIPT_DATA')
+    """The studio's data root: the folder BMO_VOICE_STUDIO_DATA names, else the voice folder's studio/."""
+    named = os.environ.get('BMO_VOICE_STUDIO_DATA')
     return named if named else str(pathlib.Path(settings()['data_root']) / 'voice' / 'studio')
 
 

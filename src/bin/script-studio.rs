@@ -1,6 +1,6 @@
 //! The script studio's server (`docs/script-studio.md`, 「Access and service」): the voice's settings for the account
 //! service and the studio's deployment values, and its environment for the data root, the port and the generated
-//! screen: `BMO_SCRIPT_DATA`, `BMO_SCRIPT_PORT` and `BMO_SCRIPT_STATIC`.
+//! screen: `BMO_VOICE_STUDIO_DATA`, `BMO_VOICE_STUDIO_PORT` and `BMO_VOICE_STUDIO_STATIC`.
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -33,13 +33,14 @@ async fn main() -> ExitCode {
     Ok(settings) => settings,
     Err(why) => return fail(why),
   };
-  let root = named("BMO_SCRIPT_DATA").map_or_else(|| settings.voice_folder().join("studio"), PathBuf::from);
-  let port: u16 = named("BMO_SCRIPT_PORT").and_then(|port| port.parse().ok()).unwrap_or(PORT);
-  let static_dir = match named("BMO_SCRIPT_STATIC") {
+  let root =
+    named("BMO_VOICE_STUDIO_DATA").map_or_else(|| settings.voice_folder().join("studio"), PathBuf::from);
+  let port: u16 = named("BMO_VOICE_STUDIO_PORT").and_then(|port| port.parse().ok()).unwrap_or(PORT);
+  let static_dir = match named("BMO_VOICE_STUDIO_STATIC") {
     Some(named) => PathBuf::from(named),
     None => match Settings::release_folder() {
       Ok(release) => release.join("studio/client/.output/public"),
-      Err(why) => return fail(format!("{why}; name the screen in BMO_SCRIPT_STATIC")),
+      Err(why) => return fail(format!("{why}; name the screen in BMO_VOICE_STUDIO_STATIC")),
     },
   };
 

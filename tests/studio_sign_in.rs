@@ -156,7 +156,7 @@ async fn a_sign_in_the_account_service_takes_opens_a_studio_session_and_a_wrong_
     .and_then(|value| value.to_str().ok())
     .unwrap_or_default()
     .to_owned();
-  assert!(session.starts_with("bmo_script="), "{session}");
+  assert!(session.starts_with("voice_studio="), "{session}");
   assert_eq!(taken.json::<Value>().await.expect("a body"), json!({ "name": NAME }));
   assert_eq!(
     *accounts.ended.lock().expect("the ledger"),

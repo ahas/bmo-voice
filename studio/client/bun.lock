@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "bmo-script-client",
+      "name": "voice-studio-client",
       "dependencies": {
         "@nuxt/ui": "4.12.2",
         "@nuxtjs/i18n": "^10.6.0",
