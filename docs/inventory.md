@@ -343,7 +343,7 @@ duplicates them.
 | `bot/bmo-server/src/verbs/benches/gate_eval/gates/{voice_polish,voice_reading}.{rs,toml}` (4) | bmo-gate | The gate's evaluation members; this repository serves them a line's script reading (`docs/boundary-api.md`) |
 | `client/server/api/voice-briefing.get.ts`, `voice-briefing.post.ts`, `voice-briefing.post.test.ts` (3) | bmo-web | The switch on the console's agents screen, read and moved through the receiver |
 | `chat/chat/kakao/voice-video.ts`, `voice-video.test.ts` (2) | the KakaoTalk provider | A provider's voice and video message handling |
-| `tools/song/scripts/song/voice_host.py`, `voice_key.py`, `tools/song/src/song-voice.test.ts`, `song-voice-key.test.ts` (4) | bmo-song | The song bench's own voice parts |
+| `tools/song/scripts/song/voice_host.py`, `voice_key.py`, `tools/song/src/song-voice.test.ts`, `song-voice-key.test.ts` (4) | the song unit | The song bench's own voice parts |
 | `android/**` (32), `client/server/api/app/android.apk.get.ts`, `repo/repo/android-release.ts` and its test, `scripts/build/android.ts` and its test (5) | dropped | The native briefing app is dropped by archive document #301 (「앱: bmo-app」) |
 
 ## The news brief: not carried
