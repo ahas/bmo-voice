@@ -39,10 +39,12 @@ How a commit of this repository goes live. The testbed deploys it from the repos
   handed to `scripts/voice-lines.ts run --persona` (`docs/voice-lines.md`, 「The speech standard」): who the agent is
   and the world it lives in, how it talks and names itself, the people it may name, and a few invented example lines,
   a long line among them.
-- **The proxy:** `deploy/nginx.conf` holds the script studio's two locations, the bare path redirected to the one with
-  the slash and everything under it passed to the studio's port, with the request's host and scheme handed on, which
-  the studio's origin check and its secure cookie read. A deployment never touches the proxy; the path and the port
-  are fixed and the locations stand in the host's server block.
+- **The proxy:** the script studio's two locations are a settings file the install writes, `proxy/bmo-script.conf`
+  under the data root (`install.toml`): the bare path redirected to the one with the slash and everything under it
+  passed to the studio's port, with the request's host and scheme handed on, which the studio's origin check and its
+  secure cookie read. The web server includes it once, `include <data root>/proxy/*.conf;` inside the server block
+  that serves the console, written by a person with root; the install's verification says where it is missing. A
+  deployment never touches the proxy, and the repository holds no host's proxy configuration.
 
 ## Where things stand
 

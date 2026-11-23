@@ -7,7 +7,7 @@ ConditionPathExists=%h/.local/share/bmo/data/env/voice.toml
 [Service]
 # The studio runs out of the deploy tree: its binary in bin/, its settings in settings.toml, and the screen the
 # deployment generated into studio/client/.output/public, which it serves by default. Its port is the one the proxy
-# locations in deploy/nginx.conf pass to.
+# locations the install writes pass to (docs/deploy.md, 「The proxy」).
 Type=simple
 WorkingDirectory=%h/.local/share/bmo-voice/deploy
 ExecStart=%h/.local/share/bmo-voice/deploy/bin/script-studio

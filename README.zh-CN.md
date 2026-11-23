@@ -40,7 +40,7 @@
 | 目录 | 内容 |
 |---|---|
 | `data/` | 代码按语言读取的语言资料，`data/<language>/`；其中每一行韩语都记录在 `korean-ledger.json` 中 |
-| `deploy/` | 测试台部署所维护的单元（语音服务和脚本工作室），以及工作室的代理 location |
+| `deploy/` | 测试台部署所维护的单元（语音服务和脚本工作室） |
 | `docs/` | 先于代码的文档：从 `docs/layout.md` 开始阅读 |
 | `plugin/` | Harness 插件的技能，`plugin/skills/bmo-voice/` |
 | `policy/` | 引擎自身的策略值，`policy/voice.toml` |

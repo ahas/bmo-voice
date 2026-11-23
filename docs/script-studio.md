@@ -4,7 +4,8 @@ A studio for checking the provided source material and recording the line spans 
 
 ## Access and service
 
-- **Address:** the path `/bmo-script/` of the host the proxy locations in `deploy/` stand in. The path goes to the
+- **Address:** the path `/bmo-script/` of the host whose web server includes the proxy locations the install writes
+  (`docs/deploy.md`, 「The proxy」). The path goes to the
   service, which serves both the screen and its API; the path without the slash is redirected to it.
 - **Service:** `bmo-script.service` runs the `script-studio` binary on loopback, at the port `BMO_SCRIPT_PORT`
   names, 3214 where it names none. The data root comes from `BMO_SCRIPT_DATA`, by default `voice/studio/` under the

@@ -7,7 +7,7 @@ How the repository is laid out, what each part is, and where it runs. Read this 
 | Folder | What it holds |
 |---|---|
 | `data/` | Language material the code reads by language, `data/<language>/`: the reading tables a script is spoken from, the voice names' seed readings, and the Korean the script studio stores in its records. Every line of it is in `korean-ledger.json` |
-| `deploy/` | The units the testbed's deployment keeps on the operations machine, and the proxy locations of the script studio |
+| `deploy/` | The units the testbed's deployment keeps on the operations machine |
 | `docs/` | The documents, which come before the code |
 | `plugin/` | The harness plugin's skill, `plugin/skills/bmo-voice/`, telling a harness when and how to use the MCP server |
 | `policy/` | The engine's own policy values, `policy/voice.toml` |

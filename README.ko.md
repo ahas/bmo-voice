@@ -43,7 +43,7 @@
 | 폴더 | 내용 |
 |---|---|
 | `data/` | 코드가 언어별로 읽는 언어 자료(`data/<language>/`). 여기에 있는 한국어 줄은 모두 `korean-ledger.json`에 기록되어 있습니다 |
-| `deploy/` | 테스트베드의 배포가 관리하는 유닛(음성 서비스와 스크립트 스튜디오)과 스튜디오의 프록시 location |
+| `deploy/` | 테스트베드의 배포가 관리하는 유닛(음성 서비스와 스크립트 스튜디오) |
 | `docs/` | 코드보다 먼저 오는 문서들. `docs/layout.md`부터 읽으십시오 |
 | `plugin/` | 하네스 플러그인의 스킬, `plugin/skills/bmo-voice/` |
 | `policy/` | 엔진 자체의 정책 값, `policy/voice.toml` |

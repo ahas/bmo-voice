@@ -47,7 +47,7 @@ first (`docs/voice-plan.md`).
 | Folder | What it holds |
 |---|---|
 | `data/` | Language material the code reads by language, `data/<language>/`; every Korean line of it is in `korean-ledger.json` |
-| `deploy/` | The units the testbed's deployment keeps, the voice service and the script studio, and the studio's proxy locations |
+| `deploy/` | The units the testbed's deployment keeps, the voice service and the script studio |
 | `docs/` | The documents, which come before the code: start with `docs/layout.md` |
 | `plugin/` | The harness plugin's skill, `plugin/skills/bmo-voice/` |
 | `policy/` | The engine's own policy values, `policy/voice.toml` |
