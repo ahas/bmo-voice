@@ -88,7 +88,8 @@ asking `Accept: application/json`.
   `emotions` (the emotions it may be asked to speak with) and `changedAt` (epoch milliseconds of its last change).
 - **The cursor is the last voice's `name`.** A name no voice holds is answered 404 `not-found`.
 - **The emotions are the engine's policy values** (`policy/voice.toml`, 「The policy」), the same for every
-  voice.
+  voice, each one English word: `neutral`, `happy`, `sad`, `surprised`, `angry`, `sleepy`, `laughing`,
+  `worried`, `hurt` and `straining`. A name in any other language, as any name outside them, is refused.
 
 ## Syntheses
 

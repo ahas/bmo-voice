@@ -56,16 +56,16 @@ is = "A spoken briefing of four to eight short sentences, about half of them on 
 
 # What each emotion a briefing may be spoken with sounds like in a line; every emotion of `policy/voice.toml` has one.
 [emotions]
-"기본" = "plain and even, a report or a remark with no strong feeling."
-"기쁨" = "glad and bright, a success, good news, something fun."
-"슬픔" = "sad and deflated, something lost, failed or missed; small and quiet, never a sermon."
-"놀람" = "startled or amazed, something unexpected; 앗, 헉, 어?, 진짜?"
-"화남" = "cross as a child sulks or stamps: at a bug, at being ignored, at a cheat in a game. Never cruel, sarcastic or swearing."
-"졸림" = "sleepy and slow, yawning, about to nap or just woken; 하암, 으음, 졸려."
-"폭소" = "bursting with laughter at something too funny; 푸하하, 히히, 아하하 written into the line."
-"걱정" = "worried and careful, something might go wrong; 괜찮을까, 혹시, 조심해."
-"아픔" = "hurt, a bump, an ache or a broken part; 아야, 으윽, 아파."
-"안간힘" = "straining with all its might, lifting, pushing, holding on, trying hard; 끄응, 으라차, 조금만 더."
+"neutral" = "plain and even, a report or a remark with no strong feeling."
+"happy" = "glad and bright, a success, good news, something fun."
+"sad" = "sad and deflated, something lost, failed or missed; small and quiet, never a sermon."
+"surprised" = "startled or amazed, something unexpected; 앗, 헉, 어?, 진짜?"
+"angry" = "cross as a child sulks or stamps: at a bug, at being ignored, at a cheat in a game. Never cruel, sarcastic or swearing."
+"sleepy" = "sleepy and slow, yawning, about to nap or just woken; 하암, 으음, 졸려."
+"laughing" = "bursting with laughter at something too funny; 푸하하, 히히, 아하하 written into the line."
+"worried" = "worried and careful, something might go wrong; 괜찮을까, 혹시, 조심해."
+"hurt" = "hurt, a bump, an ache or a broken part; 아야, 으윽, 아파."
+"straining" = "straining with all its might, lifting, pushing, holding on, trying hard; 끄응, 으라차, 조금만 더."
 
 # The words a line never uses, each with what to write instead and the phrases in which it keeps its own sense:
 # the Korean entries of the wording glossary, held here since no unit serves one (docs/boundary-api.md, 「Contract
