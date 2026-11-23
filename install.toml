@@ -1,0 +1,245 @@
+# What installing the voice engine on a fresh machine needs, read by the testbed's install verb (bmo-testbed's
+# docs/install.md, 「The install declaration」). The settings are docs/boundary-api.md's 「Settings」; the voice nodes,
+# the base weights and the voices are docs/voice-plan.md's.
+
+install = 1
+
+restart = "systemctl --user restart bmo-script.service bmo-voice.service"
+
+[[needs]]
+program = "cargo"
+what = "Builds the service, the unit command, the script studio's server and the hosted tool; the Rust toolchain from https://rustup.rs."
+
+[[needs]]
+program = "bun"
+what = "Installs and runs the node scripts, the studio's tools and the studio's screen, and the card adapter the master runs; the Bun runtime from https://bun.sh."
+
+[[needs]]
+program = "uv"
+what = "Makes the Python tests' interpreter at every release and the voice environment the encoder and the transcriber run on, and fetches the weights; uv from https://docs.astral.sh/uv/."
+
+[[needs]]
+program = "psql"
+what = "The engine's own database stands on a PostgreSQL server of version 13 or later on this machine, whose citext extension the migrations create; the postgresql package, with a role for this account that may create databases."
+
+[[needs]]
+program = "ssh"
+what = "Reaches the voice nodes, which every synthesis and the node scripts run on; the openssh-client package."
+
+[[needs]]
+program = "curl"
+what = "Asks the script studio for its health at every deployment; the curl package."
+
+[[port]]
+name = "voice.server"
+number = 13108
+
+# The script studio's port, fixed in its unit, its health and its proxy locations.
+[[port]]
+name = "voice.studio"
+number = 3214
+
+# The bearer every caller presents, the console among them; the settings name it by its file.
+[[token]]
+name = "voice.service"
+file = "env/voice.token"
+
+[[database]]
+name = "bmo_voice"
+
+[[input]]
+name = "voice.huggingface-token"
+what = "A Hugging Face access token with read access (made at https://huggingface.co/settings/tokens) of an account that has accepted the licence on the gated model page https://huggingface.co/fishaudio/s2-pro; it fetches the voice's base weights once."
+file = "env/voice-huggingface.token"
+secret = true
+
+[[input]]
+name = "voice.node-ssh"
+what = "The SSH login, as user@host, of a Linux machine with an NVIDIA card of 12 GB or more whose driver runs CUDA 12.9, which this machine's account reaches by its SSH key with no password; it becomes the voice node every line is spoken on."
+file = "env/voice-node-ssh"
+
+[[input]]
+name = "voice.node-name"
+what = "The name the voice node is listed under in the node service: lowercase letters, digits and hyphens."
+file = "env/voice-node-name"
+default = "voice-1"
+
+# The token files of the units the voice calls whose own declarations keep them nowhere it reads: the account
+# service the studio signs in against, and agency, whose pool derives the spoken words.
+[[settings]]
+file = "env/voice-web.token"
+text = "{{token.web.server}}"
+
+[[settings]]
+file = "env/voice-agency.token"
+text = "{{token.agency.control}}"
+
+# The settings, env/voice.toml. Every token file is read under the data root's env/. The narration speaks BMO's
+# own voice, which an after-step installs.
+[[settings]]
+file = "env/voice.toml"
+text = """
+listen = "127.0.0.1:{{port.voice.server}}"
+address = "http://127.0.0.1:{{port.voice.server}}"
+token_file = "voice.token"
+database = "postgres:///bmo_voice?host=/var/run/postgresql"
+data_root = "{{data_root}}"
+
+[units.node]
+address = "http://127.0.0.1:{{port.node.server}}"
+token_file = "node.token"
+
+[units.arbiter]
+address = "http://127.0.0.1:{{port.arbiter.master}}"
+token_file = "arbiter.token"
+
+[units.web]
+address = "{{value.web.address}}"
+token_file = "voice-web.token"
+
+[units.agency]
+address = "http://127.0.0.1:{{port.agency.control}}"
+token_file = "voice-agency.token"
+
+[units.artifact]
+address = "http://127.0.0.1:{{port.artifact.server}}"
+token_file = "artifact.token"
+
+[narration]
+voice = "bmo"
+"""
+
+# The deploy tree is a declaration root of the card master, which reads weights/voice.card.toml from it.
+[[line]]
+file = "~/.config/bmo-arbiter/env"
+key = "CARD_DECLARATIONS"
+value = "{{home}}/.local/share/bmo-voice/deploy"
+
+[[line]]
+file = "env/web-console.env"
+key = "VOICE_ADDRESS"
+value = "http://127.0.0.1:{{port.voice.server}}"
+
+[[line]]
+file = "env/web-console.env"
+key = "VOICE_TOKEN"
+value = "{{token.voice.service}}"
+
+# The voice environment on this machine, bmo-voice/.venv under the home: the encoder every road ends in and the
+# transcriber, installed from the frozen list as it stands (docs/voice-plan.md, 「The environments」).
+[[after]]
+id = "voice-environment"
+run = '''
+set -eu
+uv venv --quiet --allow-existing --python 3.12 "$HOME/bmo-voice/.venv"
+uv pip install --quiet --python "$HOME/bmo-voice/.venv/bin/python" --no-deps -r synth/voice-node-requirements.txt
+'''
+done = '''"$HOME/bmo-voice/.venv/bin/python" -c 'import soundfile, torch, transformers' '''
+
+# The base weights at the revision synth/engine.toml pins, fetched into this account's Hugging Face cache, where the
+# node scripts' setup carries them to every voice node from (docs/voice-plan.md, 「Where the weights live」).
+[[after]]
+id = "base-weights"
+inputs = ["voice.huggingface-token"]
+run = '''
+set -eu
+pin="$(python3 -c 'import tomllib; b = tomllib.load(open("synth/engine.toml", "rb"))["base"]; print(b["repository"], b["revision"])')"
+set -- $pin
+HF_TOKEN_PATH="$BMO_INPUT_VOICE_HUGGINGFACE_TOKEN" uvx --from huggingface_hub hf download "$1" --revision "$2" >/dev/null
+'''
+done = '''
+python3 - <<'PY'
+import os, sys, tomllib
+base = tomllib.load(open("synth/engine.toml", "rb"))["base"]
+hub = os.environ.get("HF_HUB_CACHE") or os.path.join(os.environ.get("HF_HOME") or os.path.expanduser("~/.cache/huggingface"), "hub")
+snapshot = os.path.join(hub, "models--" + base["repository"].replace("/", "--"), "snapshots", base["revision"])
+sys.exit(0 if all(os.path.isfile(os.path.join(snapshot, one["name"])) for one in base["file"]) else 1)
+PY
+'''
+
+# BMO's own trained voice, published at https://huggingface.co/ahas-io/bmo-voice, installed as the first and
+# current voice with its delivery clips beside it (docs/voice-plan.md, 「The voices」).
+[[after]]
+id = "bmo-voice"
+run = '''
+set -eu
+from="$(mktemp -d)"
+trap 'rm -rf "$from"' EXIT
+uvx --from huggingface_hub hf download ahas-io/bmo-voice --local-dir "$from" >/dev/null
+cd "$HOME/.local/share/bmo-voice/deploy"
+bun scripts/voice-install.ts --add bmo --checkpoint "$from"
+cp "$from"/reference*.wav "$BMO_DATA_DIR/voice/voices/bmo/"
+'''
+done = 'test -f "$BMO_DATA_DIR/voice/voices/bmo/lora.pt" && test -f "$BMO_DATA_DIR/voice/voices/bmo/reference.wav"'
+
+# The machine the person gave, listed in the node service as an ssh node through its registry route, at the
+# address and with the token file the voice's own settings name.
+[[after]]
+id = "voice-node"
+inputs = ["voice.node-ssh", "voice.node-name"]
+run = """
+python3 - "$BMO_INPUT_VOICE_NODE_NAME" "$BMO_INPUT_VOICE_NODE_SSH" <<'PY'
+import json, os, sys, tomllib, urllib.request
+env = os.path.join(os.environ["BMO_DATA_DIR"], "env")
+node = tomllib.load(open(os.path.join(env, "voice.toml"), "rb"))["units"]["node"]
+token = open(os.path.join(env, node["token_file"])).read().strip()
+name = open(sys.argv[1]).read().strip()
+user, host = open(sys.argv[2]).read().strip().split("@", 1)
+body = json.dumps({"name": name, "host": host, "user": user}).encode()
+headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
+urllib.request.urlopen(urllib.request.Request(node["address"] + "/nodes", data=body, headers=headers, method="POST"))
+PY
+"""
+done = """
+python3 - "$BMO_INPUT_VOICE_NODE_NAME" <<'PY'
+import os, sys, tomllib, urllib.parse, urllib.request
+env = os.path.join(os.environ["BMO_DATA_DIR"], "env")
+node = tomllib.load(open(os.path.join(env, "voice.toml"), "rb"))["units"]["node"]
+token = open(os.path.join(env, node["token_file"])).read().strip()
+name = urllib.parse.quote(open(sys.argv[1]).read().strip())
+urllib.request.urlopen(urllib.request.Request(node["address"] + "/nodes/" + name, headers={"Authorization": "Bearer " + token}))
+PY
+"""
+
+# The voice placed on that node through the card master's placement route, which stands the node's card arbiter and
+# runs the voice's adapter: the engine environment built there, the weights and the voices carried, the server
+# started and a check line spoken (docs/voice-plan.md, 「Building and updating them」). The placement is read until
+# it ends, however long the node's build takes.
+[[after]]
+id = "place-voice"
+inputs = ["voice.node-name"]
+run = """
+python3 - "$BMO_INPUT_VOICE_NODE_NAME" <<'PY'
+import json, os, sys, time, tomllib, urllib.request
+env = os.path.join(os.environ["BMO_DATA_DIR"], "env")
+master = tomllib.load(open(os.path.join(env, "voice.toml"), "rb"))["units"]["arbiter"]
+headers = {"Authorization": "Bearer " + open(os.path.join(env, master["token_file"])).read().strip(), "Content-Type": "application/json"}
+def ask(path, body=None):
+    data = None if body is None else json.dumps(body).encode()
+    request = urllib.request.Request(master["address"] + path, data=data, headers=headers, method="GET" if body is None else "POST")
+    return json.load(urllib.request.urlopen(request))
+placement = ask("/placements", {"kind": "place", "serviceName": "voice", "nodeName": open(sys.argv[1]).read().strip()})
+told = 0
+while True:
+    placement = ask("/placements/" + str(placement["id"]))
+    for line in placement["lines"][told:]:
+        print(line, flush=True)
+    told = len(placement["lines"])
+    if placement["state"] in ("done", "failed"):
+        break
+    time.sleep(10)
+if placement["state"] == "failed":
+    sys.exit(placement.get("failure") or "the placement failed")
+PY
+"""
+done = """
+python3 - "$BMO_INPUT_VOICE_NODE_NAME" <<'PY'
+import json, os, sys, tomllib, urllib.request
+env = os.path.join(os.environ["BMO_DATA_DIR"], "env")
+master = tomllib.load(open(os.path.join(env, "voice.toml"), "rb"))["units"]["arbiter"]
+token = open(os.path.join(env, master["token_file"])).read().strip()
+cluster = json.load(urllib.request.urlopen(urllib.request.Request(master["address"] + "/cluster", headers={"Authorization": "Bearer " + token})))
+name = open(sys.argv[1]).read().strip()
+sys.exit(0 if any(one["serviceName"] == "voice" and name in one["nodeNames"] for one in cluster["services"]) else 1)
+PY
+"""
