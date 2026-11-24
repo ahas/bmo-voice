@@ -146,6 +146,10 @@ common:
   title:
     discard_changes: Discard unsaved changes?
     share: Share
+    no_permission: No permission
+    page_failed: Something went wrong
+    page_not_found: Page not found
+    unreachable: "Can't connect"
   action:
     add_choice: 'Add "{value}"'
     cancel: Cancel
@@ -191,6 +195,10 @@ common:
     unshare: Stop sharing
     zoom_in: Zoom in
     zoom_out: Zoom out
+    go_back: Back
+    go_home: Home
+    refresh: Refresh
+    retry: Try again
   aria:
     close_named: "Close {name}"
     column_width: "Width of {name}"
@@ -208,6 +216,8 @@ common:
     speed_named: "Playback speed {speed}"
     window_move: Move the window · arrow keys
     window_resize: Resize the window · arrow keys
+    holds_chosen: Contains selected items
+    search_named: "Search {name}"
   error:
     choices_find_failed: The search failed.
     editor_failed: The editor could not be loaded.
@@ -268,6 +278,10 @@ common:
     preview_link: Link
     preview_meta: Details
     preview_note: A note
+    no_permission: "This account can't view this page."
+    page_failed: "The server couldn't load this page."
+    page_not_found: The address is wrong or the page was deleted.
+    unreachable: "Couldn't reach the server."
   placeholder:
     member_search: Search by name
     search: Search

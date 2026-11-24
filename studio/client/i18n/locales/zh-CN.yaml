@@ -146,6 +146,10 @@ common:
   title:
     discard_changes: 要放弃未保存的更改吗？
     share: 共享
+    no_permission: 没有权限
+    page_failed: 出错了
+    page_not_found: 找不到页面
+    unreachable: 无法连接
   action:
     add_choice: '添加“{value}”'
     cancel: 取消
@@ -191,6 +195,10 @@ common:
     unshare: 停止共享
     zoom_in: 放大
     zoom_out: 缩小
+    go_back: 返回
+    go_home: 返回首页
+    refresh: 刷新
+    retry: 重试
   aria:
     close_named: "关闭 {name}"
     column_width: "{name} 的宽度"
@@ -208,6 +216,8 @@ common:
     speed_named: "播放速度 {speed}"
     window_move: 移动窗口 · 方向键
     window_resize: 调整窗口大小 · 方向键
+    holds_chosen: 包含所选项
+    search_named: "搜索{name}"
   error:
     choices_find_failed: 搜索失败。
     editor_failed: 无法加载编辑器。
@@ -268,6 +278,10 @@ common:
     preview_link: 链接
     preview_meta: 详情
     preview_note: 备注
+    no_permission: 此账号无法查看此页面。
+    page_failed: 服务器未能加载此页面。
+    page_not_found: 地址有误或页面已被删除。
+    unreachable: 无法连接到服务器。
   placeholder:
     member_search: 按名称搜索
     search: 搜索

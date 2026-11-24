@@ -38,7 +38,9 @@ A studio for checking the provided source material and recording the line spans 
 - **Screen:** the Nuxt app in `studio/client/`, a host of bmo-ui at the version packed beside it, generated into
   static files. The server hands them
   out as they are and answers every other GET under the prefix, a deep link included, with the app's `index.html`.
-  Paths under `api/`, `media/` and `subtitle/` are the server's own.
+  Paths under `api/`, `media/` and `subtitle/` are the server's own. A deep link no page of the app answers, and
+  any error that stands in place of a page, draws bmo-ui's error page (bmo-ui's `docs/components.md`, "The error
+  page"), never the framework's; its way to the start opens the studio's own start.
 - **bmo-ui's patches** stand in `studio/client/patches/`, copied from bmo-ui's main for the version packed, and
   are applied to the very versions they name, as bmo-ui asks of a host. The screen pins the component library to
   the exact version bmo-ui is built on, so its install resolves the patched versions of the libraries beneath it;

@@ -146,6 +146,10 @@ common:
   title:
     discard_changes: 未保存の変更を破棄しますか？
     share: 共有
+    no_permission: 権限がありません
+    page_failed: エラーが発生しました
+    page_not_found: ページが見つかりません
+    unreachable: 接続できません
   action:
     add_choice: '「{value}」を追加'
     cancel: キャンセル
@@ -191,6 +195,10 @@ common:
     unshare: 共有を停止
     zoom_in: 拡大
     zoom_out: 縮小
+    go_back: 戻る
+    go_home: ホームへ
+    refresh: 更新
+    retry: 再試行
   aria:
     close_named: "{name} を閉じる"
     column_width: "{name} の幅"
@@ -208,6 +216,8 @@ common:
     speed_named: "再生速度 {speed}"
     window_move: ウィンドウを移動 · 矢印キー
     window_resize: ウィンドウのサイズを変更 · 矢印キー
+    holds_chosen: 選択した項目を含む
+    search_named: "{name}を検索"
   error:
     choices_find_failed: 検索できませんでした。
     editor_failed: エディターを読み込めませんでした。
@@ -268,6 +278,10 @@ common:
     preview_link: リンク
     preview_meta: 詳細
     preview_note: メモ
+    no_permission: このアカウントではこのページを表示できません。
+    page_failed: サーバーがこのページを読み込めませんでした。
+    page_not_found: アドレスが間違っているか、ページが削除されました。
+    unreachable: サーバーに接続できませんでした。
   placeholder:
     member_search: 名前で検索
     search: 検索
