@@ -14,7 +14,6 @@ use std::str::FromStr;
 use sea_orm::{
   ConnectionTrait, DatabaseConnection, DbBackend, QueryResult, SqlxPostgresConnector, Statement, Value,
 };
-use sea_orm_migration::MigratorTrait;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 /// Why the store did not answer.
@@ -51,7 +50,7 @@ pub async fn connect(address: &str, connections: u32) -> Result<DatabaseConnecti
 
 /// The store's migrations run to the newest: as the service starts, and before the unit command reads or writes.
 pub async fn migrate(db: &DatabaseConnection) -> Result<(), StoreError> {
-  migration::Migrator::up(db, None).await.map_err(StoreError::from)
+  migration::up(db).await.map_err(StoreError::from)
 }
 
 fn statement(sql: &str, values: Vec<Value>) -> Statement {

@@ -158,12 +158,15 @@ The last 1,000 events are kept; every write past them lets the oldest go.
 
 ## The migrations
 
-- **Each migration makes its tables** with their indexes, column for column in the shape the rows already
-  read in, so rows copied in keep every column their readers name. Its record stands in
-  `voice_migrations`, so the database may be shared with another service's tables. The `citext` extension is
-  created where it is missing.
-- **A migration may also bring rows to what the tables state:** every `failed` synthesis holding no `failure`
-  is given `its reason was not kept`.
+- **The schema starts at the 1.0.0 baseline,** one migration that creates the `citext` extension where it is
+  missing and makes every table with its indexes, column for column in the shape the rows read in. Every later
+  change to the schema is a migration after it. Its record stands in `voice_migrations`, so the database may be
+  shared with another service's tables.
+- **An install from before 1.0.0 is taken as it stands.** A database whose record names every migration of the
+  last release before 1.0.0, and nothing else, already holds the baseline's schema: the record is rewritten to
+  name the baseline alone, in one transaction, and no table and no row is touched. A database whose record
+  names only part of them is refused, with the migration it stopped at; it is brought to the last release
+  before 1.0.0 by that release first.
 - **A table's `rowid`** is the identity the rows already kept carry; nothing reads it.
 
 ## The folder
