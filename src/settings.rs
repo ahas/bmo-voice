@@ -101,6 +101,8 @@ impl Default for Spoken {
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Studio {
+  /// The loopback port the studio's server listens on; [`Studio::PORT`] where none is named.
+  pub port: Option<u16>,
   /// The folder the source manifest's paths and the download records' keys stand under, which an asset's path is
   /// read without; none where they stand at the top.
   pub source_root: Option<String>,
@@ -114,6 +116,16 @@ pub struct Studio {
   pub cloud: Option<String>,
   /// The folder of the manifest's paths the cloud's player names its videos below, read by the media tools alone.
   pub cloud_home: Option<String>,
+}
+
+impl Studio {
+  /// The port the studio's server listens on where neither its environment nor the settings name one.
+  pub const PORT: u16 = 3214;
+
+  /// The port the studio's server listens on: the one `named` gives, else the settings', else [`Studio::PORT`].
+  pub fn listen_port(&self, named: Option<u16>) -> u16 {
+    named.or(self.port).unwrap_or(Self::PORT)
+  }
 }
 
 /// Why the settings would not stand.

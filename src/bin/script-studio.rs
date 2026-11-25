@@ -1,6 +1,7 @@
 //! The script studio's server (`docs/script-studio.md`, 「Access and service」): the voice's settings for the account
-//! service and the studio's deployment values, and its environment for the data root, the port and the generated
-//! screen: `BMO_VOICE_STUDIO_DATA`, `BMO_VOICE_STUDIO_PORT` and `BMO_VOICE_STUDIO_STATIC`.
+//! service and the studio's deployment values, its port among them, and its environment for the data root, the port
+//! and the generated screen: `BMO_VOICE_STUDIO_DATA`, `BMO_VOICE_STUDIO_PORT` and `BMO_VOICE_STUDIO_STATIC`. Started
+//! as `script-studio address`, it prints the address it would listen at and starts nothing.
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -14,9 +15,6 @@ use bmo_voice::studio::subtitles::Speech;
 use bmo_voice::units::Caller;
 use bmo_voice::units::web::Web;
 use tokio::net::TcpListener;
-
-/// The port the studio listens on where the environment names none.
-const PORT: u16 = 3214;
 
 fn named(variable: &str) -> Option<String> {
   std::env::var(variable).ok().filter(|value| !value.is_empty())
@@ -33,9 +31,18 @@ async fn main() -> ExitCode {
     Ok(settings) => settings,
     Err(why) => return fail(why),
   };
+  let port = settings
+    .studio
+    .listen_port(named("BMO_VOICE_STUDIO_PORT").and_then(|port| port.parse().ok()));
+
+  // `address` is the deployment's health's one question: where the server listens.
+  if std::env::args().nth(1).as_deref() == Some("address") {
+    println!("http://127.0.0.1:{port}");
+    return ExitCode::SUCCESS;
+  }
+
   let root =
     named("BMO_VOICE_STUDIO_DATA").map_or_else(|| settings.voice_folder().join("studio"), PathBuf::from);
-  let port: u16 = named("BMO_VOICE_STUDIO_PORT").and_then(|port| port.parse().ok()).unwrap_or(PORT);
   let static_dir = match named("BMO_VOICE_STUDIO_STATIC") {
     Some(named) => PathBuf::from(named),
     None => match Settings::release_folder() {

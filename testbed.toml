@@ -49,9 +49,9 @@ link = "deploy"
 data_root = "~/.local/share/bmo/data"
 env_links = [{ link = "settings.toml", target = "env/voice.toml" }]
 units = ["deploy/*.service"]
-# Answers 0 once the service answers its health and the script studio its API with a sign-in asked for and its
-# screen with HTML.
-health = '''cd ~/.local/share/bmo-voice/deploy && bin/bmo-voice health && test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3214/voice-studio/api/assets)" = 401 && curl -sf http://127.0.0.1:3214/voice-studio/ | grep -qi '<html' '''
+# Answers 0 once the service answers its health and the script studio, at the address the release's settings give
+# it, its API with a sign-in asked for and its screen with HTML.
+health = '''cd ~/.local/share/bmo-voice/deploy && bin/bmo-voice health && studio="$(bin/script-studio address)" && test "$(curl -s -o /dev/null -w '%{http_code}' "$studio/voice-studio/api/assets")" = 401 && curl -sf "$studio/voice-studio/" | grep -qi '<html' '''
 
 # The unit command, linked into the folder holding `bmo`, the first folder `bmo` looks for unit commands in. The
 # link names this repository's deploy tree, whose own link stands across releases; a link made to the release

@@ -34,7 +34,8 @@ what = "Asks the script studio for its health at every deployment; the curl pack
 name = "voice.server"
 number = 13108
 
-# The script studio's port, fixed in its unit and its health, and named in the proxy locations written below.
+# The script studio's port, written into the settings' [studio] table its server and its health read, and named in
+# the proxy locations written below.
 [[port]]
 name = "voice.studio"
 number = 3214
@@ -107,6 +108,9 @@ token_file = "artifact.token"
 
 [narration]
 voice = "bmo"
+
+[studio]
+port = {{port.voice.studio}}
 """
 
 # The deploy tree is a declaration root of the card master, which reads weights/voice.card.toml from it.

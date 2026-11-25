@@ -8,11 +8,13 @@ A studio for checking the provided source material and recording the line spans 
   (`docs/deploy.md`, 「The proxy」). The path goes to the
   service, which serves both the screen and its API; the path without the slash is redirected to it.
 - **Service:** `bmo-voice-studio.service` runs the `script-studio` binary on loopback, at the port `BMO_VOICE_STUDIO_PORT`
-  names, 3214 where it names none. The data root comes from `BMO_VOICE_STUDIO_DATA`, by default `voice/studio/` under the
+  names, else the settings' `[studio]` `port`, else 3214; an install writes the port it chose for the studio there.
+  `script-studio address` prints the address the server would listen at, read the same way, and starts nothing,
+  so the deployment's health asks the studio where it listens. The data root comes from `BMO_VOICE_STUDIO_DATA`, by default `voice/studio/` under the
   data root, and the generated screen from `BMO_VOICE_STUDIO_STATIC`, by default `studio/client/.output/public` in the
   release. A port of 0 is one the system chooses, named in the line the service prints as it starts listening.
 - **What is the deployment's own** stands in the settings' `[studio]` section (`docs/boundary-api.md`, 「Settings」),
-  each part optional: `source_root`, the folder the source manifest's paths and the download records' keys stand
+  each part optional: `port`, the loopback port the server listens on (「Service」 above); `source_root`, the folder the source manifest's paths and the download records' keys stand
   under, which an asset's path is read without; `source_url`, the address an export names as its source, null where
   none is named; `speakers`, the spellings of the speaker label a subtitle cue may open with, which matching drops,
   matched whatever their case, the first of them the speaker an automatic line's id and notes name; `cloud`, the

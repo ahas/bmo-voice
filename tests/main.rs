@@ -15,6 +15,7 @@ mod script_figures;
 mod spoken_kept_words;
 mod spoken_numbers;
 mod spoken_words;
+mod studio_address;
 mod studio_sign_in;
 mod synthesis_clocks;
 mod transcriber_card;
