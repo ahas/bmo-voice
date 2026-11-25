@@ -90,4 +90,5 @@ a neutral name, and the testbed's `personal-data` check holds the rule `docs/PER
 
 ## Version
 
-The version stands in `VERSION` and in the root manifest's workspace, which hold the same number.
+The version is the set's, read off the git tags when a build is made; the root manifest's workspace version is
+a placeholder that never moves (`docs/boundary-api.md`, 「Versions」).

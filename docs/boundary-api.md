@@ -1,7 +1,5 @@
 # The voice engine's boundary
 
-Fixed at 0.1.0-rev.41.
-
 Every route this engine answers, its event stream, the calls it makes, its harness plugin, its hosted tool,
 its command line and its settings. The engine is an upstream: a coding harness takes it as its first entry
 point through its MCP server, with no console and no other unit running. The engine keeps briefings, each a
@@ -13,7 +11,7 @@ schedule is a caller's work too.
 every route with its parameters, its body, its answers and the codes it can answer, the bodies' schemas, the
 events under `x-events`, the harness plugin under `x-harness` and its tools under `x-tools`. `bmo-voice
 openapi` prints it as the repository keeps it. A change to anything here changes this document and that one
-in the same commit, and moves the version (「Versions」).
+in the same commit; it moves no version (「Versions」).
 
 ## Conventions
 
@@ -723,10 +721,10 @@ and its server calls the engine's synthesis and reading rules through the crate 
 
 ## Versions
 
-- **The repository has one version,** in `VERSION` and the root manifest's workspace, shared by the engine, its
-  client, its plugin, its hosted tool and its OpenAPI document.
-- **Before its first release it is `0.1.0` and counts revisions:** the first `0.1.0` is the base, and every
-  later bump is one revision, written `0.1.0-rev.<n>` with `n` counting from 1. Major, minor and patch never
-  move before the first release, a breaking change included.
-- **The first release drops the suffix.** From then on the version moves by semver; a removed or renamed
-  route or field, or a field that becomes required, is a major version.
+- **The version is the set's,** read off the git tags when a build is made, as bmo-chat's `docs/conventions.md`
+  「Versions」 states: the testbed hands it to the build as `BMO_VERSION`, and the health, the MCP server and
+  `bmo-voice --version` answer it. The boundary is the one of the release its commit is tagged with.
+- **A version moves only at a release the owner declares,** which tags the commit and makes none; a change to
+  the boundary moves none by itself, and a deployment is told apart by its commit.
+- **The root manifest's workspace version is a placeholder** that never moves, and the OpenAPI document's
+  `info.version` names it.

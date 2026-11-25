@@ -15,7 +15,7 @@ use bmo_voice::wire::{BriefingKind, NewBriefing, NewSynthesis, NewTranscription,
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "bmo-voice", version, about = "The voice engine's harness plugin and commands")]
+#[command(name = "bmo-voice", version = bmo_voice::VERSION, about = "The voice engine's harness plugin and commands")]
 struct Command {
   #[command(subcommand)]
   word: Word,

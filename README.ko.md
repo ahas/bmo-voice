@@ -87,4 +87,5 @@ Python 테스트(`tests/*.py`)는 전용 인터프리터 `tests/.venv`에서 실
 
 ## 버전
 
-버전은 `VERSION`과 루트 매니페스트의 workspace에 적혀 있으며, 두 곳의 번호는 같습니다.
+버전은 세트의 버전이며, 빌드할 때 git 태그에서 읽습니다. 루트 매니페스트 workspace의 버전은 움직이지 않는
+자리표시자입니다(`docs/boundary-api.md`, 「Versions」).

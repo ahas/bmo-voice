@@ -26,8 +26,8 @@ is spoken, and what it says, is its caller's to decide.
   event and command the voice serves and every one it calls; `docs/inventory.md` is what came from the old
   repository.
 - A change that would make a document wrong or incomplete repairs the document first, stating what is true now,
-  and the code is written to match. A change to the boundary moves the version as `docs/boundary-api.md` says,
-  in the same commit.
+  and the code is written to match. A change to the boundary moves no version: the version is the set's, read
+  off the git tags at build time, as `docs/boundary-api.md` 「Versions」 says.
 - A document states what is true now: no change history, no rationale told through an earlier design, no pasted
   source, signature or config fragment, and no file-and-line pins.
 

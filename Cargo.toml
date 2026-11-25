@@ -7,7 +7,8 @@ members = [
   "tools/servers",
 ]
 
-# One version for the whole repository (docs/boundary-api.md, 「Versions」).
+# The version is a placeholder that never moves; a build reads the set's version off the git tags
+# (docs/boundary-api.md, 「Versions」).
 [workspace.package]
 version = "0.1.0-rev.41"
 edition = "2024"

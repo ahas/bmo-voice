@@ -87,4 +87,5 @@ Python のテスト(`tests/*.py`)は専用のインタプリタ `tests/.venv` �
 
 ## バージョン
 
-バージョンは `VERSION` とルートマニフェストの workspace に記載され、両者は同じ番号です。
+バージョンはセットのもので、ビルド時に git タグから読み取ります。ルートマニフェストの workspace のバージョンは
+動かないプレースホルダーです(`docs/boundary-api.md`、「Versions」)。

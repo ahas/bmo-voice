@@ -81,4 +81,5 @@ Python 测试（`tests/*.py`）运行在专用解释器 `tests/.venv` 上，由�
 
 ## 版本
 
-版本号写在 `VERSION` 和根清单的 workspace 中，两处的版本号保持一致。
+版本是整个套件的版本，在构建时从 git 标签读取；根清单 workspace 中的版本是从不变动的占位值
+(`docs/boundary-api.md`，「Versions」)。
