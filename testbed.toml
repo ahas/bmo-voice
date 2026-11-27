@@ -90,3 +90,15 @@ command = "cd studio/client && BMO_VOICE_STUDIO_PACK=i18n/locales/ko.yaml BMO_VO
 id = "voice-nodes"
 phase = "after-health"
 command = "bun scripts/voice-node.ts sync"
+
+# This service's standing line in every agent's brain, declared once the service is up (the brain's
+# docs/boundary-api.md, 「Declarations and holders」); a machine with no brain passes.
+[[deploy.step]]
+id = "holder-declare"
+phase = "after-health"
+command = '''
+set -eu
+brain="$HOME/.local/share/bmo-brain/deploy/bin/bmo-brain"
+[ -x "$brain" ] || exit 0
+"$brain" holder declare deploy/brain-holder.toml
+'''
