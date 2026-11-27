@@ -3,7 +3,7 @@
 held_by = "voice"
 
 [[memory]]
-key = "when"
+key = "voice.when"
 type = "tip"
 recall_condition = "say something aloud, another voice, or a transcription"
 text = "Your own voice is bmo/speak, another voice voice/generate, and a transcription bmo listen."
