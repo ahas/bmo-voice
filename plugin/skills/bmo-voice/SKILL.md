@@ -51,10 +51,9 @@ that could not be spoken ends `failed`.
 
 `voice_transcribe` with `{ "language": "ko", "files": ["/path/one.ogg", "/path/two.ogg"] }`. The files stand
 on the engine's own machine, as paths it can read. The answer is the transcription with its `id` and state;
-`voice_transcribe` answers at once with state `waiting`, so read it again through `GET
-/transcriptions/{transcriptionId}` until the state is `done` or `failed`, then its `text` is what was heard,
-one file's words to a line, in the order given. There is no MCP tool for reading one transcription; the
-engine's client has `transcription(id)`.
+`voice_transcribe` answers at once with state `waiting`, so read it again with `voice_transcription` and
+`{ "transcriptionId": <id> }` until the state is `done` or `failed`, then its `text` is what was heard, one file's
+words to a line, in the order given.
 
 ## Reading a text as it is to be said
 

@@ -155,6 +155,13 @@ struct OneSynthesis {
   synthesis_id: i64,
 }
 
+/// One transcription, by its id.
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OneTranscription {
+  transcription_id: i64,
+}
+
 /// Sound files to take down in one language.
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -210,6 +217,12 @@ pub fn tools() -> Vec<VoiceTool> {
 
         client.create_transcription(&transcription).await
       },
+    ),
+    tool(
+      "voice_transcription",
+      "One transcription and its state; once done, its text, one file's words to a line.",
+      "GET /transcriptions/{transcriptionId}",
+      |client, asked: OneTranscription| async move { client.transcription(asked.transcription_id).await },
     ),
     tool(
       "voice_script",

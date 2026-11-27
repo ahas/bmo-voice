@@ -592,6 +592,7 @@ The archive (its `docs/api.md`, 「Attachments」), called by the command alone,
 | `voice_synthesize` | `POST /syntheses` |
 | `voice_synthesis` | `GET /syntheses/{synthesisId}` |
 | `voice_transcribe` | `POST /transcriptions` |
+| `voice_transcription` | `GET /transcriptions/{transcriptionId}` |
 | `voice_script` | `POST /script-readings` |
 
 - **The `bmo-voice` skill** tells a harness when and how to use them. A tool's failure carries the status,

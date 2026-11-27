@@ -1069,6 +1069,28 @@
       "route": "POST /transcriptions"
     },
     {
+      "name": "voice_transcription",
+      "description": "One transcription and its state; once done, its text, one file's words to a line.",
+      "input": {
+        "description": "One transcription, by its id.",
+        "type": "object",
+        "properties": {
+          "transcriptionId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "transcriptionId"
+        ]
+      },
+      "output": {
+        "$ref": "#/components/schemas/Transcription"
+      },
+      "route": "GET /transcriptions/{transcriptionId}"
+    },
+    {
       "name": "voice_script",
       "description": "Read a text into a script for the ear.",
       "input": {
