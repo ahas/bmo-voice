@@ -10,7 +10,7 @@ members = [
 # The version is a placeholder that never moves; a build reads the set's version off the git tags
 # (docs/boundary-api.md, 「Versions」).
 [workspace.package]
-version = "0.1.0-rev.41"
+version = "0.0.0"
 edition = "2024"
 license = "MIT"
 publish = false
