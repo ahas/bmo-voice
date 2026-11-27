@@ -1,6 +1,6 @@
 ---
 name: bmo-voice
-description: Turn text into speech in a trained voice, transcribe spoken files, read a text into a script for the ear, or list the voices and voice servers a voice engine holds, through the bmo-voice MCP server. Use when a harness needs to speak a line in one of the engine's voices, take spoken material down, or prepare text as it is to be said.
+description: How the bmo-voice MCP tools speak a text in a trained voice, transcribe spoken files, read a text into a script for the ear, and list the voices and voice servers, with the arguments each takes.
 ---
 
 # bmo-voice
@@ -31,7 +31,8 @@ It calls the engine at the address in the voice settings, with the engine's toke
    model name in that language's letters, every number, date and unit in words, and no address, path, code or
    markup. Write them with judgement and pass them, or leave them out and the engine derives them. `language`,
    `ko` or `en`, is optional: left out, a line with more English words than Korean is said in English and any
-   other in Korean, and a line of neither in the voice's own. `emotion`, `style` and `seed` are optional. The answer is the synthesis: its `id` and its state, `waiting` or
+   other in Korean, and a line of neither in the voice's own. `emotion`, `style` and `seed` are optional. `key`, optional, is your own name for the line: asked again with
+   the same `key` while its synthesis has not failed, that synthesis answers instead of a new one. The answer is the synthesis: its `id` and its state, `waiting` or
    `speaking`.
 3. `voice_synthesis` with `{ "synthesisId": <id> }` until the state is `done` or `failed`. A `done`
    synthesis carries `durationMs` and its `spoken` words. One that has not ended says what it waits on in
@@ -42,8 +43,8 @@ It calls the engine at the address in the voice settings, with the engine's toke
    OGG/Opus answer that honours `Range`. The MCP server names no tool for the bytes; read them through the
    engine's client or its address.
 
-A synthesis of a text and a voice already asked for is answered with a new member each time; nothing is
-cached. A voice that stands at no node's server answers `not-found` at `voice_synthesize`, and a synthesis
+A call naming no `key` makes a new synthesis each time, even of a text and a voice already asked for; one naming
+a `key` already asked answers that synthesis while it has not failed, so a retry never speaks the line twice. A voice that stands at no node's server answers `not-found` at `voice_synthesize`, and a synthesis
 that could not be spoken ends `failed`.
 
 ## Taking spoken files down
