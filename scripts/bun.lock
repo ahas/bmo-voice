@@ -5,7 +5,7 @@
     "": {
       "name": "bmo-voice-scripts",
       "dependencies": {
-        "bmo-text": "file:vendor/bmo-text-0.1.0-rev.5-f5874fb.tgz",
+        "bmo-text": "file:vendor/bmo-text-0.0.0-07f90b5.tgz",
         "eventsource-parser": "^4.1.2",
         "leven": "^4.1.0",
         "music-metadata": "^12.2.3",
@@ -27,7 +27,7 @@
 
     "@types/node": ["@types/node@26.6.5", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg=="],
 
-    "bmo-text": ["bmo-text@vendor/bmo-text-0.1.0-rev.5-f5874fb.tgz", {}, "sha512-C1O6+RXSYvnGELjahWwU78qX55DoFAz97CeFYKxVLG3WxfFe8wKzWhcrrSwSZ2+PhFGE1TdcHakQKgFRmPri+Q=="],
+    "bmo-text": ["bmo-text@vendor/bmo-text-0.0.0-07f90b5.tgz", {}, "sha512-usJMBxZLtX+BNpRZaG+n18lOVFfnljGkq/tZHOVf4ufn8ksOcZuN23bUnnnTDzZEqQ7gkh9dwzBFk1HEe+IA9A=="],
 
     "bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 

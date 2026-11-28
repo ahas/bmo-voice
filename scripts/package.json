@@ -8,7 +8,7 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "bmo-text": "file:vendor/bmo-text-0.1.0-rev.5-f5874fb.tgz",
+    "bmo-text": "file:vendor/bmo-text-0.0.0-07f90b5.tgz",
     "eventsource-parser": "^4.1.2",
     "leven": "^4.1.0",
     "music-metadata": "^12.2.3"
