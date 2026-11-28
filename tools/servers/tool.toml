@@ -28,6 +28,7 @@ name = "generate"
 title = "Generate a voice"
 description = "Make a sound of any words in any served voice and write it to a file to play or attach, as OGG/Opus: written at path where one is given, else under the temporary folder, and the answer names the file. It is generated media, never you speaking in a room: it drives no face and plays nowhere by itself."
 input = "generate.json"
+manual = "generate.md"
 capabilities = ["room.tools"]
 
 # A worker whose role holds `room.send`, the producer among them, reaches this entry through the `worker`

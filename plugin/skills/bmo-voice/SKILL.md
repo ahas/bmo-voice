@@ -1,25 +1,29 @@
 ---
 name: bmo-voice
-description: How the bmo-voice MCP tools speak a text in a trained voice, transcribe spoken files, read a text into a script for the ear, and list the voices and voice servers, with the arguments each takes.
+description: How a chat agent's own voice, another voice and a written sound are made with the hosted voice tools, and how the bmo-voice MCP tools speak a text in a trained voice, transcribe spoken files, read a text into a script for the ear and list the voices, with the arguments each takes and what each error means.
 ---
 
 # bmo-voice
 
 The voice engine keeps trained voices and speaks text in them on the voice servers of the nodes it is
 configured with. A synthesis is answered at once; the sound follows, and the member says when it is done.
-The `bmo-voice` MCP server reaches the engine, one tool for each route, so a harness can speak a line with
-nothing else running.
 
-## Starting the server
+## Which tool makes which sound
 
-Register the server with the harness as a stdio MCP server:
+- **Your own voice in the room you answer** is `bmo/speak`, the receiver's: called with no argument it says your
+  round's answer in the neutral voice, `--arg emotion=<a feeling>` only where the person asks for one, and the
+  answer goes out as a voice note in your voice. Write that answer as you would say it aloud.
+- **A sound that is not you speaking** (another voice, words read in a voice that is not yours, a sample) is
+  `voice/generate`: `bmo use voice/generate --json '{"voiceName": "<voice>", "text": "<the words>"}'`, with
+  `emotion`, `language` or an absolute `path` where needed. It answers the file it wrote; send that file into the
+  room with `bmo/file` and no caption, your words about it in your answer. It is generated media, never you
+  speaking: your face does not move for it. A voice it does not know is refused with the voices it has.
+- **Which voices the nodes hold loaded** is `voice/servers`, with no arguments.
+- **A run that took a line in under its own key writes its sound** with `worker/voice_sound`:
+  `{"synthesisId": <id>, "key": "<its key>", "path": "<absolute path>"}`.
+- An answer marked `isError` is a refusal: read its words for what to do next.
 
-```
-bmo-voice mcp
-```
-
-It calls the engine at the address in the voice settings, with the engine's token from its token file.
-`--address <url>` and `--token <token>` name them instead.
+The MCP tools below reach the engine directly, for a harness that holds the `bmo-voice` server.
 
 ## Speaking a line
 

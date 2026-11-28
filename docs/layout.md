@@ -9,7 +9,7 @@ How the repository is laid out, what each part is, and where it runs. Read this 
 | `data/` | Language material the code reads by language, `data/<language>/`: the reading tables a script is spoken from, the voice names' seed readings, and the Korean the script studio stores in its records. Every line of it is in `korean-ledger.json` |
 | `deploy/` | The units the testbed's deployment keeps on the operations machine |
 | `docs/` | The documents, which come before the code |
-| `plugin/` | The harness plugin's skill, `plugin/skills/bmo-voice/`, telling a harness when and how to use the MCP server |
+| `plugin/` | The harness plugin's skill, `plugin/skills/bmo-voice/`, saying how the hosted voice tools and the MCP server are used |
 | `policy/` | The engine's own policy values, `policy/voice.toml` |
 | `prompts/` | What the engine's own model runs are told: the training lines' writer and the spoken words' deriver. English only |
 | `scripts/` | The node and training scripts, a Bun project of its own: the voice node install, push, sync, health, speak and card adapter, a voice installed and checked, the voice names, training stages placed on a card, the training lines written |
@@ -78,7 +78,7 @@ stands, and no other.
 
 - **The MCP server is `bmo-voice mcp`,** a command of the crate, built on the service's own client. Its tools
   are the OpenAPI document's `x-tools`, each a thin call of one route.
-- **The skill** `plugin/skills/bmo-voice/` tells a harness when and how to use the server: which voice to
+- **The skill** `plugin/skills/bmo-voice/` says how the hosted voice tools and the server are used: which voice to
   choose, how a synthesis ends, and how a refusal reads.
 
 ## Where things run

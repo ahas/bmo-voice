@@ -75,7 +75,7 @@ command = '''
 set -eu
 rm -rf tools/servers/.placed
 mkdir -p tools/servers/.placed
-cp bin/voice-servers-tool tools/servers/tool.toml tools/servers/servers.json tools/servers/generate.json tools/servers/voice_sound.json tools/servers/.placed/
+cp bin/voice-servers-tool tools/servers/tool.toml tools/servers/servers.json tools/servers/generate.json tools/servers/voice_sound.json tools/servers/generate.md tools/servers/.placed/
 bmo-pocket put tools/servers/.placed --placed --service voice --allow room.tools --allow room.send
 '''
 

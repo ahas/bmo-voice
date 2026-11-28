@@ -595,7 +595,7 @@ The archive (its `docs/api.md`, 「Attachments」), called by the command alone,
 | `voice_transcription` | `GET /transcriptions/{transcriptionId}` |
 | `voice_script` | `POST /script-readings` |
 
-- **The `bmo-voice` skill** tells a harness when and how to use them. A tool's failure carries the status,
+- **The `bmo-voice` skill** says how they are used, beside which hosted tool makes which sound. A tool's failure carries the status,
   code and sentence of the refusal, or the sentence saying why nothing answered.
 
 ## The hosted tool
@@ -610,7 +610,8 @@ The archive (its `docs/api.md`, 「Attachments」), called by the command alone,
   its entries ask for allowed (`docs/deploy.md`).
 - **`voice/servers`** asks for `room.tools`, is read-only and takes no arguments. **`voice/generate`** asks for
   `room.tools` and takes `voiceName`, `text`, and optionally `emotion`, `language` and the absolute `path` to
-  write. **`worker/voice_sound`** asks for
+  write; its manual, `tools/servers/generate.md`, placed beside the manifest, says that it is a sound that is not
+  the caller speaking and how its file is sent into a room. **`worker/voice_sound`** asks for
   `room.send`, takes a `synthesisId`, the `key` the synthesis was taken in under and the absolute `path` to write,
   and answers the path with the bytes written. The tool host keeps no clock on any call, which ends when the
   engine has answered. The executable speaks the tool host's call protocol 1 itself: one request on standard
